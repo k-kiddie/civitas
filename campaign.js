@@ -116,6 +116,7 @@
     return [{ speaker: event.id.includes('housing') ? '윤' : '소라', text: event.text }];
   }
   function eventReply(event, choice) {
+    if(event.workAgreement)return projects.agreements.reply(event,choice);
     if(event.workProject)return projects.reply(event,choice);
     if(event.careerEcho)return echoes.reply(event,choice);
     if(event.chronicle)return chronicles.reply(event,choice);
@@ -156,6 +157,7 @@
   }
   function eventChoices(state, event) {
     if (!event || event.resolved) return [];
+    if(event.workAgreement)return projects.agreements.choices(state,event);
     if(event.workProject)return projects.choices(state,event);
     if(event.careerEcho)return echoes.choices(state,event);
     if(event.chronicle)return chronicles.choices(state,event);
@@ -247,7 +249,9 @@
       const choice = eventChoices(next, event).find(item => item.id === action.choice);
       if (!event || event.id !== action.eventId || !choice || choice.disabled) return { state, message: '지금은 이 선택을 할 수 없다.' };
       let result = '';
-      if(event.workProject){
+      if(event.workAgreement){
+        result=projects.agreements.resolve(next,event,choice.id);
+      } else if(event.workProject){
         result=projects.resolve(next,event,choice.id);
       } else if(event.careerEcho){
         result=echoes.resolve(next,event,choice.id);

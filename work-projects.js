@@ -1,5 +1,6 @@
 'use strict';
 (function(root){
+  const agreementFactory=typeof module!=='undefined'?require('./work-agreements'):root.WorkAgreements;
   const actor=state=>state.life.activeId||'player';
   const active=run=>run.status==='active';
   const clamp=n=>Math.max(0,Math.min(100,n));
@@ -18,6 +19,7 @@
     state.life.projects={nextId:1,runs:[],...state.life.projects};
     for(const p of Object.values(state.life.people))p.workLinks={...p.workLinks};
     for(const run of state.life.projects.runs)if(active(run)&&run.actor!==actor(state)){refund(state,run);run.status='archived';run.closedDay=state.day;run.result='이전 인물의 일거리로 보관하고 맡겨 둔 보수를 의뢰인에게 반환했다.';}
+    agreements.restore(state);
   }
   function current(state){return state.life.projects.runs.find(run=>run.actor===actor(state)&&active(run));}
   function pool(state,type){const t=templates[type];return Object.values(state.life.people).filter(p=>p.id!==actor(state)&&p.source==='resident'&&!p.controlArchive&&p.age>=18&&p.age<65&&p.health>=45&&t.peers.includes(p.occupation));}
@@ -104,19 +106,20 @@
     else if(r.stage==='contest'){
       const rival=state.life.people[r.rival],resentful=rival?.workLinks[r.actor]?.lastOutcome==='blamed'&&rival.relationship<65,cooperate=rival&&!resentful&&rival.health>=45&&(rival.relationship>=60||rival.relationship>=35&&(rival.society.community>=55||rival.society.security>=60));
       const detail=(extra,coauthor)=>{const e=evaluation(state,r,extra,coauthor);return '예상 평가 '+e.score+' / 기준 '+e.target;};
-      result=[{id:'verify',title:'원본과 현장을 다시 대조한다',detail:'행동 1 · 기력 10 · 기록 +4 · '+detail(4,false),actions:1,energy:10},
+      result=[...(agreements.canSupport(state,r)?[{id:'jointCheck',title:'동료와 공동 준비금으로 함께 검증한다',detail:'공동 준비금 4 · 행동 1 · 기력 6 · 기록 +6 · '+detail(6,false),actions:1,energy:6}]:[]),
+        {id:'verify',title:'원본과 현장을 다시 대조한다',detail:'행동 1 · 기력 10 · 기록 +4 · '+detail(4,false),actions:1,energy:10},
         {id:'rework',title:'준비비와 시간을 더 들여 보강한다',detail:'개인 돈 6 · 행동 1 · 기력 6 · 평가 7일 연기 · 기록 +7 · '+detail(7,false),actions:1,energy:6,cash:6},
         ...(rival?[{id:'cooperate',title:rival.name+'에게 공동 제안을 요청한다',detail:'행동 1 · 기력 6 · '+(cooperate?'상대가 공동 확인에 동의':'상대가 독립 제안을 유지하려 함')+' · 선정되면 상대 보수 4 · '+detail(0,true),actions:1,energy:6,blocked:!cooperate}]:[]),
         {id:'submit',title:'지금 준비한 제안으로 평가받는다',detail:'추가 비용 없음 · '+detail(0,false)}];
     }else result=[
       {id:'confirm',title:r.evaluation.won?'각자 한 일을 확인하고 보수를 나눈다':'평가와 각자 한 일을 그대로 받아들인다',detail:r.evaluation.won?'행동 1 · 기력 6 · 내 보수 '+(24-(r.partner?6:0)-(r.coauthor?4:0))+' · 동료 '+(r.partner?6:0)+' · 공동 확인자 '+(r.coauthor?4:0):'추가 비용 없음 · 보수는 의뢰인에게 반환 · 동료 관계 +1 · 지지 −1',actions:r.evaluation.won?1:0,energy:r.evaluation.won?6:0},
-      ...(!r.evaluation.won&&r.partner?[{id:'blame',title:'실패는 동료 책임이라고 주장한다',detail:'보수는 의뢰인에게 반환 · 동료 관계 −10 · 지지 −3 · 다음 참여 의사에 영향'}]:[])
+      ...(!r.evaluation.won&&r.partner?[{id:'blame',title:'실패는 동료 책임이라고 주장한다',detail:'보수는 의뢰인에게 반환 · 동료 관계 −10 · 지지 −3 · 다음 참여 의사에 영향'+(r.agreement?' · 동료 약속 파기/관계 추가 −4':'')}]:[])
     ];
     if(r.postponements<2)result.push({id:'later',title:'준비한 뒤 다시 이야기한다',detail:'7일 뒤 재연락 · 두 번 가능 · 보수 보관 유지'});
     result.push({id:'cancel',title:'제안을 인계하고 그만둔다',detail:'보수는 의뢰인에게 반환 · 준비비는 이미 지출 · 동료가 있으면 관계 −2'});
     return result.map(c=>({...c,disabled:Boolean(c.blocked||state.actions<(c.actions||0)||state.energy<(c.energy||0)||state.cash<(c.cash||0))}));
   }
-  function reply(event,id){return {reply:id.startsWith('partner:')?'함께 준비하고 선정되면 약속한 몫을 나누겠습니다.':{solo:'혼자 준비하겠습니다.',verify:'원본과 현장을 다시 대조하겠습니다.',rework:'돈과 시간을 더 들여 준비하겠습니다.',cooperate:'서로 확인한 내용을 합쳐 공동 제안으로 내겠습니다.',submit:'지금 준비한 제안으로 평가받겠습니다.',confirm:'평가와 각자 한 일을 함께 기록하겠습니다.',blame:'실패는 동료의 책임이라고 생각합니다.',later:'준비한 뒤 다시 이야기하겠습니다.',cancel:'남은 기록을 인계하고 보수를 반환하겠습니다.',close:'이전 기록을 닫겠습니다.'}[id],speaker:event.workProject?.speaker||'의뢰인',reaction:id==='later'?'7일 뒤 다시 연락하겠습니다.':'이번 선택과 각자 한 일을 함께 기록하겠습니다.'};}
+  function reply(event,id){return {reply:id.startsWith('partner:')?'함께 준비하고 선정되면 약속한 몫을 나누겠습니다.':{jointCheck:'공동 준비금으로 동료와 함께 검증하겠습니다.',solo:'혼자 준비하겠습니다.',verify:'원본과 현장을 다시 대조하겠습니다.',rework:'돈과 시간을 더 들여 준비하겠습니다.',cooperate:'서로 확인한 내용을 합쳐 공동 제안으로 내겠습니다.',submit:'지금 준비한 제안으로 평가받겠습니다.',confirm:'평가와 각자 한 일을 함께 기록하겠습니다.',blame:'실패는 동료의 책임이라고 생각합니다.',later:'준비한 뒤 다시 이야기하겠습니다.',cancel:'남은 기록을 인계하고 보수를 반환하겠습니다.',close:'이전 기록을 닫겠습니다.'}[id],speaker:event.workProject?.speaker||'의뢰인',reaction:id==='later'?'7일 뒤 다시 연락하겠습니다.':'이번 선택과 각자 한 일을 함께 기록하겠습니다.'};}
   function resolve(state,event,id){
     const {run:r,valid}=context(state,event);if(!valid)return '이전 인물의 일거리를 닫았다. 현재 인물에게 효과를 적용하지 않았다.';
     const choice=choices(state,event).find(c=>c.id===id);if(!choice||choice.disabled)return '선택 조건이 바뀌었다.';
@@ -127,9 +130,11 @@
       r.partner=id.startsWith('partner:')?id.slice(8):null;
       const p=state.life.people[r.partner];r.partnerScore=p?competence(p,r.type)+(p.relationship>=60?2:1):0;
       if(p){link(state,r,p.id,'worked','preparing');relation(state,r,p.id,0,'함께 제안을 준비하기로 했다. 선정되면 보수 6을 받기로 합의');}
+      agreements.attach(state,r);
       r.stage='contest';r.dueDay=state.day+7;log(state,r,p?p.name+'과 함께 준비한다.':'혼자 제안을 준비한다.');
     }else if(r.stage==='contest'){
-      r.evidence={verify:4,rework:7,cooperate:0,submit:0}[id];r.coauthor=id==='cooperate'?r.rival:null;
+      if(id==='jointCheck')agreements.support(state,r);
+      r.evidence={jointCheck:6,verify:4,rework:7,cooperate:0,submit:0}[id];r.coauthor=id==='cooperate'?r.rival:null;
       r.rivalContribution=r.coauthor?Math.min(4,competence(state.life.people[r.coauthor],r.type)):0;
       r.evaluation=evaluation(state,r);r.stage='settlement';r.dueDay=state.day+(id==='rework'?21:14);
       if(r.coauthor){link(state,r,r.coauthor,'worked','coauthor');relation(state,r,r.coauthor,0,'독립 제안에서 공동 확인자로 참여하기로 했다. 선정되면 보수 4 합의');}
@@ -144,11 +149,13 @@
       r.payments=payments.map(([person,amount])=>({person,amount}));
       if(r.partner){relation(state,r,r.partner,r.blame?-10:r.won?5:1,r.blame?'함께 준비한 일의 실패 책임을 떠넘겼다.':'각자 한 일과 평가 결과를 함께 남겼다.');state.life.people[r.partner].workLinks[r.actor].lastOutcome=r.blame?'blamed':r.won?'success':'reviewed';}
       if(r.coauthor){relation(state,r,r.coauthor,4,'경쟁하던 제안을 합쳐 함께 결과를 확인했다.');state.life.people[r.coauthor].workLinks[r.actor].lastOutcome=r.won?'success':'reviewed';}
+      agreements.record(state,r);
       close(state,r,(r.won?'제안이 선정되어 개인 보수 24를 약속한 몫대로 나눴다.':'제안이 선정되지 않아 보수 24를 의뢰인에게 반환했다.')+(r.blame?' 동료에게 책임을 떠넘긴 일도 남는다.':' 각자 한 일을 기록했다.'));return r.result;
     }
     return '다음 연락 '+r.dueDay+'일 · 기다리는 동안 다른 활동과 기간 생활을 진행할 수 있다.';
   }
   function act(state,action){
+    const agreed=agreements.act(state,action);if(agreed)return agreed;
     if(!['projectStart','projectCancel'].includes(action.type))return null;
     if(action.type==='projectCancel'){
       const r=current(state);if(!r||state.eventQueue.length||state.hearing||state.underReview||state.actions<1)return {ok:false,message:'진행 중인 일거리 · 행동 1 · 다른 사건 없음 필요'};
@@ -159,8 +166,9 @@
     const run={id:state.life.projects.nextId++,type:action.project,actor:actor(state),career:state.career,department:['official','soldier'].includes(state.career)?state.institution.department:null,client:t.client,startedDay:state.day,status:'active',stage:'planning',dueDay:state.day,escrow:24,partner:null,postponements:0,choices:[],skillScore:Math.min(4,(state.skills[t.skill]||0)*2),reputation:historyScore(state,action.project)};
     state.life.projects.runs.push(run);stageEvent(state,run);log(state,run,'개인 준비비 4 · 의뢰인 개인 보수 24 보관');return {ok:true,message:t.name+' · 함께할 사람과 제안을 고른다.'};
   }
-  function tick(state){const r=current(state);if(!r||r.dueDay>state.day||state.eventQueue.length||state.hearing||state.underReview||state.agencyProposal||state.followUps.some(item=>item.day<=state.day+1))return;stageEvent(state,r);}
-  function blocked(state){return current(state)?'진행 중인 공동 일거리를 마치거나 보수를 반환한 뒤 은퇴하자.':'';}
-  const api={templates,restore,current,pool,competence,willing,historyScore,availability,evaluation,choices,reply,resolve,act,tick,blocked};
+  function tick(state){agreements.tick(state);const r=current(state);if(!r||r.dueDay>state.day||state.eventQueue.length||state.hearing||state.underReview||state.agencyProposal||state.followUps.some(item=>item.day<=state.day+1))return;stageEvent(state,r);}
+  function blocked(state){return current(state)?'진행 중인 공동 일거리를 마치거나 보수를 반환한 뒤 은퇴하자.':agreements.blocked(state);}
+  const agreements=agreementFactory.create({templates,actor,current,pool,willing,money,relation,log});
+  const api={agreements,templates,restore,current,pool,competence,willing,historyScore,availability,evaluation,choices,reply,resolve,act,tick,blocked};
   if(typeof module!=='undefined')module.exports=api;root.WorkProjects=api;
 })(globalThis);
