@@ -7,6 +7,7 @@ const port = Math.max(1, Number(process.env.PORT) || 8080);
 const routes = new Map([
   ['/',['index.html','text/html; charset=utf-8']],
   ['/game.js',['game.js','text/javascript; charset=utf-8']],
+  ['/style.css',['style.css','text/css; charset=utf-8']],
 ]);
 http.createServer((req,res)=>{
   const url = new URL(req.url,'http://localhost');
