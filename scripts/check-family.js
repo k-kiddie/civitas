@@ -1,0 +1,61 @@
+'use strict';
+const assert=require('node:assert/strict');const C=require('../campaign');const F=C.family;
+function ready(){
+ const s=C.normalize({...C.fresh(),startConfigured:true,profileSet:true,ageChosen:true,age:30,name:'가람',gender:'unspecified',day:100,cash:1000,energy:100,jobStory:{stage:'complete',wageBonus:0,outcome:null},election:{day:20,round:1,won:false,winner:'소라'}});
+ s.politics.round=2;s.politics.nextDay=1480;s.life.clock.mode='lifetime';s.randomState.lastDay=100000;
+ const p=Object.values(s.life.people).find(p=>p.source==='resident');p.baseAge=30;p.age=30;p.relationship=85;p.history.push({day:10,type:'relationship',text:'첫 안부'});return s;
+}
+function proposal(s,action,choice='accept'){
+ const opened=C.apply(s,action).state;assert(opened.eventQueue[0]?.familyOffer);
+ assert.equal(opened.cash,s.cash); // fees apply on accepting, not on opening a conversation.
+ const event=opened.eventQueue[0],replay=JSON.parse(JSON.stringify(opened));
+ let result=C.apply(opened,{type:'eventChoice',eventId:event.id,choice}).state;
+ assert(result.eventQueue[0].resolved);assert.equal(C.apply(result,{type:'eventChoice',eventId:event.id,choice}).state,result);
+ assert.deepEqual(C.apply(replay,{type:'eventChoice',eventId:event.id,choice}).state.life,result.life);
+ return C.apply(result,{type:'acknowledge'}).state;
+}
+let s=ready();assert.equal(s.life.people.player.family.status,'unset');assert.equal(s.life.people.player.family.children.length,0);
+const target=Object.values(s.life.people).find(p=>p.source==='resident');const job=target.occupation,money=target.wealth;
+let declined=proposal(s,{type:'familyDate',person:target.id},'wait');assert.equal(declined.life.people.player.family.partner,null);assert.equal(declined.cash,1000);
+s=proposal(s,{type:'familyDate',person:target.id});assert.equal(s.life.people.player.family.partner,target.id);assert.equal(s.life.people[target.id].family.partner,'player');
+assert.equal(s.life.people[target.id].occupation,job);assert.equal(s.life.people[target.id].wealth,money);assert.equal(s.life.people.player.gender,'unspecified');
+assert.equal(C.apply(s,{type:'familyMarry'}).state,s);
+s.day=190;s.actions=2;s=C.normalize(s);s=proposal(s,{type:'familyMarry'});
+assert.equal(s.life.people.player.family.status,'married');assert.equal(s.life.people[target.id].family.status,'married');assert.equal(s.cash,988);assert.equal(s.life.people[target.id].wealth,money);
+s.actions=2;const beforeBirthMoney=s.cash;
+s=proposal(s,{type:'familyChild',method:'birth',name:'새봄',childAge:0});assert.equal(s.cash,beforeBirthMoney-20);assert.equal(s.life.family.pending.length,1);assert.equal(s.life.family.pending[0].dueDay,460);
+const pendingCopy=JSON.parse(JSON.stringify(s));
+s=C.apply(s,{type:'lifePass',days:365,routine:'work'}).state;
+assert.equal(s.day,460);assert.equal(s.life.clock.plan.target,555);assert.equal(s.life.family.pending.length,0);assert(s.eventQueue[0].familyReport);
+const newborn=s.life.people[s.life.people.player.family.children[0]];
+assert.equal(newborn.age,0);assert.deepEqual(newborn.family.parents,['player',target.id]);assert(s.life.people[target.id].family.children.includes(newborn.id));assert.equal(newborn.wealth,0);
+assert.equal(C.apply(s,{type:'lifeContinue'}).state,s);
+const parentsCash=s.cash;s=C.apply(s,{type:'acknowledge'}).state;s=C.apply(s,{type:'advance'}).state;
+assert.equal(s.life.people[newborn.id].wealth,0);assert.equal(s.life.people[newborn.id].age,0);assert.equal(s.cash,parentsCash-3-2-(s.day%7===0?12:0));
+const count=Object.keys(s.life.people).length;C.life.tick(s);assert.equal(Object.keys(s.life.people).length,count);
+let separated=JSON.parse(JSON.stringify(pendingCopy));separated.actions=2;separated=C.apply(separated,{type:'familySeparate'}).state;
+assert.equal(separated.life.people.player.family.partner,null);assert.equal(separated.life.family.pending.length,1);
+separated=C.apply(separated,{type:'lifePass',days:365,routine:'work'}).state;
+const later=separated.life.people[separated.life.people.player.family.children[0]];assert.deepEqual(later.family.parents,['player',target.id]);assert.equal(separated.life.people[target.id].family.partner,null);
+let minor=ready();minor.life.people[target.id].age=17;assert.equal(C.apply(minor,{type:'familyDate',person:target.id}).state,minor);
+let early=ready();early.life.people[target.id].history=early.life.people[target.id].history.filter(item=>item.type!=='relationship');assert.equal(C.apply(early,{type:'familyDate',person:target.id}).state,early);
+let stale=C.apply(ready(),{type:'familyDate',person:target.id}).state;stale.life.people[target.id].family.partner='another';const staleId=stale.eventQueue[0].id;
+assert.equal(C.apply(stale,{type:'eventChoice',eventId:staleId,choice:'accept'}).state,stale);stale=C.apply(stale,{type:'eventChoice',eventId:staleId,choice:'wait'}).state;assert.equal(stale.life.people.player.family.partner,null);
+console.log('기존 가족 자동 생성 없음·성인/관계/알아간 기간·대화 수락/보류·조건 변경·혼인 재산 분리·270일 출생과 시간 정지·공동 부모·중복 생성/미성년 수입 차단·분리 후 돌봄 유지 통과');
+let adopt=ready();adopt=proposal(adopt,{type:'familyChild',method:'adoption',name:'온별',childAge:16});
+const childId=adopt.life.people.player.family.children[0];assert.equal(adopt.life.people[childId].age,16);assert.deepEqual(adopt.life.people[childId].family.parents,['player']);
+adopt=C.apply(adopt,{type:'familyEducate',person:childId,path:'craft'}).state;assert.equal(adopt.life.people[childId].education.years,1);
+adopt.actions=2;assert.equal(C.apply(adopt,{type:'familyEducate',person:childId,path:'craft'}).state,adopt);
+adopt=C.apply(adopt,{type:'lifePass',days:365,routine:'work'}).state;assert.equal(adopt.day,465);assert.equal(adopt.life.people[childId].age,17);assert.equal(adopt.life.people[childId].source,'family');
+adopt=C.apply(adopt,{type:'familyEducate',person:childId,path:'craft'}).state;assert.equal(adopt.life.people[childId].education.years,2);
+const replay=JSON.parse(JSON.stringify(adopt));adopt=C.apply(adopt,{type:'lifePass',days:365,routine:'work'}).state;
+assert.deepEqual(C.apply(replay,{type:'lifePass',days:365,routine:'work'}).state.life,adopt.life);
+assert.equal(adopt.day,830);assert.equal(adopt.life.people[childId].age,18);assert.equal(adopt.life.people[childId].source,'resident');assert.equal(adopt.life.people[childId].occupation,'apprentice');assert.deepEqual(adopt.life.people[childId].family.parents,['player']);
+assert(adopt.eventQueue.some(event=>event.id==='family-adult-'+childId));assert(!F.eligiblePartner(adopt,adopt.life.people[childId]));
+assert.equal(C.apply(adopt,{type:'familyEducate',person:childId,path:'craft'}).state,adopt);
+const oldFamily=JSON.parse(JSON.stringify(adopt.life.people[childId].family));adopt.eventQueue=[];adopt=C.apply(adopt,{type:'advance'}).state;assert.deepEqual(adopt.life.people[childId].family,oldFamily);
+const invalid=ready();assert.equal(C.apply(invalid,{type:'familyChild',method:'adoption',name:'',childAge:6}).state,invalid);assert.equal(C.apply(invalid,{type:'familyChild',method:'adoption',name:'아이',childAge:18}).state,invalid);
+const noMoney=ready();noMoney.cash=10;assert.equal(C.apply(noMoney,{type:'familyChild',method:'adoption',name:'아이',childAge:6}).state,noMoney);
+let school=ready();school=proposal(school,{type:'familyChild',method:'adoption',name:'한결',childAge:5});const schoolId=school.life.people.player.family.children[0];school=C.apply(school,{type:'lifePass',days:365,routine:'work'}).state;assert.equal(school.life.people[schoolId].occupation,'student');
+const old=ready();delete old.life.family;for(const person of Object.values(old.life.people))person.family={status:'unset'};const migrated=C.normalize(old);assert.deepEqual(migrated.life.people.player.family.children,[]);assert(!old.life.family);assert.deepEqual(C.normalize(migrated).life,migrated.life);
+console.log('단독 입양·실제 돌봄비·연간 교육 중복 차단·6세 학교·18세 진로·동일 인물/부모 관계 유지·성년 사건·가까운 가족 관계 제외·저장 복원·구형 저장 통과');

@@ -1,5 +1,6 @@
 'use strict';
 (function(root){
+  const family=typeof module!=='undefined'?require('./family'):root.Family;
   const jobs={worker:'항구 노동자',farmer:'농장 일꾼',apprentice:'공장 견습',clerk:'서기',artisan:'정비공',trader:'시장 상인',teacher:'야학 교사',medic:'진료소 보조',journalist:'신문 기자',guard:'순찰대원',soldier:'군인',official:'행정 공무원',unemployed:'구직 중',retired:'은퇴 생활',councillor:'지역 의원'};
   const income={worker:5,farmer:5,apprentice:5,clerk:6,artisan:7,trader:8,teacher:5,medic:5,journalist:6,guard:6,soldier:6,official:6,unemployed:0,retired:5,councillor:7};
   const copy=value=>JSON.parse(JSON.stringify(value));
@@ -63,7 +64,7 @@
       player.started=true;player.jobTitle=descriptor.title;player.occupation=state.career;player.since=state.day;
       entry(player,state.day,'observed','생애 기록 시작 · '+descriptor.title+' · 현재 나이 '+(player.age??'미설정'));
     }
-    seedResidents(state);syncCouncil(state);
+    seedResidents(state);syncCouncil(state);family.restore(state);
   }
   function news(state,p,text){state.life.news.unshift({day:state.day,person:p.id,text:p.name+' · '+text});}
   function npcDay(state,p,day){
@@ -122,7 +123,8 @@
       const oldAge=player.age;player.age=age(player,day);
       if(oldAge!==player.age)entry(player,day,'age',(player.age??'미설정')+'세가 됐다.');
       player.health=Math.max(0,Math.min(100,player.health+(state.cash<0?-1:state.energy>=60?1:0)-(state.energy<20?1:0)));
-      for(const p of Object.values(state.life.people))if(p.id!=='player')npcDay(state,p,day);
+      family.tick(state,day);
+      for(const p of Object.values(state.life.people))if(p.id!=='player'&&p.source!=='family')npcDay(state,p,day);
     }
     state.life.lastDay=state.day;
   }
@@ -138,7 +140,7 @@
     const role=state.underworld.role;
     if(p.sideRole!==role){entry(p,state.day,'career','병행 활동 '+(descriptor.sideTitle||'종료'));p.sideRole=role;}
     if(state.startConfigured&&!p.started){p.started=true;entry(p,state.day,'observed','선택한 출신과 직업으로 삶을 시작했다.');}
-    seedResidents(state);syncCouncil(state);
+    seedResidents(state);syncCouncil(state);family.restore(state);
   }
   function act(state,action){
     if(!['lifeCare','lifeVisit','lifeRefer'].includes(action.type))return null;
