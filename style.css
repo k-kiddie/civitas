@@ -18,3 +18,23 @@ dialog{color:var(--text);background:var(--surface);border:1px solid #ffffff16;bo
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 .event-choices{display:grid;gap:8px;margin-top:18px}.event-choices .choice{margin:0;border-color:#ffffff15}.event-choices .choice small{font-size:12px}.event-outcome{background:#8ce5d00e;border:1px solid #8ce5d02d;border-radius:12px;padding:16px;margin-top:18px}.event-outcome p{font-size:14px;line-height:1.9;margin:8px 0 0}.event-dialog:has(.event-choices) .event-picture{height:200px}@media(max-width:650px){.event-dialog:has(.event-choices) .event-picture{height:22dvh}.event-dialog:has(.event-choices) .event-copy blockquote{font-size:14px;padding:6px 0}.event-dialog:has(.event-choices) .event-copy h2{font-size:21px}.event-dialog:has(.event-choices) .event-copy>p:not(.eyebrow){font-size:14px}.event-dialog:has(.event-choices) .choice{padding:13px 15px}}
 .conversation{display:grid;gap:15px;margin-top:20px}.speech{padding:0 0 0 14px;border-left:2px solid #456078;margin-top:16px}.conversation .speech{margin:0}.speech>span{font-size:12px;font-weight:600;color:#a9c4dc}.speech>p{font-size:15px;line-height:1.95;margin:6px 0 0;color:#e0e8f3}.player-speech{margin-left:25px;border-color:var(--accent);background:#8ce5d009;padding:12px 16px;border-radius:0 10px 10px 0}.player-speech>span{color:var(--accent)}.dialogue-next{width:100%;border:1px solid #8ce5d04d;color:var(--accent);background:#8ce5d00a;border-radius:10px;padding:14px;margin-top:18px;min-height:48px}.event-dialog:has(.conversation) .event-picture{height:clamp(150px,23dvh,220px)}.event-dialog:has(.conversation) .event-copy>p:not(.eyebrow){font-size:13px;color:var(--muted)}
+/* Keep the scene visible while only the dialogue region scrolls. */
+.event-dialog[open]{display:flex;flex-direction:column;height:min(860px,92dvh);max-height:92dvh;overflow:hidden}
+.event-visual{position:relative;flex:0 0 clamp(200px,36dvh,330px);min-height:0;overflow:hidden;background:#172333}
+.event-dialog .event-visual .event-picture{height:100%;width:100%;object-fit:cover;mask-image:none;object-position:50% 42%}
+.event-caption{position:absolute;inset:auto 0 0;padding:50px 24px 18px;background:linear-gradient(transparent,#09121bed);pointer-events:none}
+.event-caption>p{margin:0 0 6px;color:#cfdbeb;font-size:12px}
+.event-caption h2{margin:0;font-size:23px;line-height:1.4;color:white;text-shadow:0 2px 8px #0008}
+.event-dialog .event-copy{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;margin:0;padding:20px 24px 24px;scrollbar-width:thin}
+.event-copy .conversation{margin:0;gap:0}
+.event-copy .speech{padding-left:0;border:0}
+.event-copy .speech>p{margin-top:8px;font-size:16px;line-height:1.85}
+.event-copy .event-choices{margin-top:18px}
+.event-copy .event-outcome{margin-top:16px}
+.dialogue-history{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+.dialogue-history summary{cursor:pointer;min-height:35px}
+.dialogue-history p{font-size:13px;line-height:1.9}
+.dialogue-history b{display:block;color:#c9d7e7;font-weight:500}
+@media(max-width:650px){.event-dialog[open]{height:94dvh;max-height:94dvh;width:calc(100% - 24px)}.event-visual{flex-basis:clamp(190px,34dvh,290px)}.event-dialog .event-copy{padding:18px 20px 20px}.event-caption{padding:45px 20px 16px}.event-caption h2{font-size:21px}.event-copy .speech>p{font-size:15px}.event-copy .choice{padding:12px 14px}.event-copy .choice strong{font-size:14px}.event-copy .choice small{font-size:12px}}
+@media(max-height:550px){.event-visual{flex-basis:34dvh}.event-caption h2{font-size:18px}.event-caption{padding:35px 18px 12px}}
+.event-copy:focus{outline:none}.event-copy:focus-visible{outline:1px solid #8ce5d066;outline-offset:-2px}

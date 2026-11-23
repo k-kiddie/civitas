@@ -81,13 +81,17 @@ function cityArt(){let b='';let seed=41;const rand=()=>{seed=(seed*16807)%214748
     const lines = Campaign.eventDialogue(state, event);
     const index = event.resolved ? lines.length - 1 : (event.dialogueIndex || 0);
     const reading = !event.resolved && index < lines.length - 1;
-    const conversation = `<div class="conversation" aria-live="polite">${lines.slice(0,index + 1).map(line => `<div class="speech"><span>${escape(line.speaker)}</span><p>${escape(line.text)}</p></div>`).join('')}</div>`;
+    const current = event.resolved?.reaction
+      ? { speaker: event.resolved.speaker, text: event.resolved.reaction }
+      : lines[index];
+    const conversation = `<div class="conversation" aria-live="polite"><div class="speech"><span>${escape(current.speaker)}</span><p id="current-line">${escape(current.text)}</p></div></div>`;
+    const history = `<details class="dialogue-history"><summary>상황과 지난 대화</summary><p>${escape(event.text)}</p>${lines.slice(0, event.resolved ? lines.length : index).map(line => `<p><b>${escape(line.speaker)}</b> ${escape(line.text)}</p>`).join('')}${event.resolved?.reply ? `<p><b>${escape(state.name)} · 나</b> ${escape(event.resolved.reply)}</p>` : ''}</details>`;
     const nextLine = reading ? `<button class="dialogue-next" data-action="dialogueNext" data-event-id="${event.id}">이야기를 더 듣는다</button>` : '';
     const decision = event.resolved
-      ? `<div class="speech player-speech"><span>${escape(state.name)} · 나</span><p>${escape(event.resolved.reply || '')}</p></div>${event.resolved.reaction ? `<div class="speech"><span>${escape(event.resolved.speaker)}</span><p>${escape(event.resolved.reaction)}</p></div>` : ''}<section class="event-outcome" role="status"><span class="eyebrow">선택의 결과</span><p>${escape(event.resolved.result)}</p></section>`
+      ? `<section class="event-outcome" role="status"><span class="eyebrow">선택의 결과</span><p>${escape(event.resolved.result)}</p></section>`
       : !reading && choices.length ? `<div class="event-choices">${choices.map(choice => `<button class="choice" data-action="eventChoice" data-event-id="${event.id}" data-choice="${choice.id}" ${choice.disabled ? 'disabled' : ''}><strong>“${escape(Campaign.eventReply ? Campaign.eventReply(event, choice.id).reply : choice.title)}”</strong><small>${escape(choice.detail)}</small></button>`).join('')}</div>` : '';
     const continueButton = !reading && !choices.length ? `<button class="endday" data-event-dismiss autofocus>${event.scene === 'hearing' ? '청문회에 참석한다' : event.resolved ? '이 결정을 안고 계속한다' : '도시로 돌아간다'}</button>` : '';
-    return `<dialog id="event-dialog" class="event-dialog" aria-labelledby="event-title" aria-describedby="event-description"><img class="event-picture" src="/assets/events/${event.scene}.webp" alt="${escape(event.title)}"><div class="event-copy"><p class="eyebrow">${event.day}일 · ${event.id === 'storm' ? '첫 장마' : event.id === 'election' ? '선거 결과' : event.scene === 'hearing' ? '공개 청문회' : '후속 소식'}</p><h2 id="event-title">${escape(event.title)}</h2><p id="event-description">${escape(event.text)}</p>${conversation}${nextLine}${decision}${continueButton}</div></dialog>`;
+    return `<dialog id="event-dialog" class="event-dialog" aria-labelledby="event-title" aria-describedby="current-line"><div class="event-visual"><img class="event-picture" src="/assets/events/${event.scene}.webp" alt="${escape(event.title)}"><div class="event-caption"><p>${event.day}일 · ${event.id === 'storm' ? '첫 장마' : event.id === 'election' ? '선거 결과' : event.scene === 'hearing' ? '공개 청문회' : '후속 소식'}</p><h2 id="event-title">${escape(event.title)}</h2></div></div><div class="event-copy">${conversation}${nextLine}${decision}${continueButton}${history}</div></dialog>`;
   }
   function render() {
     const previousFocus = document.activeElement?.dataset?.action;
@@ -137,8 +141,8 @@ function cityArt(){let b='';let seed=41;const rand=()=>{seed=(seed*16807)%214748
     }
     render();
     if (['dialogueNext','eventChoice'].includes(element.dataset.action)) {
-      const dialog = document.querySelector('#event-dialog');
-      if (dialog) dialog.scrollTop = dialog.scrollHeight;
+      const copy = document.querySelector('#event-dialog .event-copy');
+      if (copy) copy.scrollTop = 0;
     }
   });
   document.addEventListener('submit', event => {
