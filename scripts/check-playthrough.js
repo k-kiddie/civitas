@@ -54,3 +54,43 @@ for (const plan of ['long', 'short']) {
   assert.notEqual(campaign.election.districts[0].share,campaign.election.districts[1].share);
 }
 console.log('공개 약속 이행/위반·증인 확보·중복 사건 방지·구역별 개표 통과');
+for (const career of ['investigator', 'councillor', 'mayor']) {
+  let campaign = fresh();
+  function act(action) { campaign = apply(campaign, action).state; }
+  for (const action of [{type:'survey'}, {type:'build',plan:'long',funding:'merchant'}, {type:'advance'}, {type:'witness'}, {type:'advance',to:'event'}, {type:'advance',to:'event'}, {type:'advance'}]) act(action);
+  if (career === 'mayor') {
+    campaign.election.won = true;
+    campaign.career = 'mayor';
+  } else act({type:'join',career});
+  assert.equal(campaign.career,career);
+  if (career === 'investigator') {
+    act({type:'investigate'});
+    act({type:'advance'});
+    act({type:'caseDecision',choice:'public'});
+  } else act({type:'bill'});
+  const hearingDay = campaign.hearing.day;
+  act({type:'advance',to:'event'});
+  assert.equal(campaign.day,hearingDay);
+  assert.equal(campaign.bill,'passed');
+  assert.equal(campaign.contractRelief,true);
+  const before = campaign.cash;
+  act({type:'work'});
+  assert.equal(campaign.cash - before,16);
+}
+let legacy = fresh();
+delete legacy.career;
+delete legacy.treasury;
+legacy.election = { won:true, winner:legacy.name, votes:60 };
+legacy.day = 22;
+legacy.residents.village -= 4;
+const recovered = apply(legacy,{type:'budget'}).state;
+assert.equal(recovered.career,'mayor');
+assert.equal(recovered.treasury,28);
+assert.equal(recovered.residents.village,26);
+assert.equal(recovered.cash,legacy.cash);
+let privateCase = {...fresh(),day:22,career:'investigator',caseStage:'evidence'};
+privateCase = apply(privateCase,{type:'caseDecision',choice:'private'}).state;
+assert.equal(privateCase.cash,52);
+assert.equal(privateCase.caseStage,'sealed');
+assert.equal(privateCase.hearing,null);
+console.log('직책 3종·공개수사·비공개합의·청문회 시간 정지·임금 회복·구형 저장 보완·공금 분리 통과');

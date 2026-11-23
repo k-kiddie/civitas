@@ -10,12 +10,16 @@
       surveyed: false, testimony: false, funding: null, built: null, flooded: null,
       candidate: false, election: null, policy: null, support: 25, memories: [], journal: [],
       promise: null, notices: [], witness: false,
+      career: 'worker', treasury: 40, caseStage: 'closed', contractRelief: false,
+      hearing: null, bill: null,
       residents: { harbor: 48, village: 26, hill: 12 } };
   }
   function record(state, text) { state.journal.unshift({ day: state.day, text }); }
   function remember(state, person, text) { state.memories.push({ person, text, day: state.day }); }
   function normalize(state) {
-    return { ...fresh(), ...state };
+    const result = { ...fresh(), ...state };
+    if (result.election?.won) result.career = 'mayor';
+    return result;
   }
   function electionResult(state) {
     const common = state.support - 25;
@@ -43,8 +47,8 @@
       case 'place': next.place = action.place; return { state: next, message: '' };
       case 'work':
         if (!spend(15)) break;
-        next.cash += next.funding === 'merchant' && next.flooded !== null ? 10 : 16;
-        message = '부두에서 품삯을 받았다. 선주 계약이 발효된 뒤에는 임금에서 통행료가 공제된다.';
+        next.cash += next.funding === 'merchant' && next.flooded !== null && !next.contractRelief ? 10 : 16;
+        message = next.funding === 'merchant' && next.flooded !== null && !next.contractRelief ? '부두에서 품삯 10크라운을 받았다. 선주 계약의 사용료 6크라운이 공제됐다.' : '부두에서 품삯 16크라운을 받았다.';
         break;
       case 'rest':
         if (!spend()) break;
@@ -111,6 +115,52 @@
         next.support = Math.min(90, next.support + 7);
         message = '골목 집회에서 주민들의 이야기를 들었다. 예상 지지가 올랐다.';
         break;
+      case 'join':
+        if (next.day < 21 || next.career !== 'worker' || !['investigator', 'councillor'].includes(action.career) || !next.witness || !spend()) break;
+        next.career = action.career;
+        next.caseStage = action.career === 'investigator' ? 'open' : next.caseStage;
+        message = action.career === 'investigator' ? '민석의 추천으로 항만 수사관이 됐다. 임명은 선거 당선과 다른 경로의 권한을 열었다.' : '지안의 추천으로 주민 협의회 위원에 위촉됐다. 안건을 제출하고 공개 청문회를 소집할 수 있다.';
+        remember(next, action.career === 'investigator' ? '민석' : '지안', '당신을 공직에 추천했다. 앞으로의 결정에 책임을 묻는다.');
+        break;
+      case 'investigate':
+        if (next.career !== 'investigator' || next.caseStage !== 'open' || !spend(10)) break;
+        next.caseStage = 'evidence';
+        message = next.funding === 'merchant' ? '임금 장부와 선주 계약을 대조했다. 사용료가 노동자 임금에서 공제되는 조항을 확인했다. 당신의 서명도 있다.' : '장부 대조 결과 횡령 증거는 없었다. 다만 배급을 받지 못한 가구 명단이 발견됐다.';
+        remember(next, '민석', message);
+        break;
+      case 'caseDecision':
+        if (next.career !== 'investigator' || next.caseStage !== 'evidence' || !['public', 'private'].includes(action.choice) || !spend()) break;
+        next.caseStage = action.choice === 'public' ? 'reported' : 'sealed';
+        if (action.choice === 'public') {
+          next.hearing = { day: next.day + 3, source: 'report' };
+          message = '수사 자료를 공개했다. 사흘 뒤 주민 청문회가 열린다. 서명자에게도 질문이 돌아온다.';
+        } else {
+          next.cash += 20;
+          next.support = Math.max(0, next.support - 8);
+          message = '도윤의 비공개 합의를 받아들였다. 20크라운을 받았고 민석은 보고서 누락을 기억한다.';
+          remember(next, '민석', '공개 가능한 자료를 봉인한 당신에게 책임을 묻는다.');
+        }
+        break;
+      case 'bill':
+        if (!['mayor', 'councillor'].includes(next.career) || next.bill || next.hearing || !spend(10)) break;
+        next.bill = 'pending';
+        next.hearing = { day: next.day + 3, source: 'bill' };
+        message = '항만 계약 재협상안을 제출했다. 사흘 뒤 소라·도윤·윤이 공개 청문회에서 의견을 낸다.';
+        remember(next, '지안', '당신의 재협상안을 의사록에 올렸다.');
+        break;
+      case 'budget': {
+        if (next.career !== 'mayor' || next.day < 21 || next.treasury < 12 || !spend()) break;
+        const returned = Math.min(4, Math.max(0, 86 - Object.values(next.residents).reduce((a, b) => a + b, 0)));
+        if (!returned) {
+          next.actions += 1;
+          break;
+        }
+        next.treasury -= 12;
+        next.residents.village += returned;
+        message = `공금 12크라운으로 복구 공사를 발주했다. ${returned}가구가 돌아왔다. 개인 소지금은 공금과 별도로 관리된다.`;
+        remember(next, '윤', '당신이 발주한 복구 공사를 맡았다.');
+        break;
+      }
       case 'policy':
         if (!next.election || next.policy || next.day < 21 || !spend()) break;
         next.policy = action.policy === 'housing' ? 'housing' : 'audit';
@@ -125,7 +175,8 @@
         }
         break;
       case 'advance': {
-        const target = action.to === 'event' ? (next.day < 12 ? 12 : next.day < 20 ? 20 : next.day < 21 ? 21 : next.day + 7) : next.day + 1;
+        let target = action.to === 'event' ? (next.day < 12 ? 12 : next.day < 20 ? 20 : next.day < 21 ? 21 : next.day + 7) : next.day + 1;
+        if (next.hearing && next.hearing.day > next.day) target = Math.min(target, next.hearing.day);
         while (next.day < target) {
           next.day += 1;
           next.cash -= 3 + (next.day % 7 === 0 ? 12 : 0);
@@ -155,8 +206,30 @@
             record(next, report);
             remember(next, '소라', plan === 'long' ? '어촌이 장마를 버텼다. 공사에 참여한 당신을 기억한다.' : '어촌 18가구가 침수됐다. 당신이 어떤 결정을 했는지 기억한다.');
           }
+          if (next.day > 20 && next.day % 7 === 0) {
+            next.treasury += 10;
+            if (next.career !== 'worker') {
+              next.cash += 18;
+              record(next, '주급 18크라운을 받았다. 시 재정에는 세수 10크라운이 들어왔다.');
+            }
+          }
+          if (next.hearing && next.day === next.hearing.day) {
+            const passed = next.witness && (next.support >= 40 || next.promise === 'kept');
+            next.bill = passed ? 'passed' : 'rejected';
+            next.contractRelief = passed && next.funding === 'merchant';
+            const result = passed ? (next.funding === 'merchant' ? '청문회에서 공개 계약과 주민 지지를 바탕으로 재협상안이 통과됐다. 선주 계약의 임금 공제 조항이 폐기됐다.' : '청문회에서 공사비와 배급 기록 공개안이 통과됐다. 선주 계약은 체결되지 않아 변경할 임금 조항이 없다.') : '도윤이 재협상안에 반대했다. 주민들의 동의를 확보하지 못해 안건이 부결됐다.';
+            record(next, result);
+            remember(next, '도윤', result);
+            next.notices.unshift(result);
+            next.hearing = null;
+          }
+          if (next.day === 24 && !next.hearing && !next.bill) {
+            next.notices.unshift('지안이 재협상안 제출을 권했다. 수사관은 장부를 조사하고, 동장과 협의회 위원은 안건을 제출할 수 있다.');
+            record(next, '지안이 계약 재협상에 필요한 절차를 안내했다.');
+          }
           if (next.day === 20) {
             next.election = electionResult(next);
+            if (next.election.won) next.career = 'mayor';
             record(next, `${next.election.winner} 동장 당선. ${next.candidate ? '당신의 득표율 ' + next.election.votes + '%' : '당신은 출마하지 않았다.'}`);
           }
         }
