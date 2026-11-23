@@ -1,0 +1,19 @@
+'use strict';
+const http = require('node:http');
+const fs = require('node:fs');
+const path = require('node:path');
+const root = __dirname;
+const port = Math.max(1, Number(process.env.PORT) || 8080);
+const routes = new Map([
+  ['/',['index.html','text/html; charset=utf-8']],
+  ['/game.js',['game.js','text/javascript; charset=utf-8']],
+]);
+http.createServer((req,res)=>{
+  const url = new URL(req.url,'http://localhost');
+  const route = routes.get(url.pathname);
+  if(req.method!=='GET'||!route){res.writeHead(404,{'content-type':'text/plain; charset=utf-8'});res.end('Not found');return;}
+  const [file,type] = route;
+  const body = fs.readFileSync(path.join(root,file));
+  res.writeHead(200,{'content-type':type,'content-length':body.length,'cache-control':'no-store','x-content-type-options':'nosniff'});
+  res.end(body);
+}).listen(port,'0.0.0.0',()=>console.log(`CIVITAS가 ${port} 포트에서 실행 중`));
