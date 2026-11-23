@@ -182,3 +182,20 @@ for (const won of [true,false]) {
   assert.equal(won ? state.hearing.day : state.support,won ? 23 : 31);
 }
 console.log('사건 선택 분기·비용 검증·중복 방지·중간 저장·이틀 뒤 후속 사건·당선/낙선 선택 통과');
+const dialogueApi = require('../campaign');
+for (const promise of ['kept','broken']) {
+  let state = {...fresh(),promise,flooded:promise === 'kept' ? 0 : 18,eventQueue:[{id:'storm'}]};
+  const opening = dialogueApi.eventDialogue(state,state.eventQueue[0]);
+  assert.match(opening[0].text,promise === 'broken' ? /했잖아요/ : /멈췄어요/);
+  const cash = state.cash;
+  state = apply(state,{type:'dialogueNext',eventId:'storm'}).state;
+  assert.equal(state.eventQueue[0].dialogueIndex,1);
+  assert.equal(state.cash,cash);
+  state = JSON.parse(JSON.stringify(state));
+  assert.equal(dialogueApi.eventDialogue(state,state.eventQueue[0])[0].text,opening[0].text);
+  state = apply(state,{type:'eventChoice',eventId:'storm',choice:'organize'}).state;
+  assert.match(state.eventQueue[0].resolved.reply,/이야기/);
+  assert.match(state.eventQueue[0].resolved.reaction,/증언/);
+  assert(state.memories.some(item=>item.text.includes('당신 “')));
+}
+console.log('이전 약속별 대사·읽은 위치 저장·응답과 NPC 반응·대화 기억 통과');

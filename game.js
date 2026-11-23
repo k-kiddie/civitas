@@ -78,11 +78,16 @@ function cityArt(){let b='';let seed=41;const rand=()=>{seed=(seed*16807)%214748
     const event = state.eventQueue[0];
     if (!event) return '';
     const choices = Campaign.eventChoices(state, event);
+    const lines = Campaign.eventDialogue(state, event);
+    const index = event.resolved ? lines.length - 1 : (event.dialogueIndex || 0);
+    const reading = !event.resolved && index < lines.length - 1;
+    const conversation = `<div class="conversation" aria-live="polite">${lines.slice(0,index + 1).map(line => `<div class="speech"><span>${escape(line.speaker)}</span><p>${escape(line.text)}</p></div>`).join('')}</div>`;
+    const nextLine = reading ? `<button class="dialogue-next" data-action="dialogueNext" data-event-id="${event.id}">이야기를 더 듣는다</button>` : '';
     const decision = event.resolved
-      ? `<section class="event-outcome" role="status"><span class="eyebrow">선택의 결과</span><p>${escape(event.resolved.result)}</p></section>`
-      : choices.length ? `<div class="event-choices">${choices.map(choice => `<button class="choice" data-action="eventChoice" data-event-id="${event.id}" data-choice="${choice.id}" ${choice.disabled ? 'disabled' : ''}><strong>${escape(choice.title)}</strong><small>${escape(choice.detail)}</small></button>`).join('')}</div>` : '';
-    const continueButton = !choices.length ? `<button class="endday" data-event-dismiss autofocus>${event.scene === 'hearing' ? '청문회에 참석한다' : event.resolved ? '이 결정을 안고 계속한다' : '도시로 돌아간다'}</button>` : '';
-    return `<dialog id="event-dialog" class="event-dialog" aria-labelledby="event-title" aria-describedby="event-description"><img class="event-picture" src="/assets/events/${event.scene}.webp" alt="${escape(event.title)}"><div class="event-copy"><p class="eyebrow">${event.day}일 · ${event.id === 'storm' ? '첫 장마' : event.id === 'election' ? '선거 결과' : event.scene === 'hearing' ? '공개 청문회' : '후속 소식'}</p><h2 id="event-title">${escape(event.title)}</h2><p id="event-description">${escape(event.text)}</p><blockquote>${escape(event.quote)}</blockquote>${decision}${continueButton}</div></dialog>`;
+      ? `<div class="speech player-speech"><span>${escape(state.name)} · 나</span><p>${escape(event.resolved.reply || '')}</p></div>${event.resolved.reaction ? `<div class="speech"><span>${escape(event.resolved.speaker)}</span><p>${escape(event.resolved.reaction)}</p></div>` : ''}<section class="event-outcome" role="status"><span class="eyebrow">선택의 결과</span><p>${escape(event.resolved.result)}</p></section>`
+      : !reading && choices.length ? `<div class="event-choices">${choices.map(choice => `<button class="choice" data-action="eventChoice" data-event-id="${event.id}" data-choice="${choice.id}" ${choice.disabled ? 'disabled' : ''}><strong>“${escape(Campaign.eventReply ? Campaign.eventReply(event, choice.id).reply : choice.title)}”</strong><small>${escape(choice.detail)}</small></button>`).join('')}</div>` : '';
+    const continueButton = !reading && !choices.length ? `<button class="endday" data-event-dismiss autofocus>${event.scene === 'hearing' ? '청문회에 참석한다' : event.resolved ? '이 결정을 안고 계속한다' : '도시로 돌아간다'}</button>` : '';
+    return `<dialog id="event-dialog" class="event-dialog" aria-labelledby="event-title" aria-describedby="event-description"><img class="event-picture" src="/assets/events/${event.scene}.webp" alt="${escape(event.title)}"><div class="event-copy"><p class="eyebrow">${event.day}일 · ${event.id === 'storm' ? '첫 장마' : event.id === 'election' ? '선거 결과' : event.scene === 'hearing' ? '공개 청문회' : '후속 소식'}</p><h2 id="event-title">${escape(event.title)}</h2><p id="event-description">${escape(event.text)}</p>${conversation}${nextLine}${decision}${continueButton}</div></dialog>`;
   }
   function render() {
     const previousFocus = document.activeElement?.dataset?.action;
@@ -131,6 +136,10 @@ function cityArt(){let b='';let seed=41;const rand=()=>{seed=(seed*16807)%214748
       try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { message += ' 저장 공간에 접근할 수 없어 이번 진행은 자동 저장되지 않았다.'; }
     }
     render();
+    if (['dialogueNext','eventChoice'].includes(element.dataset.action)) {
+      const dialog = document.querySelector('#event-dialog');
+      if (dialog) dialog.scrollTop = dialog.scrollHeight;
+    }
   });
   document.addEventListener('submit', event => {
     if (event.target.id !== 'profile-form') return;

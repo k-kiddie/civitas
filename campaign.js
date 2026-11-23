@@ -46,6 +46,43 @@
     if (state.support >= 40 || state.promise === 'kept') score += 1;
     return score;
   }
+  function eventDialogue(state, event) {
+    if (event.dialogue) return event.dialogue;
+    if (event.id === 'storm') return [
+      { speaker: '소라', text: state.promise === 'broken' ? '당신, 어촌을 지킨다고 했잖아요. 지금 저 집들을 봐요.' : state.flooded === 0 ? '물이 제방 밖에서 멈췄어요. 사람들이 밤새 서로의 집을 확인했어요.' : '사람들이 젖은 짐을 들고 언덕에 모였어요. 오늘 밤부터 어디서 자죠?' },
+      { speaker: '윤', text: state.flooded === 0 ? '제방은 버텼지만 배급과 물자 정리는 남았어. 누군가는 도와야 해.' : '복구하려면 돈도, 손도 필요해. 그전에 누가 무엇을 잃었는지부터 알아야 하고.' },
+      { speaker: '소라', text: '여기 남아서 도와줄 건가요? 당신도 먹고살아야 한다는 건 알아요.' }
+    ];
+    if (event.id === 'election' && state.election?.won) return [
+      { speaker: '지안', text: `${state.name} 님, 개표가 끝났어요. 당신이 동장이에요.` },
+      { speaker: '소라', text: state.promise === 'broken' ? '당선된 건 인정해요. 하지만 지난번 약속도 잊지는 않았어요.' : '축하 인사는 내일 할게요. 오늘도 집에 못 돌아간 사람들이 있어요.' },
+      { speaker: '지안', text: '첫 예산과 첫 일정에 무슨 말을 적을까요?' }
+    ];
+    if (event.id === 'election') return [
+      { speaker: '지안', text: state.candidate ? '개표가 끝났어요. 이번 선거는 소라가 이겼어요.' : '소라가 동장으로 선출됐어요. 주민들이 회의장으로 가고 있어요.' },
+      { speaker: '소라', text: '선거가 끝났다고 동네 일이 끝나는 건 아니잖아요. 다음 회의에 같이 와 줄래요?' }
+    ];
+    if (event.scene === 'hearing') return [
+      { speaker: '지안', text: '청문회를 시작하겠습니다. 오늘의 발언과 증거는 공개 기록에 남습니다.' },
+      { speaker: '도윤', text: state.funding === 'merchant' ? '제방 공사비는 내가 댔소. 계약에 적힌 서명은 당신 것도 맞지?' : '장부부터 확인합시다. 소문으로 누군가의 책임을 정할 순 없소.' },
+      { speaker: '민석', text: '누구에게 먼저 질문하겠습니까? 당신이 가진 사본도 제출할 수 있습니다.' }
+    ];
+    return [{ speaker: event.id.includes('housing') ? '윤' : '소라', text: event.text }];
+  }
+  function eventReply(event, choice) {
+    const replies = {
+      aid: ['내 돈을 보탤게요. 오늘 필요한 물자부터 구하죠.', '소라', '고마워요. 누가 무엇을 받았는지 기록해 둘게요. 며칠 뒤 다시 와 주세요.'],
+      organize: ['먼저 사람들 이야기를 듣겠어요. 함께 기록하죠.', '소라', '좋아요. 이 일을 숫자로만 남기지는 말아 주세요. 제가 증언할게요.'],
+      livelihood: ['지금은 제 품삯부터 벌어야 해요.', '소라', '알겠어요. 당신 없이 먼저 시작할게요. 기다리는 사람들은 오늘도 있어요.'],
+      housing: ['첫 예산은 집을 잃은 사람들에게 쓰겠습니다.', '윤', '그럼 내가 공사를 맡지. 사흘 뒤에 입주 명단을 가져오겠어.'],
+      audit: ['항만 계약부터 공개적으로 검토하겠습니다.', '지안', '당신의 서명도 검토 대상이에요. 그 각오까지 기록할게요.'],
+      pause: ['오늘 하루는 쉬고 싶어요.', '소라', '쉬세요. 대신 내일은 주민들 앞에서 직접 말해 줘요.'],
+      delegation: ['같이 가겠어요. 주민들 이야기는 계속 들어야죠.', '소라', '그럼 다음 회의에서 봐요. 서로 동의하지 않는 일도 이야기해요.'],
+      work: ['일단 부두로 돌아갈게요. 생활비가 밀렸어요.', '소라', '알겠어요. 회의록은 남겨 둘게요. 다음에는 당신 자리도 있었으면 해요.']
+    };
+    const entry = replies[choice];
+    return { reply: entry[0], speaker: entry[1], reaction: entry[2] };
+  }
   function eventChoices(state, event) {
     if (!event || event.resolved) return [];
     if (event.id === 'storm') return [
@@ -78,6 +115,13 @@
       next.name = Array.from(action.name.trim()).slice(0,18).join('');
       next.gender = action.gender;
       next.profileSet = true;
+      return { state: next, message: '' };
+    }
+    if (action.type === 'dialogueNext') {
+      const event = next.eventQueue[0];
+      if (!event || event.id !== action.eventId || event.resolved) return { state, message: '' };
+      event.dialogue = eventDialogue(next, event);
+      event.dialogueIndex = Math.min((event.dialogueIndex || 0) + 1, event.dialogue.length - 1);
       return { state: next, message: '' };
     }
     if (action.type === 'eventChoice') {
@@ -130,8 +174,11 @@
         result = '부두로 돌아가 12크라운을 벌었다. 주민 대표단은 당신 없이 회의를 시작했다.';
         remember(next, '소라', result);
       }
-      event.resolved = { choice: choice.id, result };
-      next.storyHistory.push({ id: event.id, day: next.day, choice: choice.id, result });
+      event.dialogue = eventDialogue(next, event);
+      const response = eventReply(event, choice.id);
+      event.resolved = { choice: choice.id, result, ...response };
+      remember(next, response.speaker, `당신 “${response.reply}” · ${response.speaker} “${response.reaction}”`);
+      next.storyHistory.push({ id: event.id, day: next.day, choice: choice.id, result, ...response });
       record(next, result);
       return { state: next, message: result };
     }
@@ -403,7 +450,7 @@
     record(next, message);
     return { state: next, message };
   }
-  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices };
+  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices, eventDialogue, eventReply };
   if (typeof module !== 'undefined') module.exports = api;
   root.Campaign = api;
 })(globalThis);
