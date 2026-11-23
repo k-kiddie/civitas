@@ -6,7 +6,7 @@
     none: { name: '공사를 보류한다', cost: 0, homes: 0, description: '돈을 쓰지 않는다. 장마 때 34가구가 침수된다.' }
   };
   function fresh() {
-    return { version: 3, day: 1, actions: 2, cash: 32, energy: 80, name: '하린', place: 'harbor',
+    return { version: 3, day: 1, actions: 2, cash: 32, energy: 80, name: '시민', gender: 'unspecified', profileSet: false, place: 'harbor',
       surveyed: false, testimony: false, funding: null, built: null, flooded: null,
       candidate: false, election: null, policy: null, support: 25, memories: [], journal: [],
       promise: null, notices: [], witness: false,
@@ -55,6 +55,13 @@
       next.energy -= energy;
       return true;
     };
+    if (action.type === 'profile') {
+      if (typeof action.name !== 'string' || !action.name.trim() || !['male','female','unspecified'].includes(action.gender)) return { state, message: '이름과 성별 설정을 확인해 주세요.' };
+      next.name = Array.from(action.name.trim()).slice(0,18).join('');
+      next.gender = action.gender;
+      next.profileSet = true;
+      return { state: next, message: '' };
+    }
     if (action.type === 'acknowledge') {
       next.eventQueue.shift();
       return { state: next, message: '' };

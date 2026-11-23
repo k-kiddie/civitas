@@ -132,3 +132,23 @@ const oldSave = fresh();
 delete oldSave.eventQueue;
 assert.deepEqual(require('../campaign').normalize(oldSave).eventQueue,[]);
 console.log('선택별 사건 그림·미확인 저장·확인 뒤 재등장 방지·기존 저장 보완 통과');
+for (const gender of ['male','female','unspecified']) {
+  const original = fresh();
+  const changed = apply(original,{type:'profile',name:'새 시민',gender}).state;
+  assert.equal(changed.gender,gender);
+  assert.equal(changed.profileSet,true);
+  assert.equal(changed.actions,original.actions);
+  assert.equal(changed.cash,original.cash);
+  assert.equal(JSON.parse(JSON.stringify(changed)).name,'새 시민');
+}
+assert.equal(apply(fresh(),{type:'profile',name:' ',gender:'male'}).state.profileSet,false);
+assert.equal(apply(fresh(),{type:'profile',name:'시민',gender:'invalid'}).state.profileSet,false);
+const oldProfile = fresh();
+delete oldProfile.gender;
+delete oldProfile.profileSet;
+oldProfile.name='기존 이름';
+const migrated = require('../campaign').normalize(oldProfile);
+assert.equal(migrated.name,'기존 이름');
+assert.equal(migrated.gender,'unspecified');
+assert.equal(migrated.profileSet,false);
+console.log('이름·성별 3종 설정·저장·잘못된 입력·구형 인물 유지 통과');

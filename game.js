@@ -10,6 +10,7 @@
   let preview = 'long';
   let message = '';
   let resetPending = false;
+  let editingProfile = false;
   const escape = value => String(value).replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[char]));
   const people = [
     ['윤', '수문공', '부두에 남은 물자국을 확인하고 싶다.'],
@@ -55,7 +56,7 @@
   function content() {
     if (tab === 'journal') return `<h2>도시가 기억하는 일</h2>${state.journal.map(entry => `<div class="log"><small>${entry.day}일</small>${escape(entry.text)}</div>`).join('') || '<p>아직 기록된 일이 없다.</p>'}`;
     if (tab === 'people') return `<h2>당신을 기억하는 사람들</h2><div class="cards">${people.map(([name, role, goal]) => `<article class="card"><h3>${name} · ${role}</h3><p>${goal}</p>${state.memories.filter(memory => memory.person === name).map(memory => `<div class="log"><small>${memory.day}일</small>${escape(memory.text)}</div>`).join('') || '<p>아직 함께 겪은 일이 없다.</p>'}</article>`).join('')}</div>`;
-    if (tab === 'power') return `<h2>${state.election ? state.election.winner + '의 첫 임기' : '강 하구의 동장 선거'}</h2><p class="prose">20일에 선거가 열린다. 장마 이후 주민들의 생활과 당신의 활동이 표심을 바꾼다. 후보 등록비는 8크라운이다. 예상 지지 ${Campaign.electionResult(state).votes}%. 공사 자금 공개 여부와 어촌 보호 약속이 구역마다 다르게 작용한다.</p>${button('후보로 등록한다', 'run', '8크라운 · 행동 1', state.candidate || state.day >= 20 || state.cash < 8 || !state.actions)}${button('골목에서 주민을 만난다', 'campaign', '예상 지지 +7 · 기력 10 · 행동 1', !state.candidate || state.day >= 20 || !state.actions || state.energy < 10)}${state.election ? `${(state.election.districts || []).map(district => `<article class="card"><h3>${district.name}</h3><p>유권자 ${district.voters}가구 · ${state.candidate ? '당신의 득표 ' + district.share + '%' : '후보 등록 안 함'}</p></article>`).join('')}<p class="toast">${state.election.won ? '당신이 당선됐다.' : '소라가 당선됐다.'} ${state.candidate ? '당신의 득표율 ' + state.election.votes + '%' : '당신은 출마하지 않았다.'}</p>` : ''}`;
+    if (tab === 'power') return `<h2>${state.election ? escape(state.election.winner) + '의 첫 임기' : '강 하구의 동장 선거'}</h2><p class="prose">20일에 선거가 열린다. 장마 이후 주민들의 생활과 당신의 활동이 표심을 바꾼다. 후보 등록비는 8크라운이다. 예상 지지 ${Campaign.electionResult(state).votes}%. 공사 자금 공개 여부와 어촌 보호 약속이 구역마다 다르게 작용한다.</p>${button('후보로 등록한다', 'run', '8크라운 · 행동 1', state.candidate || state.day >= 20 || state.cash < 8 || !state.actions)}${button('골목에서 주민을 만난다', 'campaign', '예상 지지 +7 · 기력 10 · 행동 1', !state.candidate || state.day >= 20 || !state.actions || state.energy < 10)}${state.election ? `${(state.election.districts || []).map(district => `<article class="card"><h3>${district.name}</h3><p>유권자 ${district.voters}가구 · ${state.candidate ? '당신의 득표 ' + district.share + '%' : '후보 등록 안 함'}</p></article>`).join('')}<p class="toast">${state.election.won ? '당신이 당선됐다.' : '소라가 당선됐다.'} ${state.candidate ? '당신의 득표율 ' + state.election.votes + '%' : '당신은 출마하지 않았다.'}</p>` : ''}`;
     if (state.hearing && state.hearing.day <= state.day) return hearingPanel();
     const locked = Boolean(state.built) || state.day >= 12;
     const plan = plans[preview];
@@ -69,6 +70,10 @@
     <h3>오늘의 생활</h3><div class="choices">${button('부두에서 일한다', 'work', `품삯 ${state.funding === 'merchant' && state.flooded !== null && !state.contractRelief ? 10 : 16}크라운 · 기력 15 · 행동 1`, !state.actions || state.energy < 15)}${button('하숙방에서 쉰다', 'rest', '기력 +30 · 행동 1', !state.actions)}</div>`;
   }
 function cityArt(){let b='';let seed=41;const rand=()=>{seed=(seed*16807)%2147483647;return seed/2147483647};for(let i=0;i<100;i++){let x=rand()*1000,y=100+rand()*200,w=18+rand()*34,h=25+rand()*75;b+=`<g opacity="${.35+y/600}"><path d="M${x} ${y}v${-h}l${w/2} -14 ${w/2} 14v${h}Z" fill="${['#263c44','#365059','#425960','#20343d'][i%4]}"/><path d="M${x} ${y-h}l${w/2} -14 ${w/2} 14Z" fill="#182c35"/><path d="M${x+6} ${y-h+12}h4v7h-4z M${x+w-10} ${y-h+12}h4v7h-4z" fill="${i%3?'#8c987f':'#e9bd72'}" opacity=".6"/></g>`}return `<svg viewBox="0 0 1000 410" preserveAspectRatio="xMidYMid slice" aria-label="소금 항구와 언덕 위 궁전의 도시 풍경" role="img"><defs><linearGradient id="sky" x2="0" y2="1"><stop stop-color="#4b6268"/><stop offset="1" stop-color="#122b36"/></linearGradient><filter id="fog"><feGaussianBlur stdDeviation="13"/></filter></defs><path fill="url(#sky)" d="M0 0h1000v410H0z"/><circle cx="750" cy="65" r="29" fill="#acb6a3" opacity=".35"/><path d="M0 170L180 125 350 180 620 68 810 88 1000 145V410H0" fill="#263d45"/><path d="M0 310Q250 230 450 300T1000 270V410H0" fill="#152f3c"/>${b}<g fill="#1c3038" stroke="#6d8080" stroke-width="1"><path d="M672 130V60h18v-18h12v18h20v70zM730 130V37l12-24 12 24v93zM766 130V60h20v-18h12v18h18v70zM690 130V85h96v45z"/></g><path d="M0 345Q250 300 460 340T1000 320" fill="none" stroke="#7e9999" opacity=".3"/><g fill="#101f29"><path d="M50 345h130l-22 18H78zM112 340V247l40 85h-40M375 356h105l-18 15h-70zM420 350v-85l-30 72h30"/></g><path d="M0 200Q300 160 600 210T1000 170" fill="none" stroke="#a1b4b2" stroke-width="35" filter="url(#fog)" opacity=".18"/></svg>`}
+  const genderNames = { male: '남성', female: '여성', unspecified: '미지정' };
+  function profileDialog() {
+    return `<dialog id="profile-dialog" class="profile-dialog" aria-labelledby="profile-title"><form id="profile-form"><p class="eyebrow">CIVITAS</p><h2 id="profile-title">이 도시에서 살아갈 당신</h2><p>이름은 계약과 선거 기록에 남습니다.</p><label for="player-name">이름</label><input id="player-name" name="playerName" value="${escape(state.name)}" maxlength="18" required autocomplete="off" autofocus><fieldset><legend>성별</legend>${Object.entries(genderNames).map(([value,label]) => `<label class="gender-option"><input type="radio" name="gender" value="${value}" ${state.gender === value ? 'checked' : ''}>${label}</label>`).join('')}</fieldset><p class="muted">현재 성별은 인물 설정으로 저장되며 직업과 능력치에 차이를 주지 않습니다.</p><button class="endday" type="submit">${state.profileSet ? '설정 저장' : '도시에 들어간다'}</button></form></dialog>`;
+  }
   function eventDialog() {
     const event = state.eventQueue[0];
     if (!event) return '';
@@ -76,10 +81,18 @@ function cityArt(){let b='';let seed=41;const rand=()=>{seed=(seed*16807)%214748
   }
   function render() {
     const previousFocus = document.activeElement?.dataset?.action;
-    const selected = state.built || preview;
+    const selected = state.built || (state.surveyed ? preview : 'none');
     const safe = selected === 'long';
     const homes = Object.values(state.residents).reduce((a, b) => a + b, 0);
-    document.querySelector('#app').innerHTML = `<header><div class="brand">CIVITAS<small>강 하구의 사람들</small></div><div class="clock"><strong>봄 ${state.day}일</strong>${state.day < 12 ? '장마까지 ' + (12 - state.day) + '일' : state.day < 20 ? '선거까지 ' + (20 - state.day) + '일' : '선거 이후의 삶'}</div></header><div class="layout"><aside><div class="identity"><div class="portrait">河</div><div><strong>${state.name}</strong><small>${careerNames[state.career]}</small></div></div><div class="stats">${[['소지금', state.cash + ' ₭'], ['기력', state.energy], ['주민', homes + '가구'], ['예상 지지', state.support + '%']].map(([key, value]) => `<div class="stat"><small>${key}</small><b>${value}</b></div>`).join('')}</div><nav class="nav">${[['city','도시'],['people','사람들'],['power','선거'],['journal','연대기']].map(([id, label]) => `<button data-tab="${id}" class="${tab === id ? 'active' : ''}">${label}</button>`).join('')}</nav><div class="promise">생활비 하루 3크라운<br>집세 7일마다 12크라운<br>평소 시간은 직접 넘긴다.</div></aside><main><section class="world ${state.flooded > 0 ? 'flooded' : ''}">${cityArt()}<div class="world-title"><div class="eyebrow">벨라르 · 강 하구</div><h1>${state.flooded === null ? '물이 닿을 곳에 사람이 산다.' : '선택은 도시의 모양으로 남는다.'}</h1></div><div class="district-overlay"><span>항구 ${state.residents.harbor}가구</span><span class="${safe ? 'protected' : 'risk'}">어촌 ${state.residents.village}가구 · ${safe ? '보호 계획' : '침수 위험'}</span><span>언덕 ${state.residents.hill}가구</span></div><div class="levee ${selected}" aria-label="${plans[selected].name} 위치"></div></section><section class="scene">${state.notices.slice(0,2).map(notice => `<p class="muted">${escape(notice)}</p>`).join('')}${message ? `<div class="toast" role="status">${escape(message)}</div>` : ''}${content()}${tab === 'city' || tab === 'power' ? careerPanel() : ''}<button class="endday" data-action="advance" data-to="day" ${state.hearing && state.hearing.day <= state.day ? 'disabled' : ''}>하루를 마친다 · 생활비 3크라운</button><button class="choice" data-action="advance" data-to="event" ${state.hearing && state.hearing.day <= state.day ? 'disabled' : ''}><strong>${state.hearing ? state.hearing.day + '일 청문회' : state.day < 12 ? '첫 장마' : state.day < 20 ? '선거일' : state.day < 21 ? '선거 다음 날' : '다음 주'}까지 진행</strong><small>남은 행동을 쉬고 생활비와 집세를 정산한다</small></button><button class="reset" data-reset>${resetPending ? '다시 눌러 새 캠페인 시작' : '새 캠페인 시작'}</button></section></main><aside class="right"><div class="eyebrow">도시의 달력</div><h3>12일 · 첫 장마</h3><p class="muted">공사할 수 있는 마지막 날은 11일이다.</p><h3>20일 · 동장 선거</h3><p class="muted">등록은 19일까지. 출마하지 않아도 삶은 이어진다.</p><h3>21일 · 새 예산</h3><p class="muted">당선자는 집행하고, 주민은 청원한다.</p>${state.journal.slice(0,4).map(entry => `<div class="log"><small>${entry.day}일</small>${escape(entry.text)}</div>`).join('')}</aside></div>${eventDialog()}`;
+    document.querySelector('#app').innerHTML = `<header><div class="brand">CIVITAS<small>강 하구의 사람들</small></div><div class="clock"><strong>봄 ${state.day}일</strong>${state.day < 12 ? '장마까지 ' + (12 - state.day) + '일' : state.day < 20 ? '선거까지 ' + (20 - state.day) + '일' : '선거 이후의 삶'}</div></header><div class="layout"><aside><div class="identity"><div class="portrait">${escape(Array.from(state.name)[0])}</div><div><strong>${escape(state.name)}</strong><small>${careerNames[state.career]} · ${genderNames[state.gender]}</small></div></div><div class="stats">${[['소지금', state.cash + ' ₭'], ['기력', state.energy], ['주민', homes + '가구'], ['예상 지지', state.support + '%']].map(([key, value]) => `<div class="stat"><small>${key}</small><b>${value}</b></div>`).join('')}</div><nav class="nav">${[['city','도시'],['people','사람들'],['power','선거'],['journal','연대기']].map(([id, label]) => `<button data-tab="${id}" class="${tab === id ? 'active' : ''}">${label}</button>`).join('')}</nav><div class="promise">생활비 하루 3크라운<br>집세 7일마다 12크라운<br>평소 시간은 직접 넘긴다.</div></aside><main><section class="world ${state.flooded > 0 ? 'flooded' : ''}">${cityArt()}<div class="world-title"><div class="eyebrow">벨라르 · 강 하구</div><h1>${state.flooded === null ? '물이 닿을 곳에 사람이 산다.' : '선택은 도시의 모양으로 남는다.'}</h1></div><div class="district-overlay"><span>항구 ${state.residents.harbor}가구</span><span class="${safe ? 'protected' : 'risk'}">어촌 ${state.residents.village}가구 · ${safe ? '보호 계획' : '침수 위험'}</span><span>언덕 ${state.residents.hill}가구</span></div><div class="levee ${selected}" aria-label="${plans[selected].name} 위치"></div></section><section class="scene">${state.notices.slice(0,2).map(notice => `<p class="muted">${escape(notice)}</p>`).join('')}${message ? `<div class="toast" role="status">${escape(message)}</div>` : ''}${content()}${tab === 'city' || tab === 'power' ? careerPanel() : ''}<button class="endday" data-action="advance" data-to="day" ${state.hearing && state.hearing.day <= state.day ? 'disabled' : ''}>하루를 마친다 · 생활비 3크라운</button><button class="choice" data-action="advance" data-to="event" ${state.hearing && state.hearing.day <= state.day ? 'disabled' : ''}><strong>${state.hearing ? state.hearing.day + '일 청문회' : state.day < 12 ? '첫 장마' : state.day < 20 ? '선거일' : state.day < 21 ? '선거 다음 날' : '다음 주'}까지 진행</strong><small>남은 행동을 쉬고 생활비와 집세를 정산한다</small></button><button class="reset" data-profile>인물 설정</button><button class="reset" data-reset>${resetPending ? '다시 눌러 새 캠페인 시작' : '새 캠페인 시작'}</button></section></main><aside class="right"><div class="eyebrow">도시의 달력</div><h3>12일 · 첫 장마</h3><p class="muted">공사할 수 있는 마지막 날은 11일이다.</p><h3>20일 · 동장 선거</h3><p class="muted">등록은 19일까지. 출마하지 않아도 삶은 이어진다.</p><h3>21일 · 새 예산</h3><p class="muted">당선자는 집행하고, 주민은 청원한다.</p>${state.journal.slice(0,4).map(entry => `<div class="log"><small>${entry.day}일</small>${escape(entry.text)}</div>`).join('')}</aside></div>${!state.profileSet || editingProfile ? profileDialog() : eventDialog()}`;
+    const profile = document.querySelector('#profile-dialog');
+    if (profile) {
+      profile.showModal();
+      profile.addEventListener('cancel', event => {
+        event.preventDefault();
+        if (state.profileSet) { editingProfile = false; render(); }
+      });
+    }
     const dialog = document.querySelector('#event-dialog');
     if (dialog) {
       dialog.showModal();
@@ -98,7 +111,8 @@ function cityArt(){let b='';let seed=41;const rand=()=>{seed=(seed*16807)%214748
   }
   document.addEventListener('click', event => {
     const element = event.target.closest('button');
-    if (!element || element.disabled) return;
+    if (!element || element.disabled || element.closest('#profile-form')) return;
+    if (element.hasAttribute('data-profile')) { editingProfile = true; render(); return; }
     if (element.hasAttribute('data-event-dismiss')) { dismissEvent(); return; }
     if (element.hasAttribute('data-reset')) {
       if (resetPending) { state = fresh(); message = ''; resetPending = false; localStorage.setItem(KEY, JSON.stringify(state)); }
@@ -111,6 +125,17 @@ function cityArt(){let b='';let seed=41;const rand=()=>{seed=(seed*16807)%214748
       message = result.message;
       try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { message += ' 저장 공간에 접근할 수 없어 이번 진행은 자동 저장되지 않았다.'; }
     }
+    render();
+  });
+  document.addEventListener('submit', event => {
+    if (event.target.id !== 'profile-form') return;
+    event.preventDefault();
+    const form = new FormData(event.target);
+    const result = apply(state, { type: 'profile', name: form.get('playerName'), gender: form.get('gender') });
+    state = result.state;
+    if (!state.profileSet) return;
+    editingProfile = false;
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { message = '설정을 저장하지 못했습니다.'; }
     render();
   });
   render();
