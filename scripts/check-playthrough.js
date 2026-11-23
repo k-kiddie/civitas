@@ -605,7 +605,7 @@ let political={...fresh(),candidate:true,cash:100,network:{name:'모임',members
 political=apply(political,{type:'seekEndorsement',person:'accountant'}).state;assert.equal(political.politics.endorsements.accountant,'jian');
 political=apply(political,{type:'choosePlatform',platform:'transparency'}).state;assert.equal(political.politics.endorsements.accountant,'player');
 let deserter={...fresh(),day:12,network:{name:'조직',members:[{id:'planner',loyalty:10,competence:80}]},institution:{...institutions.fresh(),scrutiny:60}};
-deserter=apply(deserter,{type:'advance'}).state;assert.equal(deserter.network.members.length,0);assert(deserter.journal.some(item=>item.text.includes('떠났다')));
+deserter=apply(deserter,{type:'advance'}).state;assert.equal(deserter.network.members.length,0);assert(deserter.journal.some(item=>item.text.includes('떠나')));
 let reelection={...fresh(),day:19,career:'clerk',support:90,candidate:true,cash:300};
 reelection=apply(reelection,{type:'advance'}).state;assert.equal(reelection.election.won,true);assert.equal(reelection.career,'mayor');assert.equal(reelection.politics.nextDay,48);assert.equal(reelection.candidate,false);
 reelection=apply(reelection,{type:'acknowledge'}).state;
@@ -615,3 +615,28 @@ while(reelection.day<47)reelection=apply(reelection,{type:'advance'}).state;
 reelection.support=0;
 reelection=apply(reelection,{type:'advance'}).state;assert.equal(reelection.day,48);assert.equal(reelection.election.won,false);assert.equal(reelection.career,'clerk');assert.equal(reelection.politics.nextDay,76);assert.equal(reelection.politics.history.length,2);
 console.log('NPC 3후보 당선 가능·구역 합계·공약과 독립 지지·조직 이탈·20/48일 선거·임기 종료·재출마·저장 이력 통과');
+let expanding={...fresh(),startConfigured:true,startingOccupation:'apprentice',support:50};
+Politics.ensureField(expanding);
+const firstField=JSON.parse(JSON.stringify(expanding.politics.field));
+assert(Object.keys(Politics.pool(expanding)).length>3);
+assert(Politics.pool(expanding).eunho);
+expanding=JSON.parse(JSON.stringify(expanding));Politics.ensureField(expanding);assert.deepEqual(expanding.politics.field,firstField);
+const snapshot=Politics.result(expanding);assert(Object.keys(snapshot.candidates).some(id=>id.startsWith('citizen-')));
+expanding.politics.round++;
+Politics.ensureField(expanding);assert(!Object.keys(expanding.politics.field).includes('citizen-1-0'));assert(expanding.politics.field['citizen-2-0']);
+assert(snapshot.candidates['citizen-1-0']);
+const beforeDefection={...fresh(),day:13,startConfigured:true,institution:{...institutions.fresh(),scrutiny:60},network:{name:'조직',members:[{id:'officer',loyalty:10,competence:70}]}};
+Politics.ensureField(beforeDefection);Politics.tick(beforeDefection);
+assert(Politics.pool(beforeDefection)['independent-officer']);assert.equal(beforeDefection.network.members.length,0);
+let generatedWin=false;
+for(let seed=1;seed<20;seed++){
+ const state={...fresh(),startConfigured:true,randomState:{...fresh().randomState,seed}};Politics.ensureField(state);
+ for(const id of Object.keys(state.politics.field).filter(id=>id.startsWith('citizen-'))){
+  state.politics.activity={sora:0,doyun:0,jian:0,[id]:6};
+  const result=Politics.result(state);
+  if(result.winnerId===id)generatedWin=true;
+  assert(Number.isFinite(result.totals[id]));
+ }
+}
+assert(generatedWin);
+console.log('3명 고정 해제·상황별 후보·회차별 생성 인물·동일 저장 유지·이탈자 독립 출마·신규 후보 당선·과거 명부 보존 통과');

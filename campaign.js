@@ -52,6 +52,8 @@
     if (result.caseStage === 'sealed' && !result.underReview && !result.followUps.some(item => item.type === 'oversight')) {
       result.followUps = [...result.followUps, { type: 'oversight', day: result.day + 3 }];
     }
+    result.politics={...result.politics};
+    politics.ensureField(result);
     return result;
   }
   function electionResult(state) { return politics.result(state.politics?state:normalize(state)); }
@@ -184,6 +186,7 @@
       next.startConfigured = true;
       next.underworld.seed=Number.isInteger(action.seed)?(action.seed>>>0)||0x713a91:0x713a91;
       next.randomState.seed=Number.isInteger(action.seed)&&(action.seed>>>0)!==0?action.seed>>>0:0x61c1a5;
+      politics.ensureField(next);
       next.background = action.background;
       next.startingOccupation = action.occupation;
       next.career = action.occupation;
