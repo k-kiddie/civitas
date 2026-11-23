@@ -1,5 +1,6 @@
 'use strict';
 (function (root) {
+  const life = typeof module !== 'undefined' ? require('./life') : root.Life;
   const council = typeof module !== 'undefined' ? require('./council') : root.Council;
   const pacts = typeof module !== 'undefined' ? require('./pacts') : root.Pacts;
   const parties = typeof module !== 'undefined' ? require('./parties') : root.Parties;
@@ -19,7 +20,7 @@
   function fresh() {
     return { version: 3, age:null, ageChosen:false, underworld:underworld.fresh(), day: 1, actions: 2, cash: 32, energy: 80, name: '시민', gender: 'unspecified', profileSet: false, place: 'harbor', startConfigured: false, background: 'worker', startingOccupation: 'worker',
       surveyed: false, testimony: false, funding: null, built: null, flooded: null,
-      council:council.fresh(), pacts:pacts.fresh(), parties:parties.fresh(), politics:politics.fresh(), candidate: false, election: null, policy: null, support: 25, memories: [], journal: [],
+      life:life.fresh(), council:council.fresh(), pacts:pacts.fresh(), parties:parties.fresh(), politics:politics.fresh(), candidate: false, election: null, policy: null, support: 25, memories: [], journal: [],
       promise: null, notices: [], witness: false,
       underReview: false, barredInvestigator: false, policeRecommendation: false, councilRecommendation: false,
       agencies: agencies.initial(), unassignedOfficials: 30, agencyProposal: null, agencyHistory: [], nextAgencyProposal: 1,
@@ -60,6 +61,7 @@
     result.pacts={...pacts.fresh(),...state.pacts};
     result.politics={...result.politics};
     politics.ensureField(result);
+    life.restore(result,lifeDescriptor(result));
     return result;
   }
   function electionResult(state) { return politics.result(state.politics?state:normalize(state)); }
@@ -172,7 +174,7 @@
     ];
     return [];
   }
-  function apply(state, action) {
+  function transition(state, action) {
     const next = normalize(JSON.parse(JSON.stringify(state)));
     let message = '';
     const spend = (energy = 0) => {
@@ -366,6 +368,11 @@
     const inHearing = next.hearing && next.hearing.day <= next.day;
     if (inHearing && !['question', 'evidence', 'verdict'].includes(action.type)) {
       return { state, message: '청문회가 진행 중이다. 증언을 듣고 표결 또는 합의를 선택하자.' };
+    }
+    const lifeResult=life.act(next,action);
+    if(lifeResult){
+      if(!lifeResult.ok)return {state,message:lifeResult.message};
+      record(next,lifeResult.message);return {state:next,message:lifeResult.message};
     }
     const councilResult=council.act(next,action,pacts.projects);
     if(councilResult){
@@ -776,9 +783,10 @@
             });
             council.electionReport(next);
             next.politics.history.unshift(JSON.parse(JSON.stringify(next.election)));
-            next.politics.nextDay+=28;next.politics.round++;next.politics.activity={sora:0,doyun:0,jian:0};next.politics.endorsements={};next.politics.requested=[];next.candidate=false;
+            next.politics.nextDay+=next.life.clock.mode==='lifetime'?1460:28;next.politics.round++;next.politics.activity={sora:0,doyun:0,jian:0};next.politics.endorsements={};next.politics.requested=[];next.candidate=false;
             record(next, `${next.election.winner} 동장 당선. ${next.election.ran ? '당신의 득표율 ' + next.election.votes + '%' : '당신은 출마하지 않았다.'}`);
           }
+          life.tick(next);
           careers.schedule(next);
           const incidental=randomEvents.schedule(next);
           if(incidental){next.eventQueue.push(incidental);record(next,incidental.title);target=next.day;}
@@ -796,7 +804,72 @@
     careers.schedule(next);
     return { state: next, message };
   }
-  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices, eventDialogue, eventReply, starts, careers, institutions, randomEvents, underworld, politics, parties, pacts, council };
+  function lifeDescriptor(state){
+    const title=institutions.title(state)||careers.jobs[state.career]?.name||({mayor:'동장',investigator:'수사관',councillor:'협의회 위원'}[state.career])||state.career;
+    return {title,sideTitle:underworld.catalog[state.underworld.role]?.name};
+  }
+  function advanceLife(state,action){
+    const fail=message=>({state,message});
+    if(!state.startConfigured||state.day<28||state.eventQueue.length||state.hearing||state.underReview||!['none','complete'].includes(state.jobStory.stage))return fail('먼저 진행 중인 사건과 심사를 마치자. 장기 생활은 첫 지역 사건 이후 28일부터 가능하다.');
+    if(pacts.governing(state).length)return fail('집행 대기 중인 정책 협약을 먼저 처리하자. 기간을 넘겨 약속을 자동 파기하지 않는다.');
+    let next=normalize(JSON.parse(JSON.stringify(state)));
+    if(action.type==='lifePass'){
+      if(next.life.clock.plan)return fail('진행 중인 생활 계획을 이어가거나 종료하자.');
+      if(![30,90,365].includes(action.days)||!['work','rest'].includes(action.routine))return fail('생활 기간과 방식을 확인하자.');
+      if(next.life.clock.mode!=='lifetime'){
+        if(next.candidate||next.pacts.agreements.some(pact=>pact.status==='signed'))return fail('등록한 선거나 서명한 선거 협약을 마친 뒤 장기 생활로 전환하자.');
+        next.life.clock.mode='lifetime';
+        if(next.election)next.politics.nextDay=(next.election.day??20)+1460;
+      }
+      next.life.clock.plan={from:next.day,target:next.day+action.days,routine:action.routine};
+    }
+    const plan=next.life.clock.plan;
+    if(!plan)return fail('이어갈 생활 계획이 없다.');
+    const startDay=next.day,startCash=next.cash;
+    let reason='계획한 기간을 마쳤다.';
+    while(next.day<plan.target){
+      if(next.day>=next.politics.nextDay-10&&plan.electionSeen!==next.politics.round){plan.electionSeen=next.politics.round;reason='선거운동 기간에 들어섰다. 출마와 선거 활동을 직접 결정하자.';break;}
+      next.life.processing=true;
+      if(next.actions&&next.energy>=20&&plan.routine==='work'&&[1,3,5].includes(next.day%7)){
+        const worked=transition(next,{type:'work'});
+        if(worked.state!==next){
+          life.observe(worked.state,next,{type:'work'},lifeDescriptor(worked.state));next=worked.state;
+          const index=next.journal.findIndex(item=>item.day===next.day&&item.text===worked.message);if(index>=0)next.journal.splice(index,1);
+        }
+      }else if(next.actions&&next.energy<70){
+        const rested=transition(next,{type:'rest'});
+        if(rested.state!==next){life.observe(rested.state,next,{type:'rest'},lifeDescriptor(rested.state));next=rested.state;next.journal=next.journal.filter(item=>!(item.day===next.day&&item.text===rested.message));}
+      }
+      const moved=transition(next,{type:'advance',to:'day'});
+      if(moved.state===next){reason=moved.message;break;}
+      life.observe(moved.state,next,{type:'advance'},lifeDescriptor(moved.state));next=moved.state;
+      next.journal=next.journal.filter(item=>!(item.day===next.day&&item.text===moved.message));
+      delete next.life.processing;
+      // normalize makes a fresh copy on each action; keep the persisted plan as the authority.
+      next.life.clock.plan.electionSeen=plan.electionSeen;
+      if(next.eventQueue.length||next.hearing||next.underReview){reason='직접 결정할 사건이 생겨 멈췄다. 처리 후 남은 기간을 이어갈 수 있다.';break;}
+      if(next.cash<0){reason='생활비가 부족해 멈췄다. 돈을 마련하거나 계획을 종료하자.';break;}
+    }
+    delete next.life.processing;
+    next.life.clock.plan.electionSeen=plan.electionSeen;
+    const completed=next.day>=plan.target;
+    if(completed)next.life.clock.plan=null;
+    life.summarize(next,startDay,startCash);
+    const message=(next.day-startDay)+'일의 생활을 진행했다. '+reason;
+    record(next,message);return {state:next,message};
+  }
+  function apply(state,action){
+    if(['lifePass','lifeContinue'].includes(action.type))return advanceLife(state,action);
+    if(action.type==='lifeCancel'){
+      if(!state.life?.clock?.plan)return {state,message:'진행 중인 생활 계획이 없다.'};
+      const next=normalize(JSON.parse(JSON.stringify(state)));next.life.clock.plan=null;
+      return {state:next,message:'남은 생활 계획을 종료했다. 이미 지난 시간과 결과는 유지된다.'};
+    }
+    const result=transition(state,action);
+    if(result.state!==state)life.observe(result.state,state,action,lifeDescriptor(result.state));
+    return result;
+  }
+  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices, eventDialogue, eventReply, starts, careers, institutions, randomEvents, underworld, politics, parties, pacts, council, life };
   if (typeof module !== 'undefined') module.exports = api;
   root.Campaign = api;
 })(globalThis);

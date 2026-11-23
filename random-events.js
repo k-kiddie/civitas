@@ -66,7 +66,7 @@
     const random=state.randomState;
     if(!state.startConfigured||state.day<6||random.checkedDay===state.day)return null;
     random.checkedDay=state.day;
-    if(state.eventQueue.length||state.hearing||state.underReview||state.agencyProposal||state.day-random.lastDay<4||!['none','complete'].includes(state.jobStory.stage))return null;
+    if(state.eventQueue.length||state.hearing||state.underReview||state.agencyProposal||state.day-random.lastDay<(state.life?.clock?.mode==='lifetime'?90:4)||!['none','complete'].includes(state.jobStory.stage))return null;
     if(state.followUps.some(item=>item.day<=state.day+1))return null;
     const candidates=eligible(state);
     if(!candidates.length||roll(state)>.45)return null;
