@@ -3,9 +3,10 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const root = __dirname;
-const port = Math.max(1, Number(process.env.PORT) || 8080);
+const port = Math.max(1, Number(process.argv[process.argv.indexOf('--port') + 1]) || Number(process.env.PORT) || 8080);
 const routes = new Map([
   ['/',['index.html','text/html; charset=utf-8']],
+  ['/campaign.js',['campaign.js','text/javascript; charset=utf-8']],
   ['/game.js',['game.js','text/javascript; charset=utf-8']],
   ['/style.css',['style.css','text/css; charset=utf-8']],
 ]);

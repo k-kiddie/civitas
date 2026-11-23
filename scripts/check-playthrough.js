@@ -1,8 +1,35 @@
 'use strict';
-const assert=require('node:assert/strict');
-const fs=require('node:fs');
-const vm=require('node:vm');
-const source=fs.readFileSync(require('node:path').join(__dirname,'../game.js'),'utf8');
-function boot(saved){let click;let html='';const storage={value:saved};const context={localStorage:{getItem:()=>storage.value,setItem:(_,v)=>storage.value=v},document:{querySelector:q=>q==='#name'?{value:'시험 시민'}:{set innerHTML(v){html=v}},addEventListener:(_,fn)=>click=fn}};vm.runInNewContext(source,context);return {html:()=>html,state:()=>JSON.parse(storage.value),click:(dataset)=>click({target:{closest:()=>({dataset,disabled:false})}}),storage}}
-for(const route of ['people','court','watch']){let app=boot();const cmd=x=>app.click({cmd:x});cmd('start');for(let day=1;day<=28;day++){if(route==='people'){if(day===1)cmd('event-bread-0');if(day===5)cmd('event-raid-2');if(day===10)cmd('event-letter-1');if(day===15)cmd('event-strike-0');if(day===21)cmd('event-offer-1')}else if(route==='court'){app.click({place:'palace'});if(day===10)cmd('event-letter-0')}else{app.click({place:'watch'});if(day===1)cmd('event-bread-1');if(day===5)cmd('event-raid-1');if(day===10)cmd('event-letter-2')}while(app.state().ap){const s=app.state();cmd(s.energy<18?'rest':s.cash<35?'work':'organize')}cmd('next')}const s=app.state();assert.equal(s.day,29);assert.equal(s.office,{people:'시의회 의원',court:'왕국 섭정',watch:'항만 수사처장'}[route]);const reloaded=boot(app.storage.value);assert.equal(reloaded.state().name,'시험 시민');assert.match(reloaded.html(),/CHAPTER I/);reloaded.click({cmd:'policy-food'});assert.equal(reloaded.state().flags.policy,'policy-food');assert.equal(reloaded.state().food,Math.min(100,s.food+20));}
-let app=boot();app.click({cmd:'start'});app.click({cmd:'event-bread-2'});for(let d=1;d<6;d++)app.click({cmd:'next'});assert(app.state().journal.some(x=>x.text.includes('약속을 지키지 못했다')));assert.equal(app.state().queue.length,0);console.log('28일 캠페인: 의회·섭정·수사처장, 지연된 약속 위반, 저장 복원, 취임 정책 통과');
+const assert = require('node:assert/strict');
+const { fresh, apply } = require('../campaign');
+function play(plan, funding) {
+  let state = fresh();
+  const act = action => { state = apply(state, action).state; };
+  act({ type: 'survey' });
+  act({ type: 'advance' });
+  if (funding === 'cooperative') {
+    act({ type: 'testimony' });
+    act({ type: 'work' });
+    act({ type: 'advance' });
+  }
+  act({ type: 'build', plan, funding });
+  assert.equal(state.built, plan);
+  act({ type: 'advance', to: 'event' });
+  assert.equal(state.flooded, { short: 18, long: 0, none: 34 }[plan]);
+  const before = state.cash;
+  act({ type: 'work' });
+  assert.equal(state.cash - before, funding === 'merchant' ? 10 : 16);
+  act({ type: 'advance', to: 'event' });
+  assert.equal(state.election.won, false);
+  act({ type: 'advance', to: 'event' });
+  act({ type: 'policy', policy: 'housing' });
+  assert.equal(state.policy, 'housing');
+  act({ type: 'advance' });
+  assert.equal(state.day, 22);
+  assert.deepEqual(JSON.parse(JSON.stringify(state)), state);
+}
+play('short'); play('none'); play('long', 'merchant'); play('long', 'cooperative');
+let state = fresh();
+for (const action of [{type:'survey'}, {type:'build',plan:'long',funding:'merchant'}, {type:'advance'}, {type:'run'}, {type:'advance',to:'event'}, {type:'campaign'}, {type:'advance',to:'event'}]) state = apply(state,action).state;
+assert.equal(state.election.won,true);
+assert.equal(apply(state,{type:'build',plan:'short'}).state,state);
+console.log('제방 3안·자금 2경로·장마·당선/기권·선거 이후·저장 상태 통과');

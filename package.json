@@ -1,0 +1,1 @@
+{"name": "civitas", "private": true, "version": "0.2.0", "scripts": {"dev": "node server.js", "start": "node server.js", "test": "node scripts/check-playthrough.js"}, "engines": {"node": ">=18"}}
