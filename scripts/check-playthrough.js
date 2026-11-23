@@ -199,3 +199,48 @@ for (const promise of ['kept','broken']) {
   assert(state.memories.some(item=>item.text.includes('당신 “')));
 }
 console.log('이전 약속별 대사·읽은 위치 저장·응답과 NPC 반응·대화 기억 통과');
+for (const choice of ['repay','resign','defend']) {
+  let state = {...fresh(), day:22, cash:100, career:'investigator', caseStage:'evidence', surveyed:true, testimony:true, witness:true, support:50};
+  const act = action => { state = apply(state,action).state; };
+  act({type:'caseDecision',choice:'private'});
+  assert.equal(state.followUps[0].day,25);
+  act({type:'advance',to:'event'});
+  assert.equal(state.day,25);
+  assert.equal(state.underReview,true);
+  assert.equal(state.eventQueue[0].id,'oversight');
+  const before = state.cash;
+  act({type:'eventChoice',eventId:'oversight',choice});
+  if (choice === 'repay') {
+    assert.equal(state.cash,before-20);
+    assert.equal(state.underReview,false);
+    assert.equal(state.caseStage,'corrected');
+  } else if (choice === 'resign') {
+    assert.equal(state.career,'worker');
+    assert.equal(state.barredInvestigator,true);
+    const original = state;
+    act({type:'join',career:'investigator'});
+    assert.equal(state,original);
+    act({type:'join',career:'councillor'});
+    assert.equal(state.career,'councillor');
+  } else {
+    act({type:'acknowledge'});
+    act({type:'advance',to:'event'});
+    assert.equal(state.day,28);
+    assert.equal(state.cash,before-9-12);
+    assert.equal(state.underReview,true);
+    for (const person of ['윤','민석']) act({type:'question',person});
+    act({type:'evidence'});
+    act({type:'verdict',choice:'vote'});
+    assert.equal(state.career,'investigator');
+    assert.equal(state.underReview,false);
+    assert.equal(state.caseStage,'corrected');
+    assert.equal(state.cash,before-9-12-20);
+    assert.equal(state.contractRelief,false);
+  }
+}
+let failedReview = {...fresh(), day:28, career:'investigator', underReview:true, hearing:{day:28,source:'oversight'}};
+failedReview = apply(failedReview,{type:'verdict',choice:'vote'}).state;
+assert.equal(failedReview.career,'worker');
+assert.equal(failedReview.barredInvestigator,true);
+assert.equal(failedReview.underReview,false);
+console.log('봉인 기록 후속 사건·반환/사직/소명·주급 정지·해임 후 다른 직업·계약 효과 분리 통과');

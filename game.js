@@ -26,13 +26,13 @@
   function careerPanel() {
     if (state.day < 21 || (state.hearing && state.hearing.day <= state.day)) return '';
     const tired = !state.actions;
-    let html = `<article class="card"><h3>${careerNames[state.career]}의 오늘</h3><p>도시 공금 ${state.treasury}크라운 · 공직 주급 18크라운 / 7일</p>`;
+    let html = `<article class="card"><h3>${careerNames[state.career]}의 오늘</h3><p>도시 공금 ${state.treasury}크라운 · ${state.underReview ? '직무 심사 중 · 주급 정지' : '공직 주급 18크라운 / 7일'}</p>`;
     if (state.career === 'worker') {
       html += `<p>계약을 공개한 시민은 민석 또는 지안의 추천을 받아 공직을 맡을 수 있다. 협의회 위원은 선출직 시의원과 별도 직책이다.</p>`;
-      html += button('민석의 추천을 받아 수사관으로 일한다', 'join', '계약 공개 필요 · 행동 1', tired || !state.witness, 'data-career="investigator"');
+      html += button('민석의 추천을 받아 수사관으로 일한다', 'join', '계약 공개 필요 · 행동 1', tired || !state.witness || state.barredInvestigator, 'data-career="investigator"');
       html += button('지안의 추천을 받아 협의회 위원이 된다', 'join', '계약 공개 필요 · 행동 1', tired || !state.witness, 'data-career="councillor"');
     }
-    if (state.career === 'investigator') {
+    if (state.career === 'investigator' && !state.underReview) {
       html += button('임금 장부와 공사 계약을 대조한다', 'investigate', '기력 10 · 행동 1', tired || state.energy < 10 || state.caseStage !== 'open');
       if (state.caseStage === 'evidence') {
         html += button('보고서를 공개하고 청문회를 요청한다', 'caseDecision', '사흘 뒤 청문회 · 행동 1', tired, 'data-choice="public"');
@@ -43,6 +43,8 @@
       html += button('계약 재협상안을 제출한다', 'bill', '기력 10 · 사흘 뒤 청문회 · 통과에 주민 지지 40 또는 이행한 약속과 계약 공개 필요', tired || state.energy < 10 || Boolean(state.bill) || Boolean(state.hearing));
     }
     if (state.career === 'mayor') html += button('공금으로 주거 복구를 발주한다', 'budget', '공금 12 · 최대 4가구 복귀 · 행동 1', tired || state.treasury < 12 || Object.values(state.residents).reduce((a,b) => a+b,0) >= 86);
+    if (state.barredInvestigator) html += '<p>이전 직무 기록으로 수사관 재임용이 제한된다. 주민 협의회 참여는 가능하다.</p>';
+    if (state.underReview) html += '<p class="toast">직무 심사가 진행 중이다. 사건창에서 답변하거나 예정된 청문회에서 소명하자.</p>';
     if (state.hearing) html += `<p class="toast">${state.hearing.day}일 청문회 예정. 시간을 넘기면 그날에 멈춘다.</p>`;
     if (state.bill && state.bill !== 'pending') html += `<p>재협상안 ${state.bill === 'passed' ? '통과' : '부결'} · ${state.contractRelief ? '품삯 공제 폐지' : '계약 유지'}</p>`;
     return html + '</article>';
@@ -51,7 +53,7 @@
     const hearing = state.hearing;
     const heard = hearing.heard || [];
     const strength = Campaign.hearingStrength(state);
-    return `<article class="card"><div class="eyebrow">공개 청문회 · ${state.day}일</div><h2>누구의 증언을 남길 것인가</h2><p>청문회 중에는 시간이 멈춘다. 증언과 증거는 하루 행동을 소모하지 않는다. 설득력 ${strength}/4 · 4 이상이면 표결 통과.</p>${['윤','소라','민석','도윤'].map(person => button(person + '에게 질문한다', 'question', heard.includes(person) ? '증언 기록 완료 · 사람들 수첩에서 다시 확인' : '증언을 듣는다', heard.includes(person), `data-person="${person}"`)).join('')}${button('지안이 보관한 계약 사본을 공개한다', 'evidence', '설득력 +2 · 당신의 서명도 공개된다', !state.witness || hearing.evidence)}${button('표결을 요청한다', 'verdict', strength >= 4 ? '현재 증거로 통과 가능' : '현재 증거로는 부결 · 증언과 사본을 확인하자', false, 'data-choice="vote"')}${state.funding === 'merchant' ? button('도윤에게 공사비를 보전하고 합의한다', 'verdict', '개인 돈 12크라운 · 임금 공제 폐지', state.cash < 12 || !heard.includes('도윤'), 'data-choice="settle"') : ''}${button('안건을 철회한다', 'verdict', '현재 계약 유지 · 청문회 종료', false, 'data-choice="withdraw"')}</article>`;
+    return `<article class="card"><div class="eyebrow">공개 청문회 · ${state.day}일</div><h2>${hearing.source === 'oversight' ? '당신의 직무를 심사한다' : '누구의 증언을 남길 것인가'}</h2>${hearing.source === 'oversight' ? '<p>통과하면 합의금 20크라운 환수 후 복직한다. 부결 또는 철회하면 해임된다.</p>' : ''}<p>청문회 중에는 시간이 멈춘다. 증언과 증거는 하루 행동을 소모하지 않는다. 설득력 ${strength}/4 · 4 이상이면 표결 통과.</p>${['윤','소라','민석','도윤'].map(person => button(person + '에게 질문한다', 'question', heard.includes(person) ? '증언 기록 완료 · 사람들 수첩에서 다시 확인' : '증언을 듣는다', heard.includes(person), `data-person="${person}"`)).join('')}${button('지안이 보관한 계약 사본을 공개한다', 'evidence', '설득력 +2 · 당신의 서명도 공개된다', !state.witness || hearing.evidence)}${button('표결을 요청한다', 'verdict', strength >= 4 ? '현재 증거로 통과 가능' : '현재 증거로는 부결 · 증언과 사본을 확인하자', false, 'data-choice="vote"')}${state.funding === 'merchant' && hearing.source !== 'oversight' ? button('도윤에게 공사비를 보전하고 합의한다', 'verdict', '개인 돈 12크라운 · 임금 공제 폐지', state.cash < 12 || !heard.includes('도윤'), 'data-choice="settle"') : ''}${button('안건을 철회한다', 'verdict', hearing.source === 'oversight' ? '소명 포기 · 수사관 해임' : '현재 계약 유지 · 청문회 종료', false, 'data-choice="withdraw"')}</article>`;
   }
   function content() {
     if (tab === 'journal') return `<h2>도시가 기억하는 일</h2>${state.journal.map(entry => `<div class="log"><small>${entry.day}일</small>${escape(entry.text)}</div>`).join('') || '<p>아직 기록된 일이 없다.</p>'}`;

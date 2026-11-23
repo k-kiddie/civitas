@@ -10,6 +10,7 @@
       surveyed: false, testimony: false, funding: null, built: null, flooded: null,
       candidate: false, election: null, policy: null, support: 25, memories: [], journal: [],
       promise: null, notices: [], witness: false,
+      underReview: false, barredInvestigator: false,
       career: 'worker', treasury: 40, caseStage: 'closed', contractRelief: false,
       hearing: null, bill: null, hearingRecord: null, eventQueue: [], storyHistory: [], followUps: [],
       residents: { harbor: 48, village: 26, hill: 12 } };
@@ -19,6 +20,9 @@
   function normalize(state) {
     const result = { ...fresh(), ...state };
     if (result.election?.won) result.career = 'mayor';
+    if (result.caseStage === 'sealed' && !result.underReview && !result.followUps.some(item => item.type === 'oversight')) {
+      result.followUps = [...result.followUps, { type: 'oversight', day: result.day + 3 }];
+    }
     return result;
   }
   function electionResult(state) {
@@ -48,6 +52,11 @@
   }
   function eventDialogue(state, event) {
     if (event.dialogue) return event.dialogue;
+    if (event.id === 'oversight') return [
+      { speaker: '민석', text: '봉인된 수사 기록과 도윤에게 받은 돈. 둘이 무관하다고 말할 수 있습니까?' },
+      { speaker: '도윤', text: '서로 합의한 돈이었소. 당신이 이 일을 공개하면 나도 가만있지는 않겠소.' },
+      { speaker: '민석', text: '지금부터 직무와 주급이 정지됩니다. 돈을 반환하고 시정할지, 공개 심사를 받을지 결정하십시오.' }
+    ];
     if (event.id === 'storm') return [
       { speaker: '소라', text: state.promise === 'broken' ? '당신, 어촌을 지킨다고 했잖아요. 지금 저 집들을 봐요.' : state.flooded === 0 ? '물이 제방 밖에서 멈췄어요. 사람들이 밤새 서로의 집을 확인했어요.' : '사람들이 젖은 짐을 들고 언덕에 모였어요. 오늘 밤부터 어디서 자죠?' },
       { speaker: '윤', text: state.flooded === 0 ? '제방은 버텼지만 배급과 물자 정리는 남았어. 누군가는 도와야 해.' : '복구하려면 돈도, 손도 필요해. 그전에 누가 무엇을 잃었는지부터 알아야 하고.' },
@@ -71,6 +80,9 @@
   }
   function eventReply(event, choice) {
     const replies = {
+      repay: ['받은 돈을 반환하고 기록을 바로잡겠습니다.', '민석', '반환 기록과 시정 보고서를 남기겠습니다. 같은 일이 반복되면 추천할 수 없습니다.'],
+      defend: ['공개 청문회에서 증거와 함께 설명하겠습니다.', '민석', '사흘 뒤에 뵙겠습니다. 통과해도 받은 돈 20크라운은 환수됩니다. 부결되면 해임입니다.'],
+      resign: ['수사관 자리에서 물러나겠습니다.', '민석', '사직은 수리하겠습니다. 이 일은 인사 기록에 남습니다.'],
       aid: ['내 돈을 보탤게요. 오늘 필요한 물자부터 구하죠.', '소라', '고마워요. 누가 무엇을 받았는지 기록해 둘게요. 며칠 뒤 다시 와 주세요.'],
       organize: ['먼저 사람들 이야기를 듣겠어요. 함께 기록하죠.', '소라', '좋아요. 이 일을 숫자로만 남기지는 말아 주세요. 제가 증언할게요.'],
       livelihood: ['지금은 제 품삯부터 벌어야 해요.', '소라', '알겠어요. 당신 없이 먼저 시작할게요. 기다리는 사람들은 오늘도 있어요.'],
@@ -85,6 +97,11 @@
   }
   function eventChoices(state, event) {
     if (!event || event.resolved) return [];
+    if (event.id === 'oversight') return [
+      { id: 'repay', title: '합의금 반환과 기록 시정', detail: '20크라운 반환 · 지지 −4 · 수사관 복직', disabled: state.cash < 20 },
+      { id: 'defend', title: '공개 직무 심사 요청', detail: '사흘간 정직 · 통과 시 20크라운 환수 · 부결 시 해임', disabled: Boolean(state.hearing) },
+      { id: 'resign', title: '사직서를 제출한다', detail: '수사관 직책과 주급 상실 · 지지 −8 · 재임용 제한', disabled: false }
+    ];
     if (event.id === 'storm') return [
       { id: 'aid', title: '내 돈으로 구호 물자를 마련한다', detail: '8크라운 · 주민 지지 +5 · 이틀 뒤 지원 결과', disabled: state.cash < 8 },
       { id: 'organize', title: '소라와 피해 주민의 증언을 모은다', detail: '기력 10 · 주민 지지 +4 · 청문회 증언 확보', disabled: state.energy < 10 },
@@ -129,7 +146,26 @@
       const choice = eventChoices(next, event).find(item => item.id === action.choice);
       if (!event || event.id !== action.eventId || !choice || choice.disabled) return { state, message: '지금은 이 선택을 할 수 없다.' };
       let result = '';
-      if (event.id === 'storm') {
+      if (event.id === 'oversight') {
+        if (choice.id === 'repay') {
+          next.cash -= 20;
+          next.caseStage = 'corrected';
+          next.underReview = false;
+          next.support = Math.max(0, next.support - 4);
+          result = '20크라운을 반환하고 봉인했던 보고서를 시정했다. 민석의 경고와 함께 수사관으로 복직했다.';
+        } else if (choice.id === 'defend') {
+          next.hearing = { day: next.day + 3, source: 'oversight' };
+          result = '사흘 뒤 공개 직무 심사를 요청했다. 결과가 나올 때까지 주급 지급이 정지된다.';
+        } else {
+          next.career = 'worker';
+          next.underReview = false;
+          next.barredInvestigator = true;
+          next.support = Math.max(0, next.support - 8);
+          next.caseStage = 'resigned';
+          result = '수사관에서 사직하고 부두 노동자로 돌아왔다. 공직 주급은 끝나지만 삶은 계속된다. 지안의 협의회 추천은 여전히 가능하다.';
+        }
+        remember(next, '민석', result);
+      } else if (event.id === 'storm') {
         if (choice.id === 'aid') {
           next.cash -= 8;
           next.support = Math.min(100, next.support + 5);
@@ -202,7 +238,13 @@
           '민석': next.witness ? '“지안이 보관한 사본을 대조했다. 계약의 서명과 공제 내역은 사실이다.”' : '“원본 대조가 안 됐다. 소문으로 계약을 뒤집을 수는 없다.”',
           '도윤': next.funding === 'merchant' ? '“내 돈으로 제방을 지었다. 계약을 바꾸려면 최소한 12크라운은 보전해 줘야 한다.”' : '“내가 공사에 투자한 계약은 없다. 공개 기록을 남기는 데 반대하지 않는다.”'
         };
-        message = `${action.person}의 증언 ${testimony[action.person]}`;
+        const reviewTestimony = {
+          '윤': next.surveyed ? '“현장 조사는 당신과 함께했다. 하지만 합의금을 받는 자리에는 없었어.”' : '“당신의 직무 수행을 직접 본 적이 없어.”',
+          '소라': next.promise === 'broken' ? '“약속을 어긴 데 이어 기록까지 봉인했나요?”' : '“돈을 받았던 일부터 공개하고 시정해야 해요.”',
+          '민석': next.witness ? '“기존 공개 사본과 봉인 기록을 대조했다. 사실대로 공개하고 환수에 응하면 시정을 검토하겠다.”' : '“공개된 자료가 부족하다. 추천인이라는 이유만으로 변호할 수는 없다.”',
+          '도윤': '“합의금을 준 사실은 인정하겠소. 당신이 받은 돈도 기록에 남겨야 공평하지.”'
+        };
+        message = `${action.person}의 증언 ${next.hearing.source === 'oversight' ? reviewTestimony[action.person] : testimony[action.person]}`;
         remember(next, action.person, message);
         break;
       }
@@ -214,14 +256,29 @@
         break;
       case 'verdict': {
         if (!inHearing || !['vote', 'settle', 'withdraw'].includes(action.choice)) break;
-        if (action.choice === 'settle' && (next.cash < 12 || next.funding !== 'merchant' || !(next.hearing.heard || []).includes('도윤'))) break;
+        if (action.choice === 'settle' && (next.hearing.source === 'oversight' || next.cash < 12 || next.funding !== 'merchant' || !(next.hearing.heard || []).includes('도윤'))) break;
         const strength = hearingStrength(next);
         const passed = action.choice === 'settle' || (action.choice === 'vote' && strength >= 4);
         if (action.choice === 'settle') next.cash -= 12;
-        next.bill = passed ? 'passed' : 'rejected';
-        next.contractRelief = passed && next.funding === 'merchant';
+        if (next.hearing.source !== 'oversight') next.bill = passed ? 'passed' : 'rejected';
+        if (next.hearing.source !== 'oversight') next.contractRelief = passed && next.funding === 'merchant';
         next.hearingRecord = { day: next.day, choice: action.choice, strength, passed, heard: next.hearing.heard || [], evidence: Boolean(next.hearing.evidence) };
         message = action.choice === 'settle' ? '개인 돈 12크라운으로 도윤과 합의했다. 임금 공제 조항이 폐지됐다.' : passed ? '증언과 증거를 바탕으로 표결이 통과됐다. 공개 감사가 확정되고 선주 계약이 있다면 임금 공제도 폐지된다.' : action.choice === 'withdraw' ? '안건을 철회했다. 원래 계약이 유지된다.' : '증언과 증거가 부족해 표결에서 부결됐다. 원래 계약이 유지된다.';
+        if (next.hearing.source === 'oversight') {
+          next.underReview = false;
+          if (passed) {
+            next.cash -= 20;
+            next.caseStage = 'corrected';
+            message = '공개 심사에서 시정 보고가 받아들여졌다. 합의금 20크라운을 환수하고 복직했다. 부족한 돈은 빚으로 남는다.';
+          } else {
+            next.career = 'worker';
+            next.caseStage = 'dismissed';
+            next.barredInvestigator = true;
+            next.support = Math.max(0, next.support - 12);
+            message = '직무 심사에서 해임됐다. 수사관 재임용이 제한되고 부두 노동자로 돌아왔다.';
+          }
+          remember(next, '민석', message);
+        }
         remember(next, '도윤', message);
         remember(next, '소라', message);
         next.hearing = null;
@@ -300,26 +357,27 @@
         message = '골목 집회에서 주민들의 이야기를 들었다. 예상 지지가 올랐다.';
         break;
       case 'join':
-        if (next.day < 21 || next.career !== 'worker' || !['investigator', 'councillor'].includes(action.career) || !next.witness || !spend()) break;
+        if (next.day < 21 || next.career !== 'worker' || !['investigator', 'councillor'].includes(action.career) || (action.career === 'investigator' && next.barredInvestigator) || !next.witness || !spend()) break;
         next.career = action.career;
         next.caseStage = action.career === 'investigator' ? 'open' : next.caseStage;
         message = action.career === 'investigator' ? '민석의 추천으로 항만 수사관이 됐다. 임명은 선거 당선과 다른 경로의 권한을 열었다.' : '지안의 추천으로 주민 협의회 위원에 위촉됐다. 안건을 제출하고 공개 청문회를 소집할 수 있다.';
         remember(next, action.career === 'investigator' ? '민석' : '지안', '당신을 공직에 추천했다. 앞으로의 결정에 책임을 묻는다.');
         break;
       case 'investigate':
-        if (next.career !== 'investigator' || next.caseStage !== 'open' || !spend(10)) break;
+        if (next.underReview || next.career !== 'investigator' || next.caseStage !== 'open' || !spend(10)) break;
         next.caseStage = 'evidence';
         message = next.funding === 'merchant' ? '임금 장부와 선주 계약을 대조했다. 사용료가 노동자 임금에서 공제되는 조항을 확인했다. 당신의 서명도 있다.' : '장부 대조 결과 횡령 증거는 없었다. 다만 배급을 받지 못한 가구 명단이 발견됐다.';
         remember(next, '민석', message);
         break;
       case 'caseDecision':
-        if (next.career !== 'investigator' || next.caseStage !== 'evidence' || !['public', 'private'].includes(action.choice) || !spend()) break;
+        if (next.underReview || next.career !== 'investigator' || next.caseStage !== 'evidence' || !['public', 'private'].includes(action.choice) || !spend()) break;
         next.caseStage = action.choice === 'public' ? 'reported' : 'sealed';
         if (action.choice === 'public') {
           next.hearing = { day: next.day + 3, source: 'report' };
           message = '수사 자료를 공개했다. 사흘 뒤 주민 청문회가 열린다. 서명자에게도 질문이 돌아온다.';
         } else {
           next.cash += 20;
+          next.followUps.push({ type: 'oversight', day: next.day + 3 });
           next.support = Math.max(0, next.support - 8);
           message = '도윤의 비공개 합의를 받아들였다. 20크라운을 받았고 민석은 보고서 누락을 기억한다.';
           remember(next, '민석', '공개 가능한 자료를 봉인한 당신에게 책임을 묻는다.');
@@ -370,6 +428,12 @@
           const due = next.followUps.filter(item => item.day <= next.day);
           next.followUps = next.followUps.filter(item => item.day > next.day);
           for (const item of due) {
+            if (item.type === 'oversight') {
+              next.underReview = true;
+              next.eventQueue.push({ id: 'oversight', day: next.day, scene: 'hearing', title: '봉인했던 기록이 돌아왔다', text: '민석이 합의금 지급 내역을 확보했다. 직무 심사에 앞서 당신의 답변을 요구한다.', quote: '민석 “돈을 받은 이유를 설명해 주십시오.”', destination: 'city' });
+              record(next, '민석이 합의금의 출처를 확인하고 직무와 주급을 정지했다.');
+              continue;
+            }
             const missing = Math.max(0, 86 - Object.values(next.residents).reduce((a, b) => a + b, 0));
             const returned = Math.min(item.type === 'aid' ? 2 : 4, missing);
             next.residents.village += returned;
@@ -413,7 +477,7 @@
           }
           if (next.day > 20 && next.day % 7 === 0) {
             next.treasury += 10;
-            if (next.career !== 'worker') {
+            if (next.career !== 'worker' && !next.underReview) {
               next.cash += 18;
               record(next, '주급 18크라운을 받았다. 시 재정에는 세수 10크라운이 들어왔다.');
             }
@@ -422,7 +486,7 @@
             next.hearing.heard = [];
             next.hearing.evidence = false;
             next.notices.unshift('청문회가 시작됐다. 증언과 증거를 확인하고 마지막 결정을 내려야 시간이 흐른다.');
-            next.eventQueue.push({ id: 'hearing-' + next.day, day: next.day, scene: 'hearing', title: '당신의 서명도 이 자리에 있다', text: '계약과 임금 장부가 증언대에 놓였다. 누구에게 질문하고 무엇을 공개할지 결정하자.', quote: '지안 “오늘의 말은 모두 기록에 남습니다.”', destination: 'city' });
+            next.eventQueue.push({ id: 'hearing-' + next.day, day: next.day, scene: 'hearing', title: next.hearing.source === 'oversight' ? '이번에는 당신이 답할 차례다' : '당신의 서명도 이 자리에 있다', text: next.hearing.source === 'oversight' ? '합의금 수령과 기록 봉인에 대한 직무 심사다. 증거와 증언으로 소명하거나 책임을 지고 물러나야 한다.' : '계약과 임금 장부가 증언대에 놓였다. 누구에게 질문하고 무엇을 공개할지 결정하자.', quote: '지안 “오늘의 말은 모두 기록에 남습니다.”', destination: 'city' });
             record(next, '청문회 개회. 윤·소라·민석·도윤이 참석했다.');
           }
           if (next.day === 24 && !next.hearing && !next.bill) {
