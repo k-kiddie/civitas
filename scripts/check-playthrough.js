@@ -33,3 +33,24 @@ for (const action of [{type:'survey'}, {type:'build',plan:'long',funding:'mercha
 assert.equal(state.election.won,true);
 assert.equal(apply(state,{type:'build',plan:'short'}).state,state);
 console.log('제방 3안·자금 2경로·장마·당선/기권·선거 이후·저장 상태 통과');
+for (const plan of ['long', 'short']) {
+  let campaign = fresh();
+  function act(action) { campaign = apply(campaign, action).state; }
+  act({type:'testimony'});
+  act({type:'promise'});
+  act({type:'advance'});
+  act({type:'survey'});
+  act({type:'advance'});
+  act({type:'build',plan,funding:'merchant'});
+  act({type:'witness'});
+  assert(campaign.memories.some(memory => memory.person === '민석'));
+  act({type:'advance',to:'event'});
+  assert.equal(campaign.promise, plan === 'long' ? 'kept' : 'broken');
+  const count = campaign.memories.length;
+  act({type:'advance'});
+  assert.equal(campaign.memories.length,count);
+  act({type:'advance',to:'event'});
+  assert.equal(campaign.election.districts.length,3);
+  assert.notEqual(campaign.election.districts[0].share,campaign.election.districts[1].share);
+}
+console.log('공개 약속 이행/위반·증인 확보·중복 사건 방지·구역별 개표 통과');

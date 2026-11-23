@@ -12,6 +12,11 @@ const routes = new Map([
 ]);
 http.createServer((req,res)=>{
   const url = new URL(req.url,'http://localhost');
+  if (url.pathname === '/healthz') {
+    res.writeHead(200, {'content-type':'application/json'});
+    res.end(JSON.stringify({status:'ok', game:'civitas'}));
+    return;
+  }
   const route = routes.get(url.pathname);
   if(req.method!=='GET'||!route){res.writeHead(404,{'content-type':'text/plain; charset=utf-8'});res.end('Not found');return;}
   const [file,type] = route;

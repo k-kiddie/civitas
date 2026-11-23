@@ -9,12 +9,29 @@
     return { version: 3, day: 1, actions: 2, cash: 32, energy: 80, name: '하린', place: 'harbor',
       surveyed: false, testimony: false, funding: null, built: null, flooded: null,
       candidate: false, election: null, policy: null, support: 25, memories: [], journal: [],
+      promise: null, notices: [], witness: false,
       residents: { harbor: 48, village: 26, hill: 12 } };
   }
   function record(state, text) { state.journal.unshift({ day: state.day, text }); }
   function remember(state, person, text) { state.memories.push({ person, text, day: state.day }); }
+  function normalize(state) {
+    return { ...fresh(), ...state };
+  }
+  function electionResult(state) {
+    const common = state.support - 25;
+    const fulfilled = state.promise === 'kept' ? 8 : state.promise === 'broken' ? -15 : 0;
+    const limit = value => Math.max(5, Math.min(95, Math.round(value)));
+    const districts = [
+      { name: '항구', voters: 48, share: limit(35 + common + (state.funding === 'merchant' ? -12 : 0)) },
+      { name: '어촌', voters: 26, share: limit(25 + common + fulfilled + (state.flooded === 0 ? 10 : -12)) },
+      { name: '언덕', voters: 12, share: limit(30 + common + (state.witness ? 10 : 0)) }
+    ];
+    const votes = Math.round(districts.reduce((sum, district) => sum + district.voters * district.share, 0) / 86);
+    const won = state.candidate && votes >= 50;
+    return { won, winner: won ? state.name : '소라', votes, districts };
+  }
   function apply(state, action) {
-    const next = JSON.parse(JSON.stringify(state));
+    const next = normalize(JSON.parse(JSON.stringify(state)));
     let message = '';
     const spend = (energy = 0) => {
       if (next.actions < 1 || next.energy < energy) return false;
@@ -46,6 +63,20 @@
         next.support += 10;
         message = '어민 대표 소라가 주민 공동 출자를 제안했다. 당신도 30크라운을 보태야 한다.';
         remember(next, '소라', '어촌을 지켜 달라는 부탁을 직접 들었다.');
+        break;
+      case 'promise':
+        if (next.promise || next.day >= 12 || !next.testimony || !spend()) break;
+        next.promise = 'pending';
+        next.support += 6;
+        message = '소라와 주민들 앞에서 어촌을 지키겠다고 약속했다. 첫 장마 때 이행 여부가 드러난다.';
+        remember(next, '소라', '주민들이 함께 들은 공개 약속의 증인이다.');
+        break;
+      case 'witness':
+        if (!next.built || next.witness || !spend()) break;
+        next.witness = true;
+        message = '지안에게 공사 결정과 자금 출처를 공개했다. 민석은 계약 사본을 확보했다.';
+        remember(next, '지안', '공사 자금과 계약을 공개 기록으로 남겼다.');
+        remember(next, '민석', '공사 결정의 사본을 가지고 있다. 공개 감사에서 증언할 수 있다.');
         break;
       case 'build': {
         const plan = plans[action.plan];
@@ -99,20 +130,34 @@
           next.day += 1;
           next.cash -= 3 + (next.day % 7 === 0 ? 12 : 0);
           next.energy = Math.max(0, Math.min(100, next.energy + 20) - (next.cash < 0 ? 10 : 0));
+          if (next.day === 6 && !next.testimony) {
+            next.notices.unshift('소라가 어촌 주민 공동 출자를 모집한다. 장마 전에 어촌을 방문할 수 있다.');
+            record(next, '소라가 공동 출자 모임을 열었다. 당신이 오기를 기다리고 있다.');
+          }
+          if (next.day === 9 && next.funding === 'merchant' && !next.witness) {
+            next.notices.unshift('민석이 선주 계약의 사본을 요청했다. 공개 여부는 당신이 결정한다.');
+            record(next, '민석이 항만 계약에 관심을 보였다. 아직 사본은 전달하지 않았다.');
+          }
           if (next.day === 12) {
             const plan = next.built || 'none';
             next.flooded = plan === 'long' ? 0 : plan === 'short' ? 18 : 34;
             next.residents.village -= Math.min(18, next.flooded);
             next.residents.harbor -= Math.max(0, next.flooded - 18);
             next.support = Math.max(0, Math.min(100, next.support + (plan === 'long' ? 22 : plan === 'short' ? -8 : -18)));
+            if (next.promise === 'pending') {
+              next.promise = plan === 'long' ? 'kept' : 'broken';
+              next.support = Math.max(0, Math.min(90, next.support + (plan === 'long' ? 8 : -15)));
+              const response = plan === 'long' ? '소라가 주민 모임에서 당신이 약속을 지켰다고 증언했다.' : '소라가 주민 모임에서 당신의 어촌 보호 약속이 깨졌다고 말했다.';
+              remember(next, '소라', response);
+              record(next, response);
+            }
             const report = `첫 장마. ${next.flooded}가구가 침수되어 도시를 떠났다.`;
             record(next, report);
             remember(next, '소라', plan === 'long' ? '어촌이 장마를 버텼다. 공사에 참여한 당신을 기억한다.' : '어촌 18가구가 침수됐다. 당신이 어떤 결정을 했는지 기억한다.');
           }
           if (next.day === 20) {
-            const won = next.candidate && next.support >= 50;
-            next.election = { won, winner: won ? next.name : '소라', votes: next.support };
-            record(next, `${next.election.winner} 동장 당선. ${next.candidate ? '당신의 득표율 ' + next.support + '%' : '당신은 출마하지 않았다.'}`);
+            next.election = electionResult(next);
+            record(next, `${next.election.winner} 동장 당선. ${next.candidate ? '당신의 득표율 ' + next.election.votes + '%' : '당신은 출마하지 않았다.'}`);
           }
         }
         next.actions = 2;
@@ -124,7 +169,7 @@
     record(next, message);
     return { state: next, message };
   }
-  const api = { fresh, apply, plans };
+  const api = { fresh, apply, plans, normalize, electionResult };
   if (typeof module !== 'undefined') module.exports = api;
   root.Campaign = api;
 })(globalThis);
