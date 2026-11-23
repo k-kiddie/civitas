@@ -9,9 +9,43 @@ if ! [[ "$port" =~ ^[0-9]+$ ]] || ((port < 1024 || port > 65535)); then
   echo '포트는 1024~65535 정수여야 합니다.' >&2
   exit 1
 fi
-node_bin="$(command -v node || true)"
-if [ -z "$node_bin" ] || ! "$node_bin" -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 18 ? 0 : 1)'; then
-  echo '먼저 시스템 Node.js 18 이상을 설치하세요.' >&2
+node_ok() {
+  local bin
+  bin="$(command -v node || true)"
+  [ -n "$bin" ] && "$bin" -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 18 ? 0 : 1)'
+}
+if ! node_ok; then
+  echo 'Node.js 18 이상이 없어 설치합니다.'
+  if command -v apt-get >/dev/null 2>&1; then
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -y
+    apt-get install -y ca-certificates curl
+    apt-get install -y nodejs || true
+    if ! node_ok; then
+      curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+      apt-get install -y nodejs
+    fi
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf install -y nodejs
+  else
+    echo 'Ubuntu 또는 Amazon Linux 2023이 아닙니다. Node.js 18 이상을 직접 설치한 뒤 다시 실행하세요.' >&2
+    exit 1
+  fi
+  if ! node_ok; then
+    echo 'Node.js 18 이상 설치에 실패했습니다.' >&2
+    exit 1
+  fi
+fi
+node_bin="$(command -v node)"
+if ! command -v curl >/dev/null 2>&1; then
+  if command -v apt-get >/dev/null 2>&1; then apt-get install -y curl; else dnf install -y curl-minimal || dnf install -y curl; fi
+fi
+current_port="$(grep -oP '^Environment=PORT=\K[0-9]+' /etc/systemd/system/civitas.service 2>/dev/null || true)"
+if systemctl is-active --quiet civitas && [ "$current_port" = "$port" ]; then
+  : # 기존 CIVITAS가 같은 포트를 쓰는 업데이트 상황
+elif command -v ss >/dev/null 2>&1 && ss -ltnH "sport = :$port" | grep -q .; then
+  echo "포트 $port 를 이미 다른 프로그램이 쓰고 있습니다. 다른 포트로 실행하세요: sudo bash deploy/install.sh 8091" >&2
+  ss -ltnp "sport = :$port" >&2 || true
   exit 1
 fi
 source_dir="$(cd "$(dirname "$0")/.." && pwd)"
