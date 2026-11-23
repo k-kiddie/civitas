@@ -342,3 +342,47 @@ const clerkRecommendation={...fresh(),day:21,career:'clerk',councilRecommendatio
 assert.equal(apply(clerkRecommendation,{type:'join',career:'councillor'}).state.career,'councillor');
 assert.equal(apply(clerkRecommendation,{type:'join',career:'investigator'}).state,clerkRecommendation);
 console.log('농촌·서기 8경로·사본 조건·우물 복구비·물값 생활비·서기 승급·독립 추천 권한 통과');
+const careers = require('../careers');
+for(const [id,job] of Object.entries(careers.jobs).filter(([,job])=>!job.secret)) {
+  let state={...fresh(),career:'worker',cash:100,energy:100,day:2};
+  if(id==='worker')state.career='farmer';
+  if(job.skill){
+    assert.equal(apply(state,{type:'applyJob',career:id}).state,state);
+    state=apply(state,{type:'train',skill:job.skill}).state;
+  }
+  state=apply(state,{type:'applyJob',career:id}).state;
+  assert.equal(state.career,id);
+  state=apply(state,{type:'advance'}).state;
+  const before=state.cash;
+  state=apply(state,{type:'work'}).state;
+  assert.equal(state.cash-before,job.wage);
+}
+for(const secret of ['undercover','courier']) {
+  let state={...fresh(),day:6,cash:100,energy:100,policeRecommendation:secret==='undercover',jobStory:{...fresh().jobStory,outcome:secret==='courier'?'collective':null},support:50};
+  assert.equal(apply(state,{type:'applyJob',career:secret}).state,state);
+  state=apply(state,{type:'rest'}).state;
+  assert.equal(state.recruitment[secret],'scheduled');
+  state=apply(state,{type:'advance',to:'event'}).state;
+  assert.equal(state.day,7);
+  assert.equal(state.eventQueue[0].recruitCareer,secret);
+  const declined=apply(state,{type:'eventChoice',eventId:'recruit-'+secret,choice:'decline'}).state;
+  assert.equal(declined.career,'worker');assert.equal(declined.recruitment[secret],'declined');
+  state=apply(state,{type:'eventChoice',eventId:'recruit-'+secret,choice:'accept'}).state;
+  assert.equal(state.career,secret);
+  state=apply(state,{type:'acknowledge'}).state;
+  state=apply(state,{type:'advance',to:'event'}).state;
+  assert.equal(state.day,8);
+  assert.equal(state.eventQueue[0].missionCareer,secret);
+  state=apply(state,{type:'eventChoice',eventId:'mission-'+secret,choice:'protect'}).state;
+  assert.equal(state.secretMissionDone,true);
+  state=apply(state,{type:'acknowledge'}).state;
+  state=apply(state,{type:'careerDuty'}).state;
+  assert.equal(apply(state,{type:'careerDuty'}).state,state);
+  assert.equal(state.followUps.filter(item=>item.type==='recruitment').length,0);
+}
+let retired={...fresh(),day:22,career:'mayor',election:{won:true,winner:'시민'}};
+retired=apply(retired,{type:'resignOffice'}).state;
+assert.equal(require('../campaign').normalize(retired).career,'worker');
+assert.equal(retired.election.won,true);
+assert.equal(apply({...fresh(),underReview:true},{type:'applyJob',career:'farmer'}).state.underReview,true);
+console.log('일반직 11종·훈련 조건·품삯·비밀 영입 2종·수락/거절·첫 임무·중복/직접진입 차단·동장 사임 통과');

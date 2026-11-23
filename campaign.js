@@ -1,6 +1,7 @@
 'use strict';
 (function (root) {
   const jobStories = typeof module !== 'undefined' ? require('./job-stories') : root.JobStories;
+  const careers = typeof module !== 'undefined' ? require('./careers') : root.Careers;
   const starts = typeof module !== 'undefined' ? require('./starts') : root.Starts;
   const plans = {
     short: { name: '항구 제방', cost: 24, homes: 68, description: '항구를 보호한다. 어촌 18가구가 침수된다.' },
@@ -13,6 +14,7 @@
       candidate: false, election: null, policy: null, support: 25, memories: [], journal: [],
       promise: null, notices: [], witness: false,
       underReview: false, barredInvestigator: false, policeRecommendation: false, councilRecommendation: false,
+      skills: {}, recruitment: {}, careerDutyDay: 0, secretMissionDone: false, officeResigned: false,
       career: 'worker', treasury: 40, caseStage: 'closed', contractRelief: false,
       hearing: null, bill: null, hearingRecord: null, eventQueue: [], storyHistory: [], followUps: [],
       jobStory: { stage:'none', opening:null, evidence:false, wageBonus:0, outcome:null },
@@ -31,7 +33,7 @@
         result.followUps = [...result.followUps, {type:'job', episode:starts.occupations[result.startingOccupation].firstEpisode, day:result.day + 2}];
       }
     }
-    if (result.election?.won) result.career = 'mayor';
+    if (result.election?.won && !result.officeResigned) result.career = 'mayor';
     if (result.caseStage === 'sealed' && !result.underReview && !result.followUps.some(item => item.type === 'oversight')) {
       result.followUps = [...result.followUps, { type: 'oversight', day: result.day + 3 }];
     }
@@ -95,6 +97,7 @@
     return [{ speaker: event.id.includes('housing') ? '윤' : '소라', text: event.text }];
   }
   function eventReply(event, choice) {
+    if (event.recruitCareer || event.missionCareer) return careers.reply(event,choice);
     if (event.jobEpisode) {
       const item = event.jobChoices.find(option => option.id === choice);
       return { reply:item.reply, speaker:event.jobPerson, reaction:item.reaction };
@@ -122,6 +125,7 @@
   }
   function eventChoices(state, event) {
     if (!event || event.resolved) return [];
+    if (event.recruitCareer || event.missionCareer) return careers.choices(state,event);
     if (event.jobEpisode) return jobStories.choices(state,event);
     if (event.id === 'opening') return starts.occupations[event.occupation].options.map(option => ({ id: option.id, title: option.reply, detail: option.detail, disabled: state.energy < 10 }));
     if (event.id === 'oversight') return [
@@ -191,7 +195,27 @@
       const choice = eventChoices(next, event).find(item => item.id === action.choice);
       if (!event || event.id !== action.eventId || !choice || choice.disabled) return { state, message: '지금은 이 선택을 할 수 없다.' };
       let result = '';
-      if (event.jobEpisode) {
+      if (event.missionCareer) {
+        if(choice.id==='protect') {
+          next.energy-=8;
+          next.support=Math.min(100,next.support+6);
+          result='첫 임무에서 이름과 연락망을 보호했다. 연락 상대의 신임을 얻었다.';
+        } else {
+          next.support=Math.max(0,next.support-3);
+          result='첫 임무를 포기했다. 현재 직업은 유지되지만 연락 상대는 실패를 기억한다.';
+        }
+        next.secretMissionDone=true;
+        remember(next,careers.routes[event.missionCareer].person,result);
+      } else if (event.recruitCareer) {
+        next.recruitment[event.recruitCareer] = choice.id === 'accept' ? 'accepted' : 'declined';
+        if (choice.id === 'accept') {
+          next.career = event.recruitCareer;
+          next.secretMissionDone = false;
+          next.followUps.push({type:'secretMission',career:event.recruitCareer,day:next.day+1});
+          result = careers.routes[event.recruitCareer].mission;
+        } else result = '비공개 제안을 거절했다. 현재 직업과 수입은 유지된다.';
+        remember(next,careers.routes[event.recruitCareer].person,result);
+      } else if (event.jobEpisode) {
         result = jobStories.resolve(next,event,choice.id);
         remember(next,event.jobPerson,result);
       } else if (event.id === 'opening') {
@@ -277,6 +301,7 @@
       remember(next, response.speaker, `당신 “${response.reply}” · ${response.speaker} “${response.reaction}”`);
       next.storyHistory.push({ id: event.id, day: next.day, choice: choice.id, result, ...response });
       record(next, result);
+      careers.schedule(next);
       return { state: next, message: result };
     }
     if (action.type === 'acknowledge') {
@@ -288,6 +313,39 @@
       return { state, message: '청문회가 진행 중이다. 증언을 듣고 표결 또는 합의를 선택하자.' };
     }
     switch (action.type) {
+      case 'train': {
+        if (!Object.hasOwn(careers.skills,action.skill) || (next.skills[action.skill]||0)>=1 || next.cash<8 || !spend(10)) break;
+        next.cash-=8;
+        next.skills[action.skill]=(next.skills[action.skill]||0)+1;
+        message=`${careers.skills[action.skill]} 훈련을 받았다. 해당 구직 공고의 조건을 확인하자.`;
+        break;
+      }
+      case 'applyJob': {
+        if (careers.requirement(next,action.career) || !spend()) break;
+        const previous=next.career;
+        next.career=action.career;
+        if(previous==='investigator' && ['open','evidence'].includes(next.caseStage)) next.caseStage='transferred';
+        message=`${careers.jobs[action.career].name}로 전직했다. 기존 인맥과 약속은 유지되며 업무 수입이 바뀐다.`;
+        break;
+      }
+      case 'resignOffice':
+        if(next.career!=='mayor' || next.hearing || !spend()) break;
+        next.officeResigned=true;
+        next.career='worker';
+        next.support=Math.max(0,next.support-8);
+        message='동장직에서 사임했다. 당선 기록은 남고, 공직 주급과 예산 집행 권한은 내려놓았다.';
+        break;
+      case 'careerDuty': {
+        const job=careers.jobs[next.career];
+        if(!job?.duty || (job.secret && !next.secretMissionDone) || next.underReview || next.careerDutyDay===next.day || next.cash<job.cost || !spend(12)) break;
+        next.cash-=job.cost;
+        next.support=Math.min(100,next.support+job.support);
+        next.careerDutyDay=next.day;
+        message=`${job.duty}. ${job.group} 업무로 주민 지지 ${job.support}를 얻었다.`;
+
+        break;
+      }
+
       case 'question': {
         if (!inHearing || !['윤', '소라', '민석', '도윤'].includes(action.person)) break;
         const heard = next.hearing.heard || [];
@@ -348,7 +406,7 @@
 
       case 'place': next.place = action.place; return { state: next, message: '' };
       case 'work': {
-        const job = starts.occupations[next.career] || starts.occupations.worker;
+        const job = careers.jobs[next.career] || starts.occupations.worker;
         if (!spend(job.energy)) break;
         const toll = next.career === 'worker' && next.funding === 'merchant' && next.flooded !== null && !next.contractRelief;
         const bonus = next.career === next.startingOccupation ? next.jobStory.wageBonus : 0;
@@ -423,7 +481,7 @@
         message = '골목 집회에서 주민들의 이야기를 들었다. 예상 지지가 올랐다.';
         break;
       case 'join':
-        if (next.day < 21 || !Object.hasOwn(starts.occupations, next.career) || !['investigator', 'councillor'].includes(action.career) || (action.career === 'investigator' && next.barredInvestigator) || !(next.witness || (action.career === 'investigator' && next.policeRecommendation) || (action.career === 'councillor' && next.councilRecommendation)) || !spend()) break;
+        if (next.underReview || next.hearing || next.day < 21 || !careers.jobs[next.career] || !['investigator', 'councillor'].includes(action.career) || (action.career === 'investigator' && next.barredInvestigator) || !(next.witness || (action.career === 'investigator' && next.policeRecommendation) || (action.career === 'councillor' && next.councilRecommendation)) || !spend()) break;
         next.career = action.career;
         next.caseStage = action.career === 'investigator' ? 'open' : next.caseStage;
         message = action.career === 'investigator' ? '민석의 추천으로 항만 수사관이 됐다. 임명은 선거 당선과 다른 경로의 권한을 열었다.' : '지안의 추천으로 주민 협의회 위원에 위촉됐다. 안건을 제출하고 공개 청문회를 소집할 수 있다.';
@@ -494,6 +552,17 @@
           const due = next.followUps.filter(item => item.day <= next.day);
           next.followUps = next.followUps.filter(item => item.day > next.day);
           for (const item of due) {
+            if(item.type==='secretMission') {
+              next.eventQueue.push(careers.mission(item.career,next));
+              record(next,'비밀 직업의 첫 임무가 도착했다.');
+              continue;
+            }
+            if(item.type==='recruitment') {
+              next.eventQueue.push(careers.invitation(item.career,next));
+              next.recruitment[item.career]='offered';
+              record(next,careers.routes[item.career].title);
+              continue;
+            }
             if (item.type === 'job') {
               const episode = jobStories.create(item.episode,next);
               if (episode) {
@@ -579,6 +648,9 @@
             });
             record(next, `${next.election.winner} 동장 당선. ${next.candidate ? '당신의 득표율 ' + next.election.votes + '%' : '당신은 출마하지 않았다.'}`);
           }
+          careers.schedule(next);
+          const encounters = next.followUps.filter(item => item.day > next.day).map(item => item.day);
+          if (encounters.length) target = Math.min(target, ...encounters);
         }
         next.actions = 2;
         message = `${next.day}일이 되었다. 생활비와 집세를 정산했다.${next.cash < 0 ? ' 생활비가 모자라 빚이 쌓이고 있다.' : ''}`;
@@ -587,9 +659,10 @@
     }
     if (!message) return { state, message: '지금은 이 행동을 할 수 없다. 비용, 기력, 일정 조건을 확인하자.' };
     record(next, message);
+    careers.schedule(next);
     return { state: next, message };
   }
-  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices, eventDialogue, eventReply, starts };
+  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices, eventDialogue, eventReply, starts, careers };
   if (typeof module !== 'undefined') module.exports = api;
   root.Campaign = api;
 })(globalThis);

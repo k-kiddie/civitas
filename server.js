@@ -7,6 +7,7 @@ const port = Math.max(1, Number(process.argv[process.argv.indexOf('--port') + 1]
 const routes = new Map([
   ['/',['index.html','text/html; charset=utf-8']],
   ['/job-stories.js',['job-stories.js','text/javascript; charset=utf-8']],
+  ['/careers.js',['careers.js','text/javascript; charset=utf-8']],
   ['/starts.js',['starts.js','text/javascript; charset=utf-8']],
   ['/campaign.js',['campaign.js','text/javascript; charset=utf-8']],
   ['/game.js',['game.js','text/javascript; charset=utf-8']],
