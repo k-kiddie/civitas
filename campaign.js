@@ -11,7 +11,7 @@
       candidate: false, election: null, policy: null, support: 25, memories: [], journal: [],
       promise: null, notices: [], witness: false,
       career: 'worker', treasury: 40, caseStage: 'closed', contractRelief: false,
-      hearing: null, bill: null,
+      hearing: null, bill: null, hearingRecord: null,
       residents: { harbor: 48, village: 26, hill: 12 } };
   }
   function record(state, text) { state.journal.unshift({ day: state.day, text }); }
@@ -34,6 +34,18 @@
     const won = state.candidate && votes >= 50;
     return { won, winner: won ? state.name : '소라', votes, districts };
   }
+  function hearingStrength(state) {
+    const hearing = state.hearing;
+    if (!hearing) return 0;
+    const heard = hearing.heard || [];
+    let score = 0;
+    if (heard.includes('윤') && state.surveyed) score += 1;
+    if (heard.includes('소라') && state.testimony && state.promise !== 'broken') score += 1;
+    if (heard.includes('민석') && state.witness) score += 1;
+    if (hearing.evidence) score += 2;
+    if (state.support >= 40 || state.promise === 'kept') score += 1;
+    return score;
+  }
   function apply(state, action) {
     const next = normalize(JSON.parse(JSON.stringify(state)));
     let message = '';
@@ -43,7 +55,48 @@
       next.energy -= energy;
       return true;
     };
+    const inHearing = next.hearing && next.hearing.day <= next.day;
+    if (inHearing && !['question', 'evidence', 'verdict'].includes(action.type)) {
+      return { state, message: '청문회가 진행 중이다. 증언을 듣고 표결 또는 합의를 선택하자.' };
+    }
     switch (action.type) {
+      case 'question': {
+        if (!inHearing || !['윤', '소라', '민석', '도윤'].includes(action.person)) break;
+        const heard = next.hearing.heard || [];
+        if (heard.includes(action.person)) break;
+        next.hearing.heard = [...heard, action.person];
+        const testimony = {
+          '윤': next.surveyed ? '“당신과 함께 물길을 확인했다. 긴 제방은 어촌까지 보호한다.”' : '“직접 조사에 함께하지 않은 사람의 책임을 제가 보증할 수는 없다.”',
+          '소라': next.promise === 'broken' ? '“당신은 지킨다고 약속했다. 그 약속을 어긴 뒤에 이제 와서 누구의 편이라는 건가?”' : next.testimony ? '“당신은 우리 말을 들었다. 임금에서 공사비까지 가져가는 계약은 바뀌어야 한다.”' : '“어촌에 오지도 않은 사람을 어떻게 믿으라는 건가?”',
+          '민석': next.witness ? '“지안이 보관한 사본을 대조했다. 계약의 서명과 공제 내역은 사실이다.”' : '“원본 대조가 안 됐다. 소문으로 계약을 뒤집을 수는 없다.”',
+          '도윤': next.funding === 'merchant' ? '“내 돈으로 제방을 지었다. 계약을 바꾸려면 최소한 12크라운은 보전해 줘야 한다.”' : '“내가 공사에 투자한 계약은 없다. 공개 기록을 남기는 데 반대하지 않는다.”'
+        };
+        message = `${action.person}의 증언 ${testimony[action.person]}`;
+        remember(next, action.person, message);
+        break;
+      }
+      case 'evidence':
+        if (!inHearing || !next.witness || next.hearing.evidence) break;
+        next.hearing.evidence = true;
+        message = '계약 사본을 공개했다. 당신의 서명까지 공개 기록에 남았다. 증거 설득력 +2.';
+        remember(next, '지안', '청문회에서 당신이 서명한 계약까지 공개했다.');
+        break;
+      case 'verdict': {
+        if (!inHearing || !['vote', 'settle', 'withdraw'].includes(action.choice)) break;
+        if (action.choice === 'settle' && (next.cash < 12 || next.funding !== 'merchant' || !(next.hearing.heard || []).includes('도윤'))) break;
+        const strength = hearingStrength(next);
+        const passed = action.choice === 'settle' || (action.choice === 'vote' && strength >= 4);
+        if (action.choice === 'settle') next.cash -= 12;
+        next.bill = passed ? 'passed' : 'rejected';
+        next.contractRelief = passed && next.funding === 'merchant';
+        next.hearingRecord = { day: next.day, choice: action.choice, strength, passed, heard: next.hearing.heard || [], evidence: Boolean(next.hearing.evidence) };
+        message = action.choice === 'settle' ? '개인 돈 12크라운으로 도윤과 합의했다. 임금 공제 조항이 폐지됐다.' : passed ? '증언과 증거를 바탕으로 표결이 통과됐다. 공개 감사가 확정되고 선주 계약이 있다면 임금 공제도 폐지된다.' : action.choice === 'withdraw' ? '안건을 철회했다. 원래 계약이 유지된다.' : '증언과 증거가 부족해 표결에서 부결됐다. 원래 계약이 유지된다.';
+        remember(next, '도윤', message);
+        remember(next, '소라', message);
+        next.hearing = null;
+        break;
+      }
+
       case 'place': next.place = action.place; return { state: next, message: '' };
       case 'work':
         if (!spend(15)) break;
@@ -214,14 +267,10 @@
             }
           }
           if (next.hearing && next.day === next.hearing.day) {
-            const passed = next.witness && (next.support >= 40 || next.promise === 'kept');
-            next.bill = passed ? 'passed' : 'rejected';
-            next.contractRelief = passed && next.funding === 'merchant';
-            const result = passed ? (next.funding === 'merchant' ? '청문회에서 공개 계약과 주민 지지를 바탕으로 재협상안이 통과됐다. 선주 계약의 임금 공제 조항이 폐기됐다.' : '청문회에서 공사비와 배급 기록 공개안이 통과됐다. 선주 계약은 체결되지 않아 변경할 임금 조항이 없다.') : '도윤이 재협상안에 반대했다. 주민들의 동의를 확보하지 못해 안건이 부결됐다.';
-            record(next, result);
-            remember(next, '도윤', result);
-            next.notices.unshift(result);
-            next.hearing = null;
+            next.hearing.heard = [];
+            next.hearing.evidence = false;
+            next.notices.unshift('청문회가 시작됐다. 증언과 증거를 확인하고 마지막 결정을 내려야 시간이 흐른다.');
+            record(next, '청문회 개회. 윤·소라·민석·도윤이 참석했다.');
           }
           if (next.day === 24 && !next.hearing && !next.bill) {
             next.notices.unshift('지안이 재협상안 제출을 권했다. 수사관은 장부를 조사하고, 동장과 협의회 위원은 안건을 제출할 수 있다.');
@@ -242,7 +291,7 @@
     record(next, message);
     return { state: next, message };
   }
-  const api = { fresh, apply, plans, normalize, electionResult };
+  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength };
   if (typeof module !== 'undefined') module.exports = api;
   root.Campaign = api;
 })(globalThis);

@@ -71,6 +71,9 @@ for (const career of ['investigator', 'councillor', 'mayor']) {
   const hearingDay = campaign.hearing.day;
   act({type:'advance',to:'event'});
   assert.equal(campaign.day,hearingDay);
+  for (const person of ['윤','소라','민석']) act({type:'question',person});
+  act({type:'evidence'});
+  act({type:'verdict',choice:'vote'});
   assert.equal(campaign.bill,'passed');
   assert.equal(campaign.contractRelief,true);
   const before = campaign.cash;
@@ -94,3 +97,23 @@ assert.equal(privateCase.cash,52);
 assert.equal(privateCase.caseStage,'sealed');
 assert.equal(privateCase.hearing,null);
 console.log('직책 3종·공개수사·비공개합의·청문회 시간 정지·임금 회복·구형 저장 보완·공금 분리 통과');
+
+for (const choice of ['vote', 'settle', 'withdraw']) {
+  let state = {...fresh(), day:30, cash:30, funding:'merchant', hearing:{day:30, source:'bill'}};
+  assert.equal(apply(state,{type:'advance'}).state,state);
+  state = apply(state,{type:'question',person:'도윤'}).state;
+  const count = state.memories.length;
+  assert.equal(apply(state,{type:'question',person:'도윤'}).state,state);
+  assert.equal(state.memories.length,count);
+  state = apply(state,{type:'verdict',choice}).state;
+  assert.equal(state.hearing,null);
+  assert.equal(state.contractRelief,choice === 'settle');
+  assert.equal(state.cash,choice === 'settle' ? 18 : 30);
+  assert.equal(apply(state,{type:'advance'}).state.day,31);
+}
+let pending = {...fresh(), day:27, witness:true, surveyed:true, support:45, hearing:{day:27,source:'bill'}};
+pending = apply(pending,{type:'question',person:'민석'}).state;
+pending = JSON.parse(JSON.stringify(pending));
+assert.deepEqual(pending.hearing.heard,['민석']);
+assert.equal(apply(pending,{type:'evidence'}).state.hearing.evidence,true);
+console.log('직접 청문회·중복 질문 방지·부결/합의/철회·진행 중 저장·시간 차단 통과');
