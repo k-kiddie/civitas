@@ -77,7 +77,12 @@ function cityArt(){let b='';let seed=41;const rand=()=>{seed=(seed*16807)%214748
   function eventDialog() {
     const event = state.eventQueue[0];
     if (!event) return '';
-    return `<dialog id="event-dialog" class="event-dialog" aria-labelledby="event-title" aria-describedby="event-description"><img class="event-picture" src="/assets/events/${event.scene}.webp" alt="${escape(event.title)}"><div class="event-copy"><p class="eyebrow">${event.day}일 · ${event.id === 'storm' ? '첫 장마' : event.id === 'election' ? '선거 결과' : '공개 청문회'}</p><h2 id="event-title">${escape(event.title)}</h2><p id="event-description">${escape(event.text)}</p><blockquote>${escape(event.quote)}</blockquote><button class="endday" data-event-dismiss autofocus>${event.destination === 'power' ? '구역별 개표 결과 보기' : event.scene === 'hearing' ? '청문회에 참석한다' : '달라진 도시를 살펴본다'}</button></div></dialog>`;
+    const choices = Campaign.eventChoices(state, event);
+    const decision = event.resolved
+      ? `<section class="event-outcome" role="status"><span class="eyebrow">선택의 결과</span><p>${escape(event.resolved.result)}</p></section>`
+      : choices.length ? `<div class="event-choices">${choices.map(choice => `<button class="choice" data-action="eventChoice" data-event-id="${event.id}" data-choice="${choice.id}" ${choice.disabled ? 'disabled' : ''}><strong>${escape(choice.title)}</strong><small>${escape(choice.detail)}</small></button>`).join('')}</div>` : '';
+    const continueButton = !choices.length ? `<button class="endday" data-event-dismiss autofocus>${event.scene === 'hearing' ? '청문회에 참석한다' : event.resolved ? '이 결정을 안고 계속한다' : '도시로 돌아간다'}</button>` : '';
+    return `<dialog id="event-dialog" class="event-dialog" aria-labelledby="event-title" aria-describedby="event-description"><img class="event-picture" src="/assets/events/${event.scene}.webp" alt="${escape(event.title)}"><div class="event-copy"><p class="eyebrow">${event.day}일 · ${event.id === 'storm' ? '첫 장마' : event.id === 'election' ? '선거 결과' : event.scene === 'hearing' ? '공개 청문회' : '후속 소식'}</p><h2 id="event-title">${escape(event.title)}</h2><p id="event-description">${escape(event.text)}</p><blockquote>${escape(event.quote)}</blockquote>${decision}${continueButton}</div></dialog>`;
   }
   function render() {
     const previousFocus = document.activeElement?.dataset?.action;
@@ -103,7 +108,7 @@ function cityArt(){let b='';let seed=41;const rand=()=>{seed=(seed*16807)%214748
   }
   function dismissEvent() {
     const event = state.eventQueue[0];
-    if (!event) return;
+    if (!event || Campaign.eventChoices(state, event).length) return;
     tab = event.destination;
     state = apply(state, { type: 'acknowledge' }).state;
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { message = '사건 확인 상태를 저장하지 못했다.'; }
@@ -120,7 +125,7 @@ function cityArt(){let b='';let seed=41;const rand=()=>{seed=(seed*16807)%214748
     } else if (element.dataset.tab) { tab = element.dataset.tab; message = ''; }
     else if (element.dataset.preview) preview = element.dataset.preview;
     else if (element.dataset.action) {
-      const result = apply(state, { type: element.dataset.action, plan: element.dataset.plan, funding: element.dataset.funding, policy: element.dataset.policy, to: element.dataset.to, career: element.dataset.career, choice: element.dataset.choice, person: element.dataset.person });
+      const result = apply(state, { type: element.dataset.action, plan: element.dataset.plan, funding: element.dataset.funding, policy: element.dataset.policy, to: element.dataset.to, career: element.dataset.career, choice: element.dataset.choice, person: element.dataset.person, eventId: element.dataset.eventId });
       state = result.state;
       message = result.message;
       try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { message += ' 저장 공간에 접근할 수 없어 이번 진행은 자동 저장되지 않았다.'; }

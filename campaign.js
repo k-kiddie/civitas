@@ -11,7 +11,7 @@
       candidate: false, election: null, policy: null, support: 25, memories: [], journal: [],
       promise: null, notices: [], witness: false,
       career: 'worker', treasury: 40, caseStage: 'closed', contractRelief: false,
-      hearing: null, bill: null, hearingRecord: null, eventQueue: [],
+      hearing: null, bill: null, hearingRecord: null, eventQueue: [], storyHistory: [], followUps: [],
       residents: { harbor: 48, village: 26, hill: 12 } };
   }
   function record(state, text) { state.journal.unshift({ day: state.day, text }); }
@@ -46,6 +46,24 @@
     if (state.support >= 40 || state.promise === 'kept') score += 1;
     return score;
   }
+  function eventChoices(state, event) {
+    if (!event || event.resolved) return [];
+    if (event.id === 'storm') return [
+      { id: 'aid', title: '내 돈으로 구호 물자를 마련한다', detail: '8크라운 · 주민 지지 +5 · 이틀 뒤 지원 결과', disabled: state.cash < 8 },
+      { id: 'organize', title: '소라와 피해 주민의 증언을 모은다', detail: '기력 10 · 주민 지지 +4 · 청문회 증언 확보', disabled: state.energy < 10 },
+      { id: 'livelihood', title: '긴급 하역 일자리를 맡는다', detail: '수입 +6크라운 · 주민 지지 −4', disabled: false }
+    ];
+    if (event.id === 'election' && state.election?.won) return [
+      { id: 'housing', title: '첫 예산을 주거 복구에 배정한다', detail: '공금 12 · 사흘 뒤 최대 4가구 복귀', disabled: state.treasury < 12 },
+      { id: 'audit', title: '첫 일정으로 항만 계약 청문회를 잡는다', detail: '기력 10 · 사흘 뒤 청문회 개회', disabled: state.energy < 10 || Boolean(state.hearing) || Boolean(state.bill) },
+      { id: 'pause', title: '취임 전 하루는 나를 위해 쉰다', detail: '기력 +15 · 주민 지지 −3', disabled: false }
+    ];
+    if (event.id === 'election') return [
+      { id: 'delegation', title: '소라와 함께 주민 대표단을 꾸린다', detail: '기력 10 · 주민 지지 +6 · 소라가 기억함', disabled: state.energy < 10 },
+      { id: 'work', title: '부두로 돌아가 밀린 품삯을 번다', detail: '수입 +12크라운 · 주민 지지 −4', disabled: false }
+    ];
+    return [];
+  }
   function apply(state, action) {
     const next = normalize(JSON.parse(JSON.stringify(state)));
     let message = '';
@@ -61,6 +79,61 @@
       next.gender = action.gender;
       next.profileSet = true;
       return { state: next, message: '' };
+    }
+    if (action.type === 'eventChoice') {
+      const event = next.eventQueue[0];
+      const choice = eventChoices(next, event).find(item => item.id === action.choice);
+      if (!event || event.id !== action.eventId || !choice || choice.disabled) return { state, message: '지금은 이 선택을 할 수 없다.' };
+      let result = '';
+      if (event.id === 'storm') {
+        if (choice.id === 'aid') {
+          next.cash -= 8;
+          next.support = Math.min(100, next.support + 5);
+          next.followUps.push({ day: next.day + 2, type: 'aid' });
+          result = '소라가 구호 물자를 받았다. 이틀 뒤 대피한 가족들의 소식이 돌아온다.';
+        } else if (choice.id === 'organize') {
+          next.energy -= 10;
+          next.support = Math.min(100, next.support + 4);
+          next.testimony = true;
+          result = '소라와 피해 가족들의 증언을 모았다. 이후 공개 청문회에서 주민의 목소리를 전할 수 있다.';
+        } else {
+          next.cash += 6;
+          next.support = Math.max(0, next.support - 4);
+          result = '긴급 하역으로 6크라운을 벌었다. 소라는 당신을 기다리다 주민들과 직접 구호를 시작했다.';
+        }
+        remember(next, '소라', result);
+      } else if (next.election?.won) {
+        if (choice.id === 'housing') {
+          next.treasury -= 12;
+          next.followUps.push({ day: next.day + 3, type: 'housing' });
+          result = '윤에게 복구 공사를 맡겼다. 공금 12크라운을 배정했고, 사흘 뒤 입주 결과가 돌아온다.';
+          remember(next, '윤', result);
+        } else if (choice.id === 'audit') {
+          next.energy -= 10;
+          next.bill = 'pending';
+          next.hearing = { day: next.day + 3, source: 'bill' };
+          result = '지안이 첫 청문회를 잡았다. 사흘 뒤 당신의 서명이 담긴 계약도 공개 검토를 받는다.';
+          remember(next, '지안', result);
+        } else {
+          next.energy = Math.min(100, next.energy + 15);
+          next.support = Math.max(0, next.support - 3);
+          result = '조용히 집으로 돌아갔다. 휴식은 얻었지만 주민들은 취임 첫 발표를 기다리고 있다.';
+        }
+      } else if (choice.id === 'delegation') {
+        next.energy -= 10;
+        next.support = Math.min(100, next.support + 6);
+        result = '소라와 주민 대표단을 꾸렸다. 선거 결과를 받아들이고 다음 예산 회의에 함께 참석하기로 했다.';
+        remember(next, '소라', result);
+      } else {
+        next.cash += 12;
+        next.support = Math.max(0, next.support - 4);
+        result = '부두로 돌아가 12크라운을 벌었다. 주민 대표단은 당신 없이 회의를 시작했다.';
+        remember(next, '소라', result);
+      }
+      event.resolved = { choice: choice.id, result };
+      next.storyHistory.push({ id: event.id, day: next.day, choice: choice.id, result });
+      record(next, result);
+      return { state: next, message: result };
     }
     if (action.type === 'acknowledge') {
       next.eventQueue.shift();
@@ -240,11 +313,24 @@
         break;
       case 'advance': {
         let target = action.to === 'event' ? (next.day < 12 ? 12 : next.day < 20 ? 20 : next.day < 21 ? 21 : next.day + 7) : next.day + 1;
+        const upcoming = next.followUps.filter(item => item.day > next.day).map(item => item.day);
+        if (upcoming.length) target = Math.min(target, ...upcoming);
         if (next.hearing && next.hearing.day > next.day) target = Math.min(target, next.hearing.day);
         while (next.day < target) {
           next.day += 1;
           next.cash -= 3 + (next.day % 7 === 0 ? 12 : 0);
           next.energy = Math.max(0, Math.min(100, next.energy + 20) - (next.cash < 0 ? 10 : 0));
+          const due = next.followUps.filter(item => item.day <= next.day);
+          next.followUps = next.followUps.filter(item => item.day > next.day);
+          for (const item of due) {
+            const missing = Math.max(0, 86 - Object.values(next.residents).reduce((a, b) => a + b, 0));
+            const returned = Math.min(item.type === 'aid' ? 2 : 4, missing);
+            next.residents.village += returned;
+            const text = item.type === 'aid' ? `구호 물자가 도착했다. ${returned}가구가 임시 거처로 돌아왔다.` : `윤이 복구 공사를 마쳤다. ${returned}가구가 새 거처에 입주했다.`;
+            record(next, text);
+            remember(next, item.type === 'aid' ? '소라' : '윤', text);
+            next.eventQueue.push({ id: 'followup-' + item.type + '-' + next.day, day: next.day, scene: next.flooded > 0 ? 'storm-partial' : 'storm-safe', title: '당신의 결정이 돌아왔다', text, quote: '“기록에만 남은 약속은 아니었네요.”', destination: 'city' });
+          }
           if (next.day === 6 && !next.testimony) {
             next.notices.unshift('소라가 어촌 주민 공동 출자를 모집한다. 장마 전에 어촌을 방문할 수 있다.');
             record(next, '소라가 공동 출자 모임을 열었다. 당신이 오기를 기다리고 있다.');
@@ -317,7 +403,7 @@
     record(next, message);
     return { state: next, message };
   }
-  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength };
+  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices };
   if (typeof module !== 'undefined') module.exports = api;
   root.Campaign = api;
 })(globalThis);

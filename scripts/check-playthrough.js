@@ -152,3 +152,33 @@ assert.equal(migrated.name,'기존 이름');
 assert.equal(migrated.gender,'unspecified');
 assert.equal(migrated.profileSet,false);
 console.log('이름·성별 3종 설정·저장·잘못된 입력·구형 인물 유지 통과');
+for (const choice of ['aid','organize','livelihood']) {
+  let state = apply({...fresh(),day:11,cash:30},{type:'advance'}).state;
+  const before = state;
+  state = apply(state,{type:'eventChoice',eventId:'storm',choice}).state;
+  assert.equal(state.storyHistory[0].choice,choice);
+  assert.equal(state.eventQueue[0].resolved.choice,choice);
+  assert.equal(apply(state,{type:'eventChoice',eventId:'storm',choice}).state,state);
+  assert.equal(JSON.parse(JSON.stringify(state)).eventQueue[0].resolved.choice,choice);
+  if (choice === 'aid') {
+    assert.equal(state.cash,before.cash - 8);
+    state = apply(state,{type:'acknowledge'}).state;
+    state = apply(state,{type:'advance',to:'event'}).state;
+    assert.equal(state.day,14);
+    assert.equal(state.residents.village,10);
+    assert.match(state.eventQueue[0].id,/followup/);
+  }
+  if (choice === 'organize') assert.equal(state.testimony,true);
+  if (choice === 'livelihood') assert.equal(state.cash,before.cash+6);
+}
+let broke = apply({...fresh(),day:11,cash:0},{type:'advance'}).state;
+assert.equal(apply(broke,{type:'eventChoice',eventId:'storm',choice:'aid'}).state,broke);
+assert.equal(apply(broke,{type:'eventChoice',eventId:'wrong',choice:'livelihood'}).state,broke);
+for (const won of [true,false]) {
+  let state = {...fresh(),day:20,election:{won}, eventQueue:[{id:'election'}]};
+  const choices = require('../campaign').eventChoices(state,state.eventQueue[0]);
+  assert.equal(choices.length,won ? 3 : 2);
+  state = apply(state,{type:'eventChoice',eventId:'election',choice:won?'audit':'delegation'}).state;
+  assert.equal(won ? state.hearing.day : state.support,won ? 23 : 31);
+}
+console.log('사건 선택 분기·비용 검증·중복 방지·중간 저장·이틀 뒤 후속 사건·당선/낙선 선택 통과');
