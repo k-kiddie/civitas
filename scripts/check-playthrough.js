@@ -743,8 +743,16 @@ function winPactElection(state){
  state=apply(state,{type:'advance'}).state;assert(state.election.won);assert.equal(state.pacts.agreements[0].status,'governing');
  assert.equal(state.pacts.agreements[0].dueDay,27);
  state.eventQueue=[];state=apply(state,{type:'advance'}).state;
+ // These policy tests use pre-approved budgets; parliamentary negotiation is tested separately.
+ for(const policy of new Set(Pacts.governing(state).map(pact=>pact.policy))){
+  state.actions=2;state=apply(state,{type:'councilSubmit',policy}).state;
+  state=apply(state,{type:'councilVote',policy}).state;
+  assert.equal(require('../council').billFor(state,policy).status,'passed');state.eventQueue=[];
+ }
+ state.actions=2;
  return state;
 }
+
 let contracted=pactCandidate();const supportBeforePact=Politics.result(contracted).totals.player;
 contracted=signPact(contracted,'labor');assert.equal(Pacts.electionBonus(contracted),2);
 assert(Politics.result(contracted).totals.player>supportBeforePact);
@@ -817,4 +825,83 @@ security=apply(security,{type:'pactDeliver',policy:'security'}).state;assert.equ
 security.officeResigned=true;assert.equal(Pacts.districtBonus(security,2),0);
 const prePactSave=fresh();delete prePactSave.pacts;assert.deepEqual(require('../campaign').normalize(prePactSave).pacts,Pacts.fresh());
 console.log('협약 수락/역제안/거절·신뢰·자격·재협상 차단·득표 지원·당선 의무·낙선 종료·공금 분리·중복 집행 차단·기한/사임 파기·상대 소멸·공동 사업·임기 세수/지역 기반·구형 저장 통과');
+}
+
+{
+ const Council=require('../council');
+ const Pacts=require('../pacts');
+ const state=fresh();
+ const synthetic={round:1,day:20,ran:true,won:true,winnerId:'player',winner:state.name,playerName:state.name,
+   totals:{player:34,sora:33,doyun:33,jian:0},candidates:{sora:{name:'소라',platform:'housing',partyName:'생활노동연대'},doyun:{name:'도윤',platform:'trade',partyName:'도시경제당'},jian:{name:'지안',platform:'transparency',partyName:'시민개혁당'}}};
+ state.parties.membership='civic';state.parties.registry.civic.members.player={name:state.name};
+ state.parties.registry.civic.leader='player';state.parties.registry.civic.nomination={round:1,id:'player'};
+ state.parties.standing=80;state.day=21;state.career='mayor';state.election=synthetic;
+ state.politics.round=2;state.politics.nextDay=48;state.treasury=100;state.energy=100;
+ // A security pledge has neither the labor nor commerce caucus's automatic support.
+ state.pacts.agreements=[{id:'test-pact',party:'civic',partyName:'시민개혁당',target:'labor',targetName:'생활노동연대',round:1,policy:'security',status:'governing',dueDay:27}];
+ Council.seatElection(state,synthetic);
+ assert.equal(state.council.chamber.groups.reduce((sum,group)=>sum+group.seats,0),11);
+ assert.equal(state.council.chamber.groups.find(group=>group.id==='civic').seats,4);
+ assert(!state.council.chamber.groups.find(group=>group.votes===0));
+ const recordedChamber=JSON.parse(JSON.stringify(state.council.history[0]));
+ let chamber=JSON.parse(JSON.stringify(state));
+ // A broken alliance's trust makes its pledge support unavailable.
+ chamber.pacts.trust.labor=20;
+ assert.equal(apply(chamber,{type:'pactDeliver',policy:'security'}).state,chamber);
+ const fundsBefore=chamber.treasury;
+ chamber=apply(chamber,{type:'councilSubmit',policy:'security'}).state;
+ assert.equal(chamber.treasury,fundsBefore);assert.equal(Council.preview(chamber,Council.billFor(chamber,'security')).yes,4);
+ assert.equal(apply(chamber,{type:'councilSubmit',policy:'security'}).state,chamber);
+ chamber=apply(chamber,{type:'councilVote',policy:'security'}).state;
+ assert.equal(Council.billFor(chamber,'security').status,'rejected');assert.equal(chamber.treasury,fundsBefore);
+ chamber.eventQueue=[];chamber.actions=2;
+ assert.equal(apply(chamber,{type:'councilRevise',policy:'security'}).state,chamber);
+ chamber=apply(chamber,{type:'advance'}).state;
+ chamber=apply(chamber,{type:'councilRevise',policy:'security'}).state;
+ const refused=apply(chamber,{type:'councilLobby',policy:'security',group:'labor'});assert.equal(refused.state,chamber);
+ chamber=apply(chamber,{type:'councilLobby',policy:'security',group:'commerce'}).state;
+ assert.equal(Council.cost(chamber,'security',20),24);assert.equal(chamber.treasury,fundsBefore);
+ chamber=apply(chamber,{type:'advance'}).state;
+ const persisted=JSON.parse(JSON.stringify(chamber));
+ const predicted=Council.preview(chamber,Council.billFor(chamber,'security'));
+ chamber=apply(chamber,{type:'councilVote',policy:'security'}).state;
+ assert.equal(Council.billFor(chamber,'security').status,'passed');assert.equal(predicted.yes,8);
+ const accepted=Council.billFor(chamber,'security');assert.equal(accepted.ballots.length,2);
+ assert.deepEqual(apply(persisted,{type:'councilVote',policy:'security'}).state.council,chamber.council);
+ chamber.eventQueue=[];
+ const poor={...chamber,treasury:23};assert.equal(apply(poor,{type:'pactDeliver',policy:'security'}).state,poor);
+ const personal=chamber.cash,partyMoney=chamber.parties.registry.civic.funds,supportBefore=chamber.support;
+ chamber=apply(chamber,{type:'pactDeliver',policy:'security'}).state;
+ assert.equal(chamber.treasury,fundsBefore-24);assert.equal(chamber.cash,personal);assert.equal(chamber.parties.registry.civic.funds,partyMoney);
+ assert.equal(chamber.support,supportBefore+4);assert.equal(Council.billFor(chamber,'security').status,'executed');
+ assert.equal(apply(chamber,{type:'pactDeliver',policy:'security'}).state,chamber);
+ assert.equal(accepted.ballots[0].yes,4);assert.equal(accepted.ballots[1].yes,8);
+ assert.deepEqual(chamber.council.history[0],recordedChamber);
+ // Automatic support responds to the exact promised policy and to policy alignment.
+ const policyDraft={policy:'security',round:1,amendments:[]};
+ assert(Council.intent(state,policyDraft,state.council.chamber.groups.find(group=>group.id==='labor')).yes);
+ const housingDraft={policy:'housing',round:1,amendments:[]};
+ assert(Council.intent(state,housingDraft,state.council.chamber.groups.find(group=>group.id==='labor')).yes);
+ assert(!Council.intent(state,policyDraft,state.council.chamber.groups.find(group=>group.id==='commerce')).yes);
+ // A mayor elected independently doesn't gain another party's votes merely by joining it.
+ const independentState=fresh();independentState.election={...synthetic};
+ Council.seatElection(independentState,synthetic);
+ const independentGroup=independentState.council.chamber.groups.find(group=>group.id==='independent-player');
+ assert(Council.intent(independentState,policyDraft,independentGroup).yes);
+ independentState.parties.membership='labor';
+ assert(!Council.intent(independentState,policyDraft,independentState.council.chamber.groups.find(group=>group.id==='labor')).yes);
+ for(let seed=1;seed<=8;seed++){
+  const electionState={...fresh(),startConfigured:true,candidate:seed%2===0,support:seed*12,randomState:{...fresh().randomState,seed}};
+  Politics.ensureField(electionState);const electionResult=Politics.result(electionState);
+  Council.seatElection(electionState,electionResult);
+  assert.equal(electionState.council.chamber.groups.reduce((sum,group)=>sum+group.seats,0),11);
+  assert(electionState.council.chamber.groups.every(group=>Number.isInteger(group.seats)&&group.seats>0));
+ }
+ const old=fresh();delete old.council;const restored=require('../campaign').normalize(old);
+ assert.deepEqual(restored.council,Council.fresh());assert(Council.authorized(restored,'housing'));
+ // Reapportion on the next election; preserve the previous term and recorded names.
+ Council.seatElection(chamber,{...synthetic,round:2,day:48,totals:{player:10,sora:70,doyun:20,jian:0},won:false,winnerId:'sora'});
+ assert.equal(chamber.council.chamber.groups.reduce((sum,group)=>sum+group.seats,0),11);
+ assert.deepEqual(chamber.council.history[1],recordedChamber);
+ console.log('의회 11석·최대잔여 배분·무소속 정부·협약/노선 찬반·부결 무지출·다음 날 재상정·수정 협상·8석 가결·공금 추가 비용·중복 집행 차단·개표 저장·임기 교체·구형 저장 통과');
 }

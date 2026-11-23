@@ -1,5 +1,6 @@
 'use strict';
 (function (root) {
+  const council = typeof module !== 'undefined' ? require('./council') : root.Council;
   const pacts = typeof module !== 'undefined' ? require('./pacts') : root.Pacts;
   const parties = typeof module !== 'undefined' ? require('./parties') : root.Parties;
   const politics = typeof module !== 'undefined' ? require('./politics') : root.Politics;
@@ -18,7 +19,7 @@
   function fresh() {
     return { version: 3, age:null, ageChosen:false, underworld:underworld.fresh(), day: 1, actions: 2, cash: 32, energy: 80, name: '시민', gender: 'unspecified', profileSet: false, place: 'harbor', startConfigured: false, background: 'worker', startingOccupation: 'worker',
       surveyed: false, testimony: false, funding: null, built: null, flooded: null,
-      pacts:pacts.fresh(), parties:parties.fresh(), politics:politics.fresh(), candidate: false, election: null, policy: null, support: 25, memories: [], journal: [],
+      council:council.fresh(), pacts:pacts.fresh(), parties:parties.fresh(), politics:politics.fresh(), candidate: false, election: null, policy: null, support: 25, memories: [], journal: [],
       promise: null, notices: [], witness: false,
       underReview: false, barredInvestigator: false, policeRecommendation: false, councilRecommendation: false,
       agencies: agencies.initial(), unassignedOfficials: 30, agencyProposal: null, agencyHistory: [], nextAgencyProposal: 1,
@@ -54,6 +55,7 @@
     if (result.caseStage === 'sealed' && !result.underReview && !result.followUps.some(item => item.type === 'oversight')) {
       result.followUps = [...result.followUps, { type: 'oversight', day: result.day + 3 }];
     }
+    result.council={...council.fresh(),...state.council};
     result.pacts={...pacts.fresh(),...state.pacts};
     result.politics={...result.politics};
     politics.ensureField(result);
@@ -359,6 +361,11 @@
     const inHearing = next.hearing && next.hearing.day <= next.day;
     if (inHearing && !['question', 'evidence', 'verdict'].includes(action.type)) {
       return { state, message: '청문회가 진행 중이다. 증언을 듣고 표결 또는 합의를 선택하자.' };
+    }
+    const councilResult=council.act(next,action,pacts.projects);
+    if(councilResult){
+      if(!councilResult.ok)return {state,message:councilResult.message};
+      record(next,councilResult.message);return {state:next,message:councilResult.message};
     }
     const pactResult=pacts.act(next,action);
     if(pactResult){
@@ -748,6 +755,7 @@
           if(next.eventQueue.length>reportsBefore)target=next.day;
           if (next.day === next.politics.nextDay) {
             next.election = electionResult(next);
+            council.seatElection(next,next.election);
             parties.settleElection(next,next.election);
             pacts.settleElection(next,next.election);
             if(next.election.won){
@@ -782,7 +790,7 @@
     careers.schedule(next);
     return { state: next, message };
   }
-  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices, eventDialogue, eventReply, starts, careers, institutions, randomEvents, underworld, politics, parties, pacts };
+  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices, eventDialogue, eventReply, starts, careers, institutions, randomEvents, underworld, politics, parties, pacts, council };
   if (typeof module !== 'undefined') module.exports = api;
   root.Campaign = api;
 })(globalThis);

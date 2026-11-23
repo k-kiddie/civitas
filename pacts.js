@@ -1,5 +1,6 @@
 'use strict';
 (function(root){
+  const council=typeof module!=='undefined'?require('./council'):root.Council;
   const projects={
     housing:{name:'임시 주택과 생활 기반',cost:20,detail:'떠난 주민 최대 8가구 귀환 · 주민 지지 +4'},
     transparency:{name:'계약 공개와 독립 감사',cost:16,detail:'계약 증거 공개 · 주민 지지 +6'},
@@ -97,19 +98,22 @@
     const project=projects[policy];
     if(!project||!promises.length||!canGovern(state)||promises.some(pact=>pact.party!==state.parties.membership||!state.parties.registry[pact.target]))return fail('현직 동장과 이번 임기의 이행 대기 협약이 필요하다.');
     if(promises.some(pact=>state.day>pact.dueDay))return fail('협약의 집행 기한이 지났다.');
-    if(state.treasury<project.cost)return fail('사업에 필요한 공금 '+project.cost+'이 부족하다. 개인 돈과 당 자금으로 집행할 수 없다.');
-    state.treasury-=project.cost;state.actions--;
+    if(!council.authorized(state,policy))return fail('협약 예산안을 의회에 제출하고 과반 승인을 먼저 받자.');
+    const budget=council.cost(state,policy,project.cost);
+    if(state.treasury<budget)return fail('사업에 필요한 공금 '+budget+'이 부족하다. 개인 돈과 당 자금으로 집행할 수 없다.');
+    state.treasury-=budget;state.actions--;
     if(matching)state.policy=action.policy;
     if(policy==='housing'){
       const returned=Math.min(8,Math.max(0,86-Object.values(state.residents).reduce((a,b)=>a+b,0)));
       state.residents.village+=returned;state.support=Math.min(100,state.support+4);
     }else if(policy==='transparency'){state.witness=true;state.support=Math.min(100,state.support+6);}
     else state.support=Math.min(100,state.support+3);
+    council.execute(state,policy);
     for(const pact of promises){
       pact.status='fulfilled';pact.closedDay=state.day;changeTrust(state,pact.target,15);
       announce(state,pact,'정책 협약을 이행했다',pact.targetName+' 측과 약속한 '+project.name+' 사업을 집행했다. '+project.detail+' · 상대 당 신뢰 +15.');
     }
-    return {ok:true,message:project.name+' 집행. 공금 '+project.cost+'을 사용했고 개인 돈과 당 자금은 유지됐다. 같은 정책의 여러 협약은 한 사업으로 함께 이행했다.'};
+    return {ok:true,message:project.name+' 집행. 공금 '+budget+'을 사용했고 개인 돈과 당 자금은 유지됐다. 같은 정책의 여러 협약은 한 사업으로 함께 이행했다.'};
   }
   function electionBonus(state){
     return Math.min(4,state.pacts.agreements.filter(pact=>pact.status==='signed'&&pact.round===state.politics.round&&
