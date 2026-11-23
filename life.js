@@ -1,5 +1,6 @@
 'use strict';
 (function(root){
+  const echoes=typeof module!=='undefined'?require('./career-echoes'):root.CareerEchoes;
   const chronicles=typeof module!=='undefined'?require('./chronicles'):root.Chronicles;
   const society=typeof module!=='undefined'?require('./society'):root.Society;
   const succession=typeof module!=='undefined'?require('./succession'):root.Succession;
@@ -71,7 +72,7 @@
       player.started=true;player.jobTitle=descriptor.title;player.occupation=state.career;player.since=state.day;
       entry(player,state.day,'observed','생애 기록 시작 · '+descriptor.title+' · 현재 나이 '+(player.age??'미설정'));
     }
-    seedResidents(state);syncCouncil(state);family.restore(state);succession.restore(state);society.restore(state);chronicles.restore(state);
+    seedResidents(state);syncCouncil(state);family.restore(state);succession.restore(state);society.restore(state);chronicles.restore(state);echoes.restore(state);
   }
   function news(state,p,text){state.life.news.unshift({day:state.day,person:p.id,text:p.name+' · '+text});}
   function npcDay(state,p,day){
@@ -127,6 +128,7 @@
       family.tick(state,day);
       for(const p of Object.values(state.life.people))if(p.id!==activeId(state)&&p.source!=='family')npcDay(state,p,day);
       chronicles.tick(state);
+      echoes.tick(state);
       society.tick(state,day,(p,job,at,reason)=>changeJob(state,p,job,at,reason));
     }
     state.life.lastDay=state.day;
@@ -135,7 +137,7 @@
     const p=currentPlayer(state);
     if(p.occupation!==state.career||p.jobTitle!==descriptor.title){changeJob(state,p,state.career,state.day,'직업·직급 변화',descriptor.title);}
     p.name=state.name;p.gender=state.gender;p.baseAge=state.age;p.age=age(p,state.day);p.wealth=state.cash;p.publicSupport=state.support;
-    if(activeId(state)!==(before.life?.activeId||'player')){seedResidents(state);syncCouncil(state);family.restore(state);succession.restore(state);society.restore(state);chronicles.restore(state);return;}
+    if(activeId(state)!==(before.life?.activeId||'player')){seedResidents(state);syncCouncil(state);family.restore(state);succession.restore(state);society.restore(state);chronicles.restore(state);echoes.restore(state);return;}
     if(action.type==='profile'&&(before.age!==state.age||before.name!==state.name||before.gender!==state.gender))entry(p,state.day,'profile','인물 설정 수정 · 시작 나이 '+state.age+' · 현재 나이 '+p.age);
     if(action.type==='start')state.life.clock.mode='lifetime';
     if(!state.life.processing&&before.cash!==state.cash)entry(p,state.day,'finance','개인 돈 '+(state.cash-before.cash>=0?'+':'')+(state.cash-before.cash)+' → '+state.cash+' · 공금·당 자금은 별도');
@@ -144,7 +146,7 @@
     const role=state.underworld.role;
     if(p.sideRole!==role){entry(p,state.day,'career','병행 활동 '+(descriptor.sideTitle||'종료'));p.sideRole=role;}
     if(state.startConfigured&&!p.started){p.started=true;entry(p,state.day,'observed','선택한 출신과 직업으로 삶을 시작했다.');}
-    seedResidents(state);syncCouncil(state);family.restore(state);succession.restore(state);society.restore(state);chronicles.restore(state);
+    seedResidents(state);syncCouncil(state);family.restore(state);succession.restore(state);society.restore(state);chronicles.restore(state);echoes.restore(state);
   }
   function act(state,action){
     if(!['lifeCare','lifeVisit','lifeRefer'].includes(action.type))return null;

@@ -1,5 +1,6 @@
 'use strict';
 (function(root){
+  const echoes=typeof module!=='undefined'?require('./career-echoes'):root.CareerEchoes;
   const careers=typeof module!=='undefined'?require('./careers'):root.Careers;
   const institutions=typeof module!=='undefined'?require('./institutions'):root.Institutions;
   const underground=typeof module!=='undefined'?require('./underworld'):root.Underworld;
@@ -14,6 +15,7 @@
     if(state.pacts.agreements.some(pact=>['signed','governing'].includes(pact.status)))return '서명했거나 이행 대기 중인 정책 협약을 먼저 마치자.';
     if(state.life.family.pending.some(plan=>plan.parents.includes(activeId(state))))return '진행 중인 가족 합류 계획을 먼저 마치자.';
     if(state.life.chronicles?.runs.some(run=>run.actor===activeId(state)&&run.status==='active'))return '진행 중인 장기 직업 이야기를 마치거나 내려놓은 뒤 은퇴하자.';
+    if(echoes.blocked(state))return echoes.blocked(state);
     if(state.cash<0)return '개인 빚을 정리한 뒤 재산 인계를 결정하자.';
     return '';
   }
