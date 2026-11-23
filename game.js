@@ -131,7 +131,7 @@ function cityArt(){let b='';let seed=41;const rand=()=>{seed=(seed*16807)%214748
       ? `<section class="event-outcome" role="status"><span class="eyebrow">선택의 결과</span><p>${escape(event.resolved.result)}</p></section>`
       : !reading && choices.length ? `<div class="event-choices">${choices.map(choice => `<button class="choice" data-action="eventChoice" data-event-id="${event.id}" data-choice="${choice.id}" ${choice.disabled ? 'disabled' : ''}><strong>“${escape(Campaign.eventReply ? Campaign.eventReply(event, choice.id).reply : choice.title)}”</strong><small>${escape(choice.detail)}</small></button>`).join('')}</div>` : '';
     const continueButton = !reading && !choices.length ? `<button class="endday" data-event-dismiss autofocus>${event.scene === 'hearing' ? '청문회에 참석한다' : event.resolved ? '이 결정을 안고 계속한다' : '도시로 돌아간다'}</button>` : '';
-    return `<dialog id="event-dialog" class="event-dialog" aria-labelledby="event-title" aria-describedby="current-line"><div class="event-visual"><img class="event-picture" src="/assets/events/${event.scene}.webp" alt="${escape(event.title)}"><div class="event-caption"><p>${event.day}일 · ${event.jobEpisode ? '직업 이야기' : event.id === 'opening' ? '첫 만남' : event.id === 'storm' ? '첫 장마' : event.id === 'election' ? '선거 결과' : event.scene === 'hearing' ? '공개 청문회' : '후속 소식'}</p><h2 id="event-title">${escape(event.title)}</h2></div></div><div class="event-copy">${conversation}${nextLine}${decision}${continueButton}${history}</div></dialog>`;
+    return `<dialog id="event-dialog" class="event-dialog" aria-labelledby="event-title" aria-describedby="current-line"><div class="event-visual"><img class="event-picture" src="/assets/events/${event.scene}.webp" alt="${escape(event.title)}"><div class="event-caption"><p>${event.day}일 · ${event.randomType ? '도시에서 생긴 일' : event.jobEpisode ? '직업 이야기' : event.id === 'opening' ? '첫 만남' : event.id === 'storm' ? '첫 장마' : event.id === 'election' ? '선거 결과' : event.scene === 'hearing' ? '공개 청문회' : '후속 소식'}</p><h2 id="event-title">${escape(event.title)}</h2></div></div><div class="event-copy">${conversation}${nextLine}${decision}${continueButton}${history}</div></dialog>`;
   }
   function nextStopLabel() {
     const fallback = state.day < 12 ? {day:12,label:'첫 장마'} : state.day < 20 ? {day:20,label:'선거'} : state.day < 21 ? {day:21,label:'새 임기'} : {day:state.day + 7,label:'다음 주'};
@@ -200,6 +200,7 @@ function cityArt(){let b='';let seed=41;const rand=()=>{seed=(seed*16807)%214748
     const starting = !state.startConfigured;
     const result = apply(state, {
       type: starting ? 'start' : 'profile', name: form.get('playerName'), gender: form.get('gender'),
+      seed: crypto.getRandomValues(new Uint32Array(1))[0],
       occupation: choose(form.get('occupation'), Object.keys(Starts.occupations)),
       background: choose(form.get('background'), Object.keys(Starts.backgrounds))
     });

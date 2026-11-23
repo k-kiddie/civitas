@@ -94,14 +94,16 @@
     }else if(action.type==='leaveInstitution'){
       if(!spend())return error();state.career='worker';message='현재 기관과 보직에서 사임했다. 개인 조직과 과거 인사 기록은 남는다.';
     }
-    if(item.scrutiny>=60&&!state.eventQueue.some(event=>event.institutionAudit)){
-      state.eventQueue.push({id:'institution-audit-'+state.day,day:state.day,scene:'hearing',title:'인사 명단에 반복되는 이름',text:'감사 담당자가 측근 인사와 개인 조직의 관계를 묻는다.',destination:'jobs',institutionAudit:true,dialogue:[{speaker:'지안',text:'이 인사가 역량에 따른 것인지, 개인 조직을 위한 것인지 설명해 주세요. 자료를 공개하거나 보직을 내려놓아야 합니다.'}]});
-    }
+    checkAudit(state);
     return {ok:true,state,message};
+  }
+  function checkAudit(state) {
+    if(!active(state)||state.institution.scrutiny<60||state.eventQueue.some(event=>event.institutionAudit))return;
+    state.eventQueue.push({id:'institution-audit-'+state.day,day:state.day,scene:'hearing',title:'인사와 민원 처리 기록을 묻는 사람',text:'감사 담당자가 업무 처리와 개인 이해관계의 관계를 묻는다.',destination:'jobs',institutionAudit:true,dialogue:[{speaker:'지안',text:'업무 처리 기록을 공개해 주세요. 자료를 공개하고 시정하거나 보직을 내려놓아야 합니다.'}]});
   }
   function auditChoices(state){return [{id:'disclose',title:'인사 자료를 공개하고 책임을 지겠다',detail:'개인 비용 12 · 실적 −8 · 감사 주목도 초기화',disabled:state.cash<12},{id:'resign',title:'현재 보직에서 물러나겠다',detail:'직위·기관 권한 상실 · 개인 조직 유지',disabled:false}];}
   function auditReply(choice){return {reply:choice==='disclose'?'자료를 공개하고 책임을 지겠습니다.':'보직에서 물러나겠습니다.',speaker:'지안',reaction:choice==='disclose'?'인사 자료와 시정 보고서를 공개 기록에 남기겠습니다.':'사임을 접수하겠습니다. 인사 기록은 이후에도 남습니다.'};}
-  const api={departments,ranks,colleagues,fresh,active,title,job,promotionReason,apply,auditChoices,auditReply};
+  const api={departments,ranks,colleagues,fresh,active,title,job,promotionReason,apply,checkAudit,auditChoices,auditReply};
   if(typeof module!=='undefined')module.exports=api;
   root.Institutions=api;
 })(globalThis);

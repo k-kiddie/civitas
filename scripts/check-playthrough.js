@@ -482,3 +482,46 @@ assert.equal(legislatureRejected.agencyHistory[0].status,'rejected');
 assert.equal(legislatureRejected.agencies.reconstruction.staff,24);
 const noHistory={...fresh()};delete noHistory.agencies;delete noHistory.agencyHistory;
 assert.equal(Object.keys(require('../campaign').normalize(noHistory).agencies).length,10);
+const RandomEvents=require('../random-events');
+const randomScenario=seed=>({...fresh(),startConfigured:true,profileSet:true,day:30,cash:30,career:'apprentice',jobStory:{...fresh().jobStory,stage:'complete'},randomState:{seed,checkedDay:0,lastDay:-10,seen:{}}});
+let first=randomScenario(1);const occurrence=RandomEvents.schedule(first);
+assert(occurrence);assert.equal(occurrence.randomType,'extraShift');
+assert.equal(RandomEvents.schedule(first),null);
+const firstSnapshot=JSON.parse(JSON.stringify(first));
+assert.equal(RandomEvents.schedule(firstSnapshot),null);
+let sameRun=randomScenario(1);assert.deepEqual(RandomEvents.schedule(sameRun),occurrence);
+let cooldown=randomScenario(1);cooldown.randomState.seen.extraShift=25;assert.equal(RandomEvents.schedule(cooldown),null);
+let plot=randomScenario(1);plot.jobStory.stage='waiting';assert.equal(RandomEvents.schedule(plot),null);
+let hearingPriority=randomScenario(1);hearingPriority.hearing={day:33};assert.equal(RandomEvents.schedule(hearingPriority),null);
+let duePriority=randomScenario(1);duePriority.followUps=[{day:31,type:'job'}];assert.equal(RandomEvents.schedule(duePriority),null);
+assert(!RandomEvents.eligible({...randomScenario(1),career:'teacher'}).some(item=>item.id==='supplies'));
+for(const template of RandomEvents.templates){
+ let state=randomScenario(1);
+ state.cash=100;state.energy=100;state.institution.rank=2;
+ state.eventQueue=[{id:'random-test',randomType:template.id,randomPerson:template.person,randomChoices:template.choices}];
+ const choice=template.choices[0];
+ state=apply(state,{type:'eventChoice',eventId:'random-test',choice:choice.id}).state;
+ assert.equal(state.eventQueue[0].resolved.choice,choice.id);
+ assert.equal(apply(state,{type:'eventChoice',eventId:'random-test',choice:choice.id}).state,state);
+}
+let randomAdvance={...randomScenario(1),day:29};
+randomAdvance=apply(randomAdvance,{type:'advance',to:'event'}).state;
+assert.equal(randomAdvance.day,30);assert.equal(randomAdvance.eventQueue[0].randomType,'extraShift');
+const savedIncident=JSON.parse(JSON.stringify(randomAdvance));
+assert.deepEqual(savedIncident.eventQueue,randomAdvance.eventQueue);
+const seeds=new Set();
+for(const seed of [1,123456,987654321,0x61c1a5,0xdeadbeef]){
+ const scenario=randomScenario(seed);const event=RandomEvents.schedule(scenario);seeds.add(event?.randomType||'quiet');
+}
+assert(seeds.size>1);
+console.log('조건별 사건 8종·확률과 조용한 날·동일 저장 재추첨 방지·4/14일 간격·연속사건 우선·선택 중복 방지·시간 정지 통과');
+let shortGap=randomScenario(1);shortGap.randomState.lastDay=28;assert.equal(RandomEvents.schedule(shortGap),null);
+const pressure=RandomEvents.templates.find(item=>item.id==='agencyPressure');
+let corrupt={...fresh(),career:'official',institution:{...institutions.fresh(),department:'audit',scrutiny:50},eventQueue:[{id:'pressure',randomType:'agencyPressure',randomPerson:'지안',randomChoices:pressure.choices}]};
+corrupt=apply(corrupt,{type:'eventChoice',eventId:'pressure',choice:'favor'}).state;
+assert.equal(corrupt.institution.scrutiny,65);assert.equal(corrupt.eventQueue[1].institutionAudit,true);
+let lowEnergy=randomScenario(1);lowEnergy.energy=0;
+const source=RandomEvents.templates.find(item=>item.id==='source');
+lowEnergy.eventQueue=[{id:'source-test',randomType:'source',randomChoices:source.choices,randomPerson:source.person}];
+assert.equal(apply(lowEnergy,{type:'eventChoice',eventId:'source-test',choice:'verify'}).state,lowEnergy);
+assert.equal(apply(lowEnergy,{type:'eventChoice',eventId:'source-test',choice:'decline'}).state.eventQueue[0].resolved.choice,'decline');

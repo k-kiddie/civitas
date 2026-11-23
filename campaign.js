@@ -1,5 +1,6 @@
 'use strict';
 (function (root) {
+  const randomEvents = typeof module !== 'undefined' ? require('./random-events') : root.RandomEvents;
   const agencies = typeof module !== 'undefined' ? require('./agencies') : root.Agencies;
   const institutions = typeof module !== 'undefined' ? require('./institutions') : root.Institutions;
   const jobStories = typeof module !== 'undefined' ? require('./job-stories') : root.JobStories;
@@ -17,6 +18,7 @@
       promise: null, notices: [], witness: false,
       underReview: false, barredInvestigator: false, policeRecommendation: false, councilRecommendation: false,
       agencies: agencies.initial(), unassignedOfficials: 30, agencyProposal: null, agencyHistory: [], nextAgencyProposal: 1,
+      randomState: {seed:0x61c1a5,checkedDay:0,lastDay:-10,seen:{}},
       institution: institutions.fresh(), network: null,
       skills: {}, recruitment: {}, careerDutyDay: 0, secretMissionDone: false, officeResigned: false,
       career: 'worker', treasury: 40, caseStage: 'closed', contractRelief: false,
@@ -101,6 +103,7 @@
     return [{ speaker: event.id.includes('housing') ? '윤' : '소라', text: event.text }];
   }
   function eventReply(event, choice) {
+    if (event.randomType) return randomEvents.reply(event,choice);
     if (event.institutionAudit) return institutions.auditReply(choice);
     if (event.recruitCareer || event.missionCareer) return careers.reply(event,choice);
     if (event.jobEpisode) {
@@ -130,6 +133,7 @@
   }
   function eventChoices(state, event) {
     if (!event || event.resolved) return [];
+    if (event.randomType) return randomEvents.choices(state,event);
     if (event.institutionAudit) return institutions.auditChoices(state);
     if (event.recruitCareer || event.missionCareer) return careers.choices(state,event);
     if (event.jobEpisode) return jobStories.choices(state,event);
@@ -173,6 +177,7 @@
       next.gender = action.gender;
       next.profileSet = true;
       next.startConfigured = true;
+      next.randomState.seed=Number.isInteger(action.seed)&&(action.seed>>>0)!==0?action.seed>>>0:0x61c1a5;
       next.background = action.background;
       next.startingOccupation = action.occupation;
       next.career = action.occupation;
@@ -201,7 +206,10 @@
       const choice = eventChoices(next, event).find(item => item.id === action.choice);
       if (!event || event.id !== action.eventId || !choice || choice.disabled) return { state, message: '지금은 이 선택을 할 수 없다.' };
       let result = '';
-      if (event.institutionAudit) {
+      if (event.randomType) {
+        result=randomEvents.resolve(next,event,choice.id);
+        remember(next,event.randomPerson,result);
+      } else if (event.institutionAudit) {
         if(choice.id==='disclose') {
           next.cash-=12;next.institution.merit=Math.max(0,next.institution.merit-8);
           result='인사 자료를 공개하고 시정 비용 12크라운을 부담했다. 실적 8을 잃고 감사 주목도는 초기화됐다.';
@@ -316,6 +324,7 @@
       remember(next, response.speaker, `당신 “${response.reply}” · ${response.speaker} “${response.reaction}”`);
       next.storyHistory.push({ id: event.id, day: next.day, choice: choice.id, result, ...response });
       record(next, result);
+      institutions.checkAudit(next);
       careers.schedule(next);
       return { state: next, message: result };
     }
@@ -690,6 +699,8 @@
             record(next, `${next.election.winner} 동장 당선. ${next.candidate ? '당신의 득표율 ' + next.election.votes + '%' : '당신은 출마하지 않았다.'}`);
           }
           careers.schedule(next);
+          const incidental=randomEvents.schedule(next);
+          if(incidental){next.eventQueue.push(incidental);record(next,incidental.title);target=next.day;}
           const encounters = next.followUps.filter(item => item.day > next.day).map(item => item.day);
           if (encounters.length) target = Math.min(target, ...encounters);
         }
@@ -703,7 +714,7 @@
     careers.schedule(next);
     return { state: next, message };
   }
-  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices, eventDialogue, eventReply, starts, careers, institutions };
+  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices, eventDialogue, eventReply, starts, careers, institutions, randomEvents };
   if (typeof module !== 'undefined') module.exports = api;
   root.Campaign = api;
 })(globalThis);
