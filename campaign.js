@@ -575,13 +575,10 @@
 
       case 'place': next.place = action.place; return { state: next, message: '' };
       case 'work': {
-        const job = institutions.job(next) || careers.jobs[next.career] || starts.occupations.worker;
-        if (next.career==='unemployed'||!spend(job.energy)) break;
-        const toll = next.career === 'worker' && next.funding === 'merchant' && next.flooded !== null && !next.contractRelief;
-        const bonus = next.career === next.startingOccupation ? next.jobStory.wageBonus : 0;
-        const wage = (toll ? 10 : job.wage) + bonus;
-        next.cash += wage;
-        message = `${job.name} 업무로 ${wage}크라운을 받았다.${toll ? ' 선주 계약의 사용료 6크라운이 공제됐다.' : ''}`;
+        const offer=workTerms(next);
+        if (next.career==='unemployed'||!spend(offer.energy)) break;
+        next.cash+=offer.wage;
+        message = `${offer.name} 업무로 ${offer.wage}크라운을 받았다.${offer.toll ? ' 선주 계약의 사용료 6크라운이 공제됐다.' : ''}`;
         break;
       }
       case 'rest':
@@ -872,10 +869,28 @@
     const title=institutions.title(state)||careers.jobs[state.career]?.name||({mayor:'동장',investigator:'수사관',councillor:'협의회 위원'}[state.career])||state.career;
     return {title,sideTitle:underworld.catalog[state.underworld.role]?.name};
   }
+  function workTerms(state){
+    const job=institutions.job(state)||careers.jobs[state.career]||starts.occupations.worker;
+    const toll=state.career==='worker'&&state.funding==='merchant'&&state.flooded!==null&&!state.contractRelief;
+    const bonus=state.career===state.startingOccupation?state.jobStory.wageBonus||0:0;
+    return {name:job.name,energy:job.energy,wage:(toll?10:job.wage)+bonus,toll};
+  }
+  function lifePassReason(state,kind='lifePass'){
+    if(!state.startConfigured)return '시작 설정을 먼저 마치자.';
+    if(state.day<28)return '첫 지역 사건 이후 28일부터 기간 생활을 사용할 수 있다.';
+    if(state.eventQueue.length)return '열린 사건의 답변과 결과 확인을 먼저 마치자.';
+    if(state.hearing)return '예정되거나 진행 중인 청문회를 먼저 마치자.';
+    if(state.underReview)return '직무 심사를 먼저 처리하자.';
+    if(!['none','complete'].includes(state.jobStory.stage))return '진행 중인 첫 직업 이야기를 먼저 마치자.';
+    if(pacts.governing(state).length)return '집행 대기 중인 정책 협약을 먼저 처리하자. 기간을 넘겨 약속을 자동 파기하지 않는다.';
+    if(kind==='lifePass'&&state.life?.clock?.plan)return '진행 중인 생활 계획을 이어가거나 종료하자.';
+    if(kind==='lifeContinue'&&!state.life?.clock?.plan)return '이어갈 생활 계획이 없다.';
+    if(kind==='lifePass'&&state.life?.clock?.mode!=='lifetime'&&(state.candidate||state.pacts.agreements.some(p=>p.status==='signed')))return '등록한 선거나 서명한 선거 협약을 마친 뒤 장기 생활로 전환하자.';
+    return '';
+  }
   function advanceLife(state,action){
     const fail=message=>({state,message});
-    if(!state.startConfigured||state.day<28||state.eventQueue.length||state.hearing||state.underReview||!['none','complete'].includes(state.jobStory.stage))return fail('먼저 진행 중인 사건과 심사를 마치자. 장기 생활은 첫 지역 사건 이후 28일부터 가능하다.');
-    if(pacts.governing(state).length)return fail('집행 대기 중인 정책 협약을 먼저 처리하자. 기간을 넘겨 약속을 자동 파기하지 않는다.');
+    const blocked=lifePassReason(state,action.type);if(blocked)return fail(blocked);
     let next=normalize(JSON.parse(JSON.stringify(state)));
     if(action.type==='lifePass'){
       if(next.life.clock.plan)return fail('진행 중인 생활 계획을 이어가거나 종료하자.');
@@ -933,7 +948,7 @@
     if(result.state!==state)life.observe(result.state,state,action,lifeDescriptor(result.state));
     return result;
   }
-  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices, eventDialogue, eventReply, starts, careers, institutions, randomEvents, underworld, politics, parties, pacts, council, life, family, succession, society, chronicles, echoes, projects };
+  const api = { workTerms, lifePassReason, fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices, eventDialogue, eventReply, starts, careers, institutions, randomEvents, underworld, politics, parties, pacts, council, life, family, succession, society, chronicles, echoes, projects };
   if (typeof module !== 'undefined') module.exports = api;
   root.Campaign = api;
 })(globalThis);

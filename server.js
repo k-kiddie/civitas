@@ -28,6 +28,7 @@ const routes = new Map([
   ['/parties.js',['parties.js','text/javascript; charset=utf-8']],
   ['/starts.js',['starts.js','text/javascript; charset=utf-8']],
   ['/campaign.js',['campaign.js','text/javascript; charset=utf-8']],
+  ['/agenda.js',['agenda.js','text/javascript; charset=utf-8']],
   ['/game.js',['game.js','text/javascript; charset=utf-8']],
   ['/style.css',['style.css','text/css; charset=utf-8']],
 ]);
