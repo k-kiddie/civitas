@@ -1,12 +1,13 @@
 'use strict';
 (function (root) {
+  const starts = typeof module !== 'undefined' ? require('./starts') : root.Starts;
   const plans = {
     short: { name: '항구 제방', cost: 24, homes: 68, description: '항구를 보호한다. 어촌 18가구가 침수된다.' },
     long: { name: '어촌까지 잇는 제방', cost: 60, homes: 86, description: '모든 86가구를 보호한다. 선주 계약 또는 주민 공동 출자가 필요하다.' },
     none: { name: '공사를 보류한다', cost: 0, homes: 0, description: '돈을 쓰지 않는다. 장마 때 34가구가 침수된다.' }
   };
   function fresh() {
-    return { version: 3, day: 1, actions: 2, cash: 32, energy: 80, name: '시민', gender: 'unspecified', profileSet: false, place: 'harbor',
+    return { version: 3, day: 1, actions: 2, cash: 32, energy: 80, name: '시민', gender: 'unspecified', profileSet: false, place: 'harbor', startConfigured: false, background: 'worker', startingOccupation: 'worker',
       surveyed: false, testimony: false, funding: null, built: null, flooded: null,
       candidate: false, election: null, policy: null, support: 25, memories: [], journal: [],
       promise: null, notices: [], witness: false,
@@ -19,6 +20,7 @@
   function remember(state, person, text) { state.memories.push({ person, text, day: state.day }); }
   function normalize(state) {
     const result = { ...fresh(), ...state };
+    result.startConfigured = state.startConfigured ?? (state.profileSet || state.day > 1 || state.journal.length > 0);
     if (result.election?.won) result.career = 'mayor';
     if (result.caseStage === 'sealed' && !result.underReview && !result.followUps.some(item => item.type === 'oversight')) {
       result.followUps = [...result.followUps, { type: 'oversight', day: result.day + 3 }];
@@ -52,6 +54,10 @@
   }
   function eventDialogue(state, event) {
     if (event.dialogue) return event.dialogue;
+    if (event.id === 'opening') {
+      const job = starts.occupations[event.occupation];
+      return [{ speaker: job.person, text: job.opening }, { speaker: job.person, text: '네 사정도 있을 테니 직접 정해 줘. 오늘의 선택은 기억하겠어.' }];
+    }
     if (event.id === 'oversight') return [
       { speaker: '민석', text: '봉인된 수사 기록과 도윤에게 받은 돈. 둘이 무관하다고 말할 수 있습니까?' },
       { speaker: '도윤', text: '서로 합의한 돈이었소. 당신이 이 일을 공개하면 나도 가만있지는 않겠소.' },
@@ -92,11 +98,17 @@
       delegation: ['같이 가겠어요. 주민들 이야기는 계속 들어야죠.', '소라', '그럼 다음 회의에서 봐요. 서로 동의하지 않는 일도 이야기해요.'],
       work: ['일단 부두로 돌아갈게요. 생활비가 밀렸어요.', '소라', '알겠어요. 회의록은 남겨 둘게요. 다음에는 당신 자리도 있었으면 해요.']
     };
+    if (event.id === 'opening') {
+      const job = starts.occupations[event.occupation];
+      const option = job.options.find(item => item.id === choice);
+      return { reply: option.reply, speaker: job.person, reaction: choice === 'help' ? '함께 확인해 줘서 고마워. 이 일은 기록으로 남겨 두자.' : '알겠어. 오늘 일은 내가 마저 알아볼게.' };
+    }
     const entry = replies[choice];
     return { reply: entry[0], speaker: entry[1], reaction: entry[2] };
   }
   function eventChoices(state, event) {
     if (!event || event.resolved) return [];
+    if (event.id === 'opening') return starts.occupations[event.occupation].options.map(option => ({ id: option.id, title: option.reply, detail: option.detail, disabled: state.energy < 10 }));
     if (event.id === 'oversight') return [
       { id: 'repay', title: '합의금 반환과 기록 시정', detail: '20크라운 반환 · 지지 −4 · 수사관 복직', disabled: state.cash < 20 },
       { id: 'defend', title: '공개 직무 심사 요청', detail: '사흘간 정직 · 통과 시 20크라운 환수 · 부결 시 해임', disabled: Boolean(state.hearing) },
@@ -127,6 +139,24 @@
       next.energy -= energy;
       return true;
     };
+    if (action.type === 'start') {
+      if (next.startConfigured || typeof action.name !== 'string' || !action.name.trim() || !['male','female','unspecified'].includes(action.gender)) return { state, message: '시작 설정을 확인해 주세요.' };
+      const background = starts.backgrounds[action.background];
+      const job = starts.occupations[action.occupation];
+      if (!background || !job) return { state, message: '출신과 첫 직업을 골라 주세요.' };
+      next.name = Array.from(action.name.trim()).slice(0,18).join('');
+      next.gender = action.gender;
+      next.profileSet = true;
+      next.startConfigured = true;
+      next.background = action.background;
+      next.startingOccupation = action.occupation;
+      next.career = action.occupation;
+      next.cash += background.cash;
+      next.support += background.support;
+      next.eventQueue.push({ id:'opening', occupation:action.occupation, day:next.day, scene:job.scene, title:job.title, text:job.text, destination:'city' });
+      record(next, `${background.name} 출신으로 ${job.name} 일을 시작했다.`);
+      return { state:next, message:'' };
+    }
     if (action.type === 'profile') {
       if (typeof action.name !== 'string' || !action.name.trim() || !['male','female','unspecified'].includes(action.gender)) return { state, message: '이름과 성별 설정을 확인해 주세요.' };
       next.name = Array.from(action.name.trim()).slice(0,18).join('');
@@ -146,7 +176,15 @@
       const choice = eventChoices(next, event).find(item => item.id === action.choice);
       if (!event || event.id !== action.eventId || !choice || choice.disabled) return { state, message: '지금은 이 선택을 할 수 없다.' };
       let result = '';
-      if (event.id === 'oversight') {
+      if (event.id === 'opening') {
+        const job = starts.occupations[event.occupation];
+        result = job.options.find(option => option.id === choice.id).result;
+        next.energy -= 10;
+        if (choice.id === 'earn') next.cash += 8;
+        else if (event.occupation === 'worker') next.surveyed = true;
+        else next.support += event.occupation === 'apprentice' ? 6 : 3;
+        remember(next, job.person, result);
+      } else if (event.id === 'oversight') {
         if (choice.id === 'repay') {
           next.cash -= 20;
           next.caseStage = 'corrected';
@@ -286,11 +324,15 @@
       }
 
       case 'place': next.place = action.place; return { state: next, message: '' };
-      case 'work':
-        if (!spend(15)) break;
-        next.cash += next.funding === 'merchant' && next.flooded !== null && !next.contractRelief ? 10 : 16;
-        message = next.funding === 'merchant' && next.flooded !== null && !next.contractRelief ? '부두에서 품삯 10크라운을 받았다. 선주 계약의 사용료 6크라운이 공제됐다.' : '부두에서 품삯 16크라운을 받았다.';
+      case 'work': {
+        const job = starts.occupations[next.career] || starts.occupations.worker;
+        if (!spend(job.energy)) break;
+        const toll = next.career === 'worker' && next.funding === 'merchant' && next.flooded !== null && !next.contractRelief;
+        const wage = toll ? 10 : job.wage;
+        next.cash += wage;
+        message = `${job.name} 업무로 ${wage}크라운을 받았다.${toll ? ' 선주 계약의 사용료 6크라운이 공제됐다.' : ''}`;
         break;
+      }
       case 'rest':
         if (!spend()) break;
         next.energy = Math.min(100, next.energy + 30);
@@ -357,7 +399,7 @@
         message = '골목 집회에서 주민들의 이야기를 들었다. 예상 지지가 올랐다.';
         break;
       case 'join':
-        if (next.day < 21 || next.career !== 'worker' || !['investigator', 'councillor'].includes(action.career) || (action.career === 'investigator' && next.barredInvestigator) || !next.witness || !spend()) break;
+        if (next.day < 21 || !Object.hasOwn(starts.occupations, next.career) || !['investigator', 'councillor'].includes(action.career) || (action.career === 'investigator' && next.barredInvestigator) || !next.witness || !spend()) break;
         next.career = action.career;
         next.caseStage = action.career === 'investigator' ? 'open' : next.caseStage;
         message = action.career === 'investigator' ? '민석의 추천으로 항만 수사관이 됐다. 임명은 선거 당선과 다른 경로의 권한을 열었다.' : '지안의 추천으로 주민 협의회 위원에 위촉됐다. 안건을 제출하고 공개 청문회를 소집할 수 있다.';
@@ -477,7 +519,7 @@
           }
           if (next.day > 20 && next.day % 7 === 0) {
             next.treasury += 10;
-            if (next.career !== 'worker' && !next.underReview) {
+            if (['mayor','investigator','councillor'].includes(next.career) && !next.underReview) {
               next.cash += 18;
               record(next, '주급 18크라운을 받았다. 시 재정에는 세수 10크라운이 들어왔다.');
             }
@@ -514,7 +556,7 @@
     record(next, message);
     return { state: next, message };
   }
-  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices, eventDialogue, eventReply };
+  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices, eventDialogue, eventReply, starts };
   if (typeof module !== 'undefined') module.exports = api;
   root.Campaign = api;
 })(globalThis);

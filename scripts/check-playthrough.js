@@ -244,3 +244,27 @@ assert.equal(failedReview.career,'worker');
 assert.equal(failedReview.barredInvestigator,true);
 assert.equal(failedReview.underReview,false);
 console.log('봉인 기록 후속 사건·반환/사직/소명·주급 정지·해임 후 다른 직업·계약 효과 분리 통과');
+for (const occupation of Object.keys(require('../starts').occupations)) {
+  for (const background of Object.keys(require('../starts').backgrounds)) {
+    const base = fresh();
+    let state = apply(base,{type:'start',name:'첫 시민',gender:'female',occupation,background}).state;
+    assert.equal(state.career,occupation);
+    assert.equal(state.startConfigured,true);
+    assert.equal(state.eventQueue[0].occupation,occupation);
+    assert.equal(state.cash,32 + require('../starts').backgrounds[background].cash);
+    assert.equal(apply(state,{type:'start',name:'다시',gender:'male',occupation,background}).state,state);
+    const before = state.cash;
+    state = apply(state,{type:'eventChoice',eventId:'opening',choice:'help'}).state;
+    assert(state.memories.some(memory=>memory.person===require('../starts').occupations[occupation].person));
+    state = apply(state,{type:'acknowledge'}).state;
+    state = apply(state,{type:'work'}).state;
+    assert.equal(state.cash,before + require('../starts').occupations[occupation].wage);
+    assert.equal(JSON.parse(JSON.stringify(state)).startingOccupation,occupation);
+  }
+}
+const priorSave = fresh();
+delete priorSave.startConfigured;
+priorSave.day=22;priorSave.cash=73;
+assert.equal(require('../campaign').normalize(priorSave).startConfigured,true);
+assert.equal(require('../campaign').normalize(priorSave).cash,73);
+console.log('출신 3종×직업 3종·시작 장면·초기 자원·직업별 품삯·중복 시작 차단·기존 저장 유지 통과');

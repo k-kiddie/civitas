@@ -6,11 +6,12 @@ const root = __dirname;
 const port = Math.max(1, Number(process.argv[process.argv.indexOf('--port') + 1]) || Number(process.env.PORT) || 8080);
 const routes = new Map([
   ['/',['index.html','text/html; charset=utf-8']],
+  ['/starts.js',['starts.js','text/javascript; charset=utf-8']],
   ['/campaign.js',['campaign.js','text/javascript; charset=utf-8']],
   ['/game.js',['game.js','text/javascript; charset=utf-8']],
   ['/style.css',['style.css','text/css; charset=utf-8']],
 ]);
-for (const scene of ['storm-safe', 'storm-partial', 'storm-flood', 'election-win', 'election-loss', 'hearing']) {
+for (const scene of ['opening-factory', 'opening-police', 'storm-safe', 'storm-partial', 'storm-flood', 'election-win', 'election-loss', 'hearing']) {
   routes.set(`/assets/events/${scene}.webp`, [`assets/events/${scene}.webp`, 'image/webp']);
 }
 http.createServer((req,res)=>{
