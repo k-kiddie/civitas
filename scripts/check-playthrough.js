@@ -988,3 +988,78 @@ console.log('협약 수락/역제안/거절·신뢰·자격·재협상 차단·�
  assert.equal(new Set(restored.council.chamber.members.map(member=>member.name)).size,11);
  console.log('의원 11명·개별 찬반 합산·여당 반란/야당 소신표·면담 3선택·설득 성공/실패·지역 조항 예산·6표 가결·중복 면담/효과 차단·낡은 면담 종료·표결 명부 보존·구형 의회 보완 통과');
 }
+
+{
+ const Council=require('../council');
+ function termResult(round,player=100){return {round,day:20+(round-1)*28,ran:true,won:player>=50,winnerId:player>=50?'player':'sora',playerName:'시민',winner:player>=50?'시민':'소라',totals:{player,sora:100-player},candidates:{sora:{name:'소라',platform:'housing',partyName:'생활노동연대'}},districts:[],votes:player};}
+ function elect(s,round,share){
+  const result=termResult(round,share);s.day=result.day;s.election=result;
+  s.parties.registry.civic.nomination={round,id:'player'};Council.seatElection(s,result);return s;
+ }
+ let s=fresh();s.parties.membership='civic';s.parties.registry.civic.members.player={name:s.name};s.parties.registry.civic.leader='player';
+ s=elect(s,1,100);assert.equal(s.council.chamber.members.length,11);
+ const originals=s.council.chamber.members.map(member=>member.id),star=originals[0],returning=originals[1];
+ for(const member of s.council.chamber.members){member.reputation=69;member.relationship=71;}
+ s.council.chamber.members[0].reputation=100;s.council.chamber.members[0].relationship=77;s.council.chamber.members[0].platform='transparency';
+ const originalName=s.council.chamber.members[0].name;
+ s.day=21;s.career='mayor';s.politics.round=2;s.politics.nextDay=48;
+ s.pacts.agreements=[{id:'career-pact',party:'civic',partyName:'시민개혁당',target:'labor',targetName:'생활노동연대',round:1,policy:'security',status:'governing',dueDay:27}];
+ s=apply(s,{type:'councilSubmit',policy:'security'}).state;
+ s=apply(s,{type:'councilVote',policy:'security'}).state;
+ const oldBallot=JSON.parse(JSON.stringify(Council.billFor(s,'security').ballots[0]));
+ assert(s.council.people[star].career.some(record=>record.type==='vote'));
+ s.eventQueue=[];s=apply(s,{type:'advance'}).state;
+ s=apply(s,{type:'pactDeliver',policy:'security'}).state;
+ assert(s.council.people[star].career.some(record=>record.type==='delivery'));
+ assert.deepEqual(Council.billFor(s,'security').ballots[0],oldBallot); // Career appends cannot mutate a recorded vote.
+ const past=JSON.parse(JSON.stringify(s.council.history[0]));
+ s=elect(s,2,10);
+ assert.equal(s.council.chamber.members.filter(member=>member.group==='civic').length,1);
+ assert(s.council.chamber.members.some(member=>member.id===star));
+ assert.equal(s.council.people[star].name,originalName);assert.equal(s.council.people[star].relationship,77);
+ assert.equal(Council.terms(s.council.people[star]),2);
+ assert.equal(s.council.people[returning].status,'defeated');assert.equal(Council.terms(s.council.people[returning]),1);
+ assert.equal(s.council.chamber.transition.reelected.length,1);
+ assert.equal(s.council.chamber.transition.departed.length,10);
+ const saved=JSON.parse(JSON.stringify(s));
+ s=elect(s,3,100);const replay=elect(saved,3,100);
+ assert.deepEqual(s.council,replay.council);
+ assert.equal(s.council.chamber.transition.returned.length,10);
+ assert(s.council.chamber.transition.returned.some(member=>member.id===returning));
+ assert.equal(Council.terms(s.council.people[returning]),2);assert.equal(s.council.people[returning].relationship,71);
+ assert.equal(Council.terms(s.council.people[star]),3);
+ assert.equal(new Set(s.council.chamber.members.map(member=>member.id)).size,11);
+ const sameRound=JSON.stringify(s.council);Council.seatElection(s,termResult(3,100));assert.equal(JSON.stringify(s.council),sameRound);
+ assert.deepEqual(s.council.history[2],past);
+ assert.deepEqual(Council.billFor({...s,election:termResult(1)},'security').ballots[0],oldBallot);
+ let memoryState=JSON.parse(JSON.stringify(s));memoryState.day=77;memoryState.career='mayor';memoryState.actions=2;memoryState.flooded=18;memoryState.eventQueue=[];
+ memoryState.politics.round=4;memoryState.politics.nextDay=104;
+ const remembered=memoryState.council.chamber.members.find(member=>member.id===star);remembered.independence=80;remembered.district=1;
+ memoryState.pacts.agreements=[{id:'later-pact',party:'civic',target:'labor',round:3,policy:'security',status:'governing',dueDay:83}];
+ memoryState=apply(memoryState,{type:'councilSubmit',policy:'security'}).state;
+ memoryState=apply(memoryState,{type:'councilMeet',policy:'security',member:star}).state;
+ assert(memoryState.eventQueue[0].dialogue.some(line=>line.text.includes('지난 제1회 임기')));
+ s=elect(s,4,0);assert.equal(s.council.people[star].status,'dormant');
+ s=elect(s,5,100);assert(s.council.chamber.members.some(member=>member.id===star));
+ assert.equal(new Set(Council.people(s).map(member=>member.name)).size,Council.people(s).length);
+ // An unfulfilled personal commitment is reviewed once when the old term ends.
+ let failed=fresh();failed.parties.membership='civic';failed.parties.registry.civic.members.player={name:failed.name};failed=elect(failed,1,100);
+ const accountable=failed.council.chamber.members[0];accountable.reputation=90;accountable.relationship=70;
+ failed.council.bills=[{id:'unfulfilled-project',round:1,policy:'housing',status:'rejected',amendments:[{member:accountable.id,cost:2}],ballots:[]}];
+ failed=elect(failed,2,100);assert.equal(failed.council.people[accountable.id].reputation,80);assert.equal(failed.council.people[accountable.id].relationship,62);
+ assert.equal(failed.council.people[accountable.id].career.filter(record=>record.type==='unfulfilled').length,1);
+ failed=elect(failed,3,100);assert.equal(failed.council.people[accountable.id].reputation,80);
+ const legacy=JSON.parse(JSON.stringify(failed));delete legacy.council.people;
+ for(const member of legacy.council.chamber.members){delete member.terms;delete member.career;delete member.reputation;}
+ const legacyHistory=JSON.parse(JSON.stringify(legacy.council.history));
+ const restored=require('../campaign').normalize(legacy);
+ assert.equal(Object.keys(restored.council.people).length,11);assert.deepEqual(restored.council.history,legacyHistory);
+ assert(!legacy.council.people);assert.deepEqual(require('../campaign').normalize(restored).council,restored.council);
+ // Use the actual daily election path and keep the mayor result before the council transition report.
+ let daily=JSON.parse(JSON.stringify(s));daily.day=159;daily.election=termResult(5);daily.politics.round=6;daily.politics.nextDay=160;daily.candidate=false;daily.eventQueue=[];daily.pacts.agreements=[];
+ daily=apply(daily,{type:'advance'}).state;
+ assert.equal(daily.council.chamber.round,6);assert.equal(daily.council.chamber.members.length,11);
+ assert(daily.eventQueue.find(event=>event.id==='council-election-6'));
+ assert(daily.eventQueue.findIndex(event=>event.id==='election')<daily.eventQueue.findIndex(event=>event.id==='council-election-6'));
+ console.log('인물 ID·관계·활동 지속·재선/낙선/원외 복귀·평판과 경력 평가·교섭단체 원외와 재등장·동일 회차 중복 차단·이행/미이행 책임·과거 개표 보존·구형 저장·실제 반복 선거 보고 통과');
+}

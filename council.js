@@ -1,12 +1,14 @@
 'use strict';
 (function(root){
   const size=11;
-  function fresh(){return {chamber:null,bills:[],nextId:1,history:[]};}
+  function fresh(){return {chamber:null,bills:[],nextId:1,history:[],people:{}};}
   const districtNames=['항구','어촌','언덕'];
   const priorities={housing:'주거·복지',trade:'교역·일자리',transparency:'공개감사',security:'치안·보급'};
+  const familyNames=['강','문','백','신','유','정','최','한'];
+  const givenNames=['이든','라온','서하','도현','지율','해솔','나린','수현','예담','지우','은재','시우','다인','도겸','수안','해원'];
   function createMembers(chamber,seed){
-    const surnames=['강','문','백','신','유','정','최','한'];
-    const names=['이든','라온','서하','도현','지율','해솔','나린','수현','예담','지우','은재','시우','다인','도겸','수안','해원'];
+    const surnames=familyNames;
+    const names=givenNames;
     let random=((seed||0x61c1a5)^Math.imul(chamber.round,2654435761))>>>0;
     const draw=max=>{random=(Math.imul(random,1664525)+1013904223)>>>0;return Math.floor(random/4294967296*max);};
     let index=0;const members=[];
@@ -21,9 +23,112 @@
     }
     return members;
   }
+  const copy=value=>JSON.parse(JSON.stringify(value));
+  function terms(member){return (member.terms||[]).filter(term=>term.elected).length;}
+  function initializePerson(member,chamber){
+    return {...member,reputation:member.reputation??50,career:member.career||[],
+      terms:member.terms||[{round:chamber.round,day:chamber.day,group:member.group,elected:true}],status:member.status||'seated'};
+  }
+  function syncPeople(state){
+    state.council.people={...state.council.people};
+    const chamber=state.council.chamber;if(!chamber)return;
+    for(const member of chamber.members||[])state.council.people[member.id]=copy(member);
+  }
   function restore(state){
     const chamber=state.council.chamber;
-    if(chamber&&!chamber.members)state.council.chamber={...chamber,members:createMembers(chamber,state.randomState?.seed)};
+    if(chamber){
+      const roster=chamber.members||createMembers(chamber,state.randomState?.seed);
+      state.council.chamber={...chamber,members:roster.map(member=>initializePerson(copy(member),chamber))};
+    }
+    syncPeople(state);
+  }
+  function people(state){
+    return Object.values({...state.council.people,...Object.fromEntries(members(state).map(member=>[member.id,member]))});
+  }
+  function rememberPerson(state,member,entry){
+    member.career=member.career||[];member.career.push(entry);
+    state.council.people={...state.council.people,[member.id]:copy(member)};
+  }
+  function electionScore(state,member,chamber){
+    let hash=(state.randomState?.seed||0x61c1a5)^Math.imul(chamber.round,2654435761);
+    for(const char of member.id)hash=Math.imul(hash^char.charCodeAt(0),16777619);
+    const variation=(hash>>>0)%21-10;
+    const group=chamber.groups.find(group=>group.id===member.group);
+    const factors=[['지역 평판',member.reputation??50],['의정 경력',Math.min(12,terms(member)*2)],
+      ['현역 기반',member.status==='seated'?4:0],['교섭단체 노선',group?.platform===member.platform?6:0],
+      ['지역 주거 수요',state.flooded>=18&&member.district===1&&member.platform==='housing'?6:0],['이번 선거의 지역 반응',variation]];
+    return {score:factors.reduce((sum,[,value])=>sum+value,0),factors};
+  }
+  function closeTerm(state,chamber){
+    if(!chamber||state.council.reviewedRound>=chamber.round)return;
+    for(const bill of state.council.bills.filter(bill=>bill.round===chamber.round&&bill.status!=='executed')){
+      for(const member of chamber.members){
+        if(!bill.amendments.some(item=>item.member===member.id))continue;
+        member.reputation=Math.max(0,(member.reputation??50)-10);
+        member.relationship=Math.max(0,member.relationship-8);
+        rememberPerson(state,member,{type:'unfulfilled',round:chamber.round,day:state.day,policy:bill.policy,text:'약속한 지역 공청회 사업이 임기 안에 집행되지 않았다. 평판 −10 · 개인 관계 −8.'});
+      }
+    }
+    state.council.reviewedRound=chamber.round;
+    syncPeople(state);
+  }
+  function selectMembers(state,chamber){
+    const generated=createMembers(chamber,state.randomState?.seed);
+    const registry={...state.council.people};
+    const names=new Set(Object.values(registry).map(person=>person.name));
+    for(const member of generated){
+      const original=member.name;let suffix=1;
+      const family=familyNames.indexOf(original[0]),given=givenNames.indexOf(original.slice(1));
+      while(names.has(member.name)){
+        member.name=suffix<128?familyNames[(family+Math.floor(suffix/16))%8]+givenNames[(given+suffix)%16]:original+' '+suffix;
+        suffix++;
+      }
+      names.add(member.name);
+    }
+    const selected=[];const contests=[];const previous=state.council.chamber;
+    const previousIds=new Set((previous?.members||[]).map(member=>member.id));
+    for(const group of chamber.groups){
+      const veterans=Object.values(registry).filter(member=>member.group===group.id);
+      const newcomers=generated.filter(member=>member.group===group.id).map(member=>({...member,reputation:50,career:[],terms:[],status:'new'}));
+      const ranked=[...veterans,...newcomers].map(member=>({...copy(member),...electionScore(state,member,chamber)}))
+        .sort((a,b)=>b.score-a.score||a.id.localeCompare(b.id));
+      const candidates=[];
+      for(let index=0;index<ranked.length;index++){
+        const person=ranked[index];const elected=index<group.seats;
+        const term={round:chamber.round,day:chamber.day,group:group.id,elected,rank:index+1,score:person.score};
+        const {score,factors,...profile}=person;
+        profile.terms.push(term);profile.status=elected?'seated':'defeated';
+        profile.career.push({type:'election',round:chamber.round,day:chamber.day,text:(elected?(terms(profile)>1?'재선':'첫 당선'):'낙선')+' · '+group.name+' 명부 '+(index+1)+'위 · 평가 '+score});
+        registry[profile.id]=copy(profile);
+        candidates.push({id:profile.id,name:profile.name,elected,score,rank:index+1,factors});
+        if(elected)selected.push(copy(profile));
+      }
+      contests.push({group:group.id,name:group.name,seats:group.seats,candidates});
+    }
+    const selectedIds=new Set(selected.map(member=>member.id));
+    for(const person of Object.values(registry)){
+      if(!chamber.groups.some(group=>group.id===person.group)){
+        person.status='dormant';
+        if(!person.terms.some(term=>term.round===chamber.round)){
+          person.terms.push({round:chamber.round,day:chamber.day,group:person.group,elected:false,reason:'교섭단체가 의석을 얻지 못함'});
+          person.career.push({type:'election',round:chamber.round,day:chamber.day,text:'소속 교섭단체가 의석을 얻지 못해 원외에 남았다.'});
+        }
+      }
+    }
+    state.council.people=registry;
+    chamber.contests=contests;
+    chamber.transition={reelected:selected.filter(member=>previousIds.has(member.id)).map(member=>({id:member.id,name:member.name})),
+      returned:selected.filter(member=>!previousIds.has(member.id)&&terms(member)>1).map(member=>({id:member.id,name:member.name})),
+      newcomers:selected.filter(member=>terms(member)===1).map(member=>({id:member.id,name:member.name})),
+      departed:(previous?.members||[]).filter(member=>!selectedIds.has(member.id)).map(member=>({id:member.id,name:member.name}))};
+    return selected;
+  }
+  function electionReport(state){
+    const chamber=state.council.chamber;if(!chamber||state.council.history.length<2)return;
+    const change=chamber.transition;
+    const text='현역 재선 '+change.reelected.length+'명 · 원외 복귀 '+change.returned.length+'명 · 첫 당선 '+change.newcomers.length+'명. '+(change.departed.length?'원외로 물러난 인물: '+change.departed.map(member=>member.name).join(' · ')+'.':'현역 전원이 의석을 지켰다.');
+    state.eventQueue.push({id:'council-election-'+chamber.round,day:chamber.day,scene:'hearing',councilReport:true,title:'익숙한 얼굴과 새로운 의회',text,destination:'power',
+      dialogue:[{speaker:'의회 기록관',text},{speaker:'의회 기록관',text:'이전 관계와 표결·면담 이력은 이어집니다. 낙선한 인물도 정치 인물 기록에 남고, 같은 교섭단체가 다음 선거에서 의석을 얻으면 다시 경쟁할 수 있습니다.'}]});
   }
   function members(state){const chamber=current(state);return chamber?.members|| (chamber?createMembers(chamber,state.randomState?.seed):[]);}
   function localObjection(state,bill,member){
@@ -68,10 +173,13 @@
     const reason=id==='hearing'?'개별 면담의 지역 공청회·공개 보고 합의':'개별 면담에서 정책 취지에 동의';
     bill.meetings=bill.meetings||[];bill.meetings.push({member:member.id,name:member.name,day:state.day,approach:id,supported,reason:supported?reason:'의견 청취 · 찬성 합의 없음'});
     member.relationship=Math.min(100,member.relationship+(id==='listen'?8:3));
+    rememberPerson(state,member,{type:'meeting',round:bill.round,day:state.day,policy:bill.policy,text:(supported?reason:'의견 청취 · 찬성 합의 없음')});
     if(id==='hearing')bill.amendments.push({member:member.id,name:member.name,day:state.day,cost:2});
     return member.name+' 의원과 면담했다. '+(supported?'찬성 합의: '+reason+'.':'찬성 합의에는 이르지 못했다. '+memberIntent(state,bill,member).reason+'.')+' 개인 관계 +'+(id==='listen'?8:3)+(id==='hearing'?' · 집행 공금 +2 · 집행 시 주민 지지 +1.':'.');
   }
   function seatElection(state,result){
+    if(state.council.chamber?.round===result.round)return;
+    restore(state);closeTerm(state,state.council.chamber);
     const groups={};const candidateGroups={};
     for(const [id,votes] of Object.entries(result.totals)){
       if(votes<=0||(id==='player'&&!result.ran))continue;
@@ -90,8 +198,9 @@
     rows.sort((a,b)=>b.remainder-a.remainder||b.votes-a.votes||a.id.localeCompare(b.id));
     const remaining=size-rows.reduce((sum,group)=>sum+group.seats,0);
     for(let index=0;index<remaining;index++)rows[index].seats++;
-    state.council.chamber={round:result.round,day:result.day,size,majority:6,governmentGroup:candidateGroups[result.winnerId],groups:rows.filter(group=>group.seats)};
-    state.council.chamber.members=createMembers(state.council.chamber,state.randomState?.seed);
+    const chamber={round:result.round,day:result.day,size,majority:6,governmentGroup:candidateGroups[result.winnerId],groups:rows.filter(group=>group.seats)};
+    chamber.members=selectMembers(state,chamber);
+    state.council.chamber=chamber;
     state.council.history.unshift(JSON.parse(JSON.stringify(state.council.chamber)));
   }
   function current(state){return state.council.chamber?.round===state.election?.round?state.council.chamber:null;}
@@ -110,7 +219,7 @@
   }
   function preview(state,bill){
     const chamber=current(state);if(!chamber)return null;
-    const individual=members(state).map(member=>({...member,...memberIntent(state,bill,member)}));
+    const individual=members(state).map(member=>({id:member.id,name:member.name,group:member.group,district:member.district,platform:member.platform,independence:member.independence,relationship:member.relationship,reputation:member.reputation??50,...memberIntent(state,bill,member)}));
     const votes=chamber.groups.map(group=>{
       const caucus=individual.filter(member=>member.group===group.id);
       const yesCount=caucus.filter(member=>member.yes).length;
@@ -144,11 +253,12 @@
       const member=members(state).find(item=>item.id===action.member);
       if(!member||state.energy<8||(bill.contacts||[]).includes(member.id)||memberIntent(state,bill,member).yes)return fail('반대 의원 · 기력 8 · 안건별 한 번의 면담 여부를 확인하자.');
       bill.contacts=bill.contacts||[];bill.contacts.push(member.id);state.actions--;state.energy-=8;
+      const memory=[...(member.career||[])].reverse().find(record=>record.round<bill.round&&['meeting','delivery','unfulfilled'].includes(record.type));
       const group=current(state).groups.find(item=>item.id===member.group);
       state.eventQueue.push({id:bill.id+'-meet-'+member.id,day:state.day,scene:'hearing',councilReport:true,
         councilMeeting:{bill:bill.id,member:member.id,name:member.name},title:member.name+' 의원과의 면담',destination:'power',
         text:districtNames[member.district]+' 지역 · '+group.name+' · 우선 의제 '+priorities[member.platform],
-        dialogue:[{speaker:member.name,text:'제 우선 의제는 '+priorities[member.platform]+'입니다. '+districtNames[member.district]+' 주민들도 제 판단을 지켜보고 있습니다.'},
+        dialogue:[...(memory?[{speaker:member.name,text:'지난 제'+memory.round+'회 임기의 일도 기억합니다. '+memory.text}]:[]),{speaker:member.name,text:'제 우선 의제는 '+priorities[member.platform]+'입니다. '+districtNames[member.district]+' 주민들도 제 판단을 지켜보고 있습니다.'},
           {speaker:member.name,text:memberIntent(state,bill,member).reason+' 때문에 현재는 반대합니다. 어떤 제안을 하시겠습니까?'}]});
       return {ok:true,message:member.name+' 의원과의 정책 면담을 시작했다. 행동 1 · 기력 8을 사용했다.'};
     }
@@ -163,15 +273,28 @@
     const result=preview(state,bill);
     bill.status=result.yes>=result.majority?'passed':'rejected';bill.lastVoteDay=state.day;
     bill.ballots.push({...result,day:state.day,status:bill.status});state.actions--;
+    for(const vote of result.members){
+      const member=members(state).find(member=>member.id===vote.id);
+      rememberPerson(state,member,{type:'vote',round:bill.round,day:state.day,policy:bill.policy,yes:vote.yes,defected:vote.defected,text:(vote.yes?'찬성':'반대')+' · '+vote.reason});
+    }
     const text=bill.name+' 예산안 '+(bill.status==='passed'?'가결':'부결')+' · 찬성 '+result.yes+' / 반대 '+result.no+' · 필요 '+result.majority+'석. '+(bill.status==='passed'?'이제 공금 '+cost(state,bill.policy,bill.baseCost)+'으로 집행할 수 있다.':'공금은 지출되지 않았다. 다음 날부터 수정 재상정할 수 있다. 협약 기한은 계속 흐른다.');
     state.eventQueue.push({id:bill.id+'-vote-'+bill.ballots.length,day:state.day,scene:'hearing',councilReport:true,title:bill.status==='passed'?'의회가 예산안을 승인했다':'의회가 예산안을 부결했다',text,destination:'power',dialogue:[{speaker:'의회 의장',text},{speaker:'의회 기록관',text:'의원별 찬반과 이탈 이유를 의회 기록에 남겼습니다. 승인과 실제 공금 집행은 별도입니다.'}]});
     return {ok:true,message:text};
   }
   function execute(state,policy){
     const bill=billFor(state,policy);
-    if(bill?.status==='passed'){bill.status='executed';bill.executedDay=state.day;state.support=Math.min(100,state.support+bill.amendments.length);}
+    if(bill?.status==='passed'){
+      bill.status='executed';bill.executedDay=state.day;state.support=Math.min(100,state.support+bill.amendments.length);
+      const ballot=bill.ballots[bill.ballots.length-1];
+      for(const member of members(state)){
+        if(!ballot.members?.find(vote=>vote.id===member.id&&vote.yes))continue;
+        member.reputation=Math.min(100,(member.reputation??50)+6);
+        rememberPerson(state,member,{type:'delivery',round:bill.round,day:state.day,policy,text:'지지한 '+bill.name+' 사업 집행 · 지역 평판 +6'});
+      }
+    }
   }
-  const api={fresh,priorities,districtNames,restore,members,memberIntent,meetingChoices,meetingReply,resolveMeeting,seatElection,current,billFor,authorized,cost,intent,preview,act,execute};
+
+  const api={fresh,priorities,districtNames,terms,people,electionReport,restore,members,memberIntent,meetingChoices,meetingReply,resolveMeeting,seatElection,current,billFor,authorized,cost,intent,preview,act,execute};
   if(typeof module!=='undefined')module.exports=api;
   root.Council=api;
 })(globalThis);

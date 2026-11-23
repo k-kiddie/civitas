@@ -102,6 +102,16 @@
     if(!vote.members)return '';
     return `<details class="card"><summary>의원별 판단 · ${vote.members.length}명</summary>${vote.members.map(member=>`<article class="councillor"><h4>${escape(member.name)} · ${member.yes?'찬성':'반대'}${member.defected?' · 당론 이탈':''}</h4><p>${Council.districtNames[member.district]} · 우선 ${Council.priorities[member.platform]}<br>자율성 ${member.independence} · 개인 관계 ${member.relationship}<br>${member.reason}</p>${bill.status==='draft'&&!member.yes?button('이 의원과 정책 면담을 한다','councilMeet','행동 1 · 기력 8 · 안건별 1회 · 대화로 제안 선택',blocked||!active||state.energy<8||(bill.contacts||[]).includes(member.id),`data-policy="${bill.policy}" data-member="${member.id}"`):''}</article>`).join('')}</details>`;
   }
+  function politicianArchive() {
+    const people=Council.people(state).sort((a,b)=>Number(b.status==='seated')-Number(a.status==='seated')||Council.terms(b)-Council.terms(a)||a.name.localeCompare(b.name));
+    const statuses={seated:'현직',defeated:'낙선·원외',dormant:'소속 단체 원외'};
+    const types={election:'선거',vote:'표결',meeting:'면담',delivery:'사업 이행',unfulfilled:'미이행 책임'};
+    return `<details class="card"><summary>정치 인물 기록 · ${people.length}명</summary><p class="muted">낙선해도 인물과 관계는 사라지지 않습니다. 같은 교섭단체가 의석을 얻는 다음 선거에서 다시 경쟁합니다.</p>${people.map(person=>`<details class="card"><summary>${escape(person.name)} · ${statuses[person.status]||'정치 신인'} · 당선 ${Council.terms(person)}회</summary><p>${Council.districtNames[person.district]} · 우선 ${Council.priorities[person.platform]}<br>개인 관계 ${person.relationship} · 지역 평판 ${person.reputation??50}</p>${(person.terms||[]).map(term=>`<p>제${term.round}회 · ${term.day}일 · ${term.elected?'당선':term.reason?'원외':'낙선'}${term.rank?' · 명부 '+term.rank+'위':''}</p>`).join('')}<details><summary>활동 기록 · ${(person.career||[]).length}건</summary>${[...(person.career||[])].reverse().map(record=>`<p>${record.day}일 · 제${record.round}회 · ${types[record.type]||record.type}<br>${escape(record.text)}</p>`).join('')||'<p>이전 상세 활동은 저장되어 있지 않습니다.</p>'}</details></details>`).join('')}</details>`;
+  }
+  function councilContests(chamber) {
+    if(!chamber.contests)return '';
+    return `<details class="card"><summary>이번 의회 인선 결과</summary><p class="muted">교섭단체가 얻은 의석 안에서 지역 평판·의정 경력·현역 기반·노선과 이번 선거의 지역 반응으로 명부 순위를 정합니다. 개인 관계 수치로 당선을 직접 결정하지 않습니다.</p>${chamber.contests.map(contest=>`<details><summary>${escape(contest.name)} · ${contest.seats}석 · 경쟁 ${contest.candidates.length}명</summary>${contest.candidates.map(person=>`<p>${person.rank}위 ${escape(person.name)} · ${person.elected?'당선':'낙선'} · 평가 ${person.score}<br><span class="muted">${person.factors.map(([label,value])=>`${label} ${value>=0?'+':''}${value}`).join(' · ')}</span></p>`).join('')}</details>`).join('')}</details>`;
+  }
   function councilPanel() {
     const chamber=Council.current(state);
     if(!chamber)return '<details class="card"><summary>의회</summary><p>다음 동장 선거부터 득표에 따라 지역 의회 11석을 선출합니다. 기존 저장의 임기는 종전 방식으로 진행할 수 있습니다.</p></details>';
@@ -109,7 +119,7 @@
     const policies=[...new Set(Pacts.governing(state).map(pact=>pact.policy))];
     const roster=Council.members(state);
     const tiles=roster.map(member=>`<span class="council-seat ${member.group===chamber.governmentGroup?'government':''}" title="${escape(member.name)}" aria-label="${escape(member.name)} 의원">${escape(Array.from(member.name).slice(-2).join(''))}</span>`).join('');
-    const memberList=`<details class="card"><summary>의원 명부 · ${roster.length}명</summary>${roster.map(member=>`<p><strong>${escape(member.name)}</strong> · ${escape(chamber.groups.find(group=>group.id===member.group)?.name)}<br>${Council.districtNames[member.district]} · 우선 ${Council.priorities[member.platform]} · 자율성 ${member.independence} · 관계 ${member.relationship}</p>`).join('')}</details>`;
+    const memberList=`<details class="card"><summary>의원 명부 · ${roster.length}명</summary>${roster.map(member=>`<p><strong>${escape(member.name)}</strong> · ${escape(chamber.groups.find(group=>group.id===member.group)?.name)}<br>${Council.districtNames[member.district]} · 우선 ${Council.priorities[member.platform]} · 자율성 ${member.independence} · 관계 ${member.relationship}<br>당선 ${Council.terms(member)}회 · 지역 평판 ${member.reputation??50}</p>`).join('')}</details>`;
     const pending=policies.filter(policy=>!Council.billFor(state,policy)).map(policy=>button(Pacts.projects[policy].name+' 예산안 제출','councilSubmit','행동 1 · 기본 공금 '+Pacts.projects[policy].cost+' · 제출 시 지출 없음',blocked,`data-policy="${policy}"`)).join('');
     const bills=state.council.bills.filter(bill=>bill.round===chamber.round).map(bill=>{
       const vote=bill.status==='draft'?Council.preview(state,bill):bill.ballots[bill.ballots.length-1]||Council.preview(state,bill);
@@ -122,7 +132,7 @@
       const meetings=(bill.meetings||[]).map(meeting=>`<p class="muted">${meeting.day}일 ${escape(meeting.name)} 면담 · ${meeting.reason}</p>`).join('');
       return `<article class="card"><span class="eyebrow">${status}</span><h3>${escape(bill.name)}</h3><p>총 집행 예산 ${Council.cost(state,bill.policy,bill.baseCost)} · 수정 조항 ${bill.amendments.length}개<br>${bill.status==='draft'?'현재 예상':'마지막 표결'} 찬성 ${vote.yes} / 반대 ${vote.no} · 과반 ${chamber.majority}명</p>${amendments}${groups}${councillorVotes(vote,bill,blocked,active)}${meetings}${controls}${history}</article>`;
     }).join('');
-    return `<details class="card"><summary>의회 · ${chamber.size}석 · 과반 ${chamber.majority}석</summary><p>제${chamber.round}회 선거 득표를 합산한 비례 의석입니다. 의원들이 당론·지역 사정·개인 정책과 관계를 보고 각각 한 표를 행사합니다.</p><div class="council-seats">${tiles}</div>${chamber.groups.map(group=>`<p>${escape(group.name)} · ${group.seats}석 · ${group.votes.toFixed(1)}%</p>`).join('')}${memberList}<p class="muted">협약 사업은 의회 승인 후 집행합니다. 지도부와 합의해도 소속 의원이 이탈할 수 있습니다. 의원별 판단에서 이유를 확인하고 개별 면담을 할 수 있습니다. 부결되어도 협약 기한은 연장되지 않습니다.</p>${pending}${bills||'<p>심의한 협약 예산안이 없습니다.</p>'}</details>`;
+    return `<details class="card"><summary>의회 · ${chamber.size}석 · 과반 ${chamber.majority}석</summary><p>제${chamber.round}회 선거 득표를 합산한 비례 의석입니다. 의원들이 당론·지역 사정·개인 정책과 관계를 보고 각각 한 표를 행사합니다.</p><div class="council-seats">${tiles}</div>${chamber.groups.map(group=>`<p>${escape(group.name)} · ${group.seats}석 · ${group.votes.toFixed(1)}%</p>`).join('')}${memberList}${politicianArchive()}${councilContests(chamber)}<p class="muted">협약 사업은 의회 승인 후 집행합니다. 지도부와 합의해도 소속 의원이 이탈할 수 있습니다. 의원별 판단에서 이유를 확인하고 개별 면담을 할 수 있습니다. 부결되어도 협약 기한은 연장되지 않습니다.</p>${pending}${bills||'<p>심의한 협약 예산안이 없습니다.</p>'}</details>`;
   }
   function pactPanel() {
     const statuses={signed:'선거 전 서명',governing:'집행 대기',fulfilled:'이행 완료',broken:'파기',expired:'당선 조건 미충족',annulled:'상대 정당 소멸'};

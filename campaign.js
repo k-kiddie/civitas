@@ -774,6 +774,7 @@
               text: `${next.election.winner} 동장 당선. ${next.election.ran ? '당신의 득표율 ' + next.election.votes + '%.' : '당신은 출마하지 않았다.'} 내일도 도시의 삶은 이어진다.`,
               quote: next.election.won ? '지안 “이제 약속을 예산으로 옮길 차례예요.”' : '소라 “내일 아침, 우리 동네에서 만나요.”', destination: 'power'
             });
+            council.electionReport(next);
             next.politics.history.unshift(JSON.parse(JSON.stringify(next.election)));
             next.politics.nextDay+=28;next.politics.round++;next.politics.activity={sora:0,doyun:0,jian:0};next.politics.endorsements={};next.politics.requested=[];next.candidate=false;
             record(next, `${next.election.winner} 동장 당선. ${next.election.ran ? '당신의 득표율 ' + next.election.votes + '%' : '당신은 출마하지 않았다.'}`);
