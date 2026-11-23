@@ -267,7 +267,7 @@ delete priorSave.startConfigured;
 priorSave.day=22;priorSave.cash=73;
 assert.equal(require('../campaign').normalize(priorSave).startConfigured,true);
 assert.equal(require('../campaign').normalize(priorSave).cash,73);
-console.log('출신 3종×직업 3종·시작 장면·초기 자원·직업별 품삯·중복 시작 차단·기존 저장 유지 통과');
+console.log('출신 3종×직업 5종·시작 장면·초기 자원·직업별 품삯·중복 시작 차단·기존 저장 유지 통과');
 for (const occupation of ['apprentice','policeAide']) {
   for (const opening of ['help','earn']) {
     for (const path of ['evidence','money']) {
@@ -313,3 +313,32 @@ const recommended = {...fresh(),day:21,career:'policeAide',policeRecommendation:
 assert.equal(apply(recommended,{type:'join',career:'investigator'}).state.career,'investigator');
 assert.equal(apply(recommended,{type:'join',career:'councillor'}).state,recommended);
 assert.equal(recommended.witness,false);
+for (const occupation of ['farmer','clerk']) {
+  for (const opening of ['help','earn']) {
+    for (const path of ['evidence','money']) {
+      let state = apply(fresh(),{type:'start',name:'새 직업',gender:'male',occupation,background:'merchant'}).state;
+      const act = action => {state=apply(state,action).state};
+      act({type:'eventChoice',eventId:'opening',choice:opening});act({type:'acknowledge'});
+      act({type:'advance',to:'event'});assert.equal(state.day,3);
+      let event=state.eventQueue[0];
+      const middle=occupation==='farmer'?(path==='evidence'?'copy':'water'):(path==='evidence'?'preserve':'handover');
+      act({type:'eventChoice',eventId:event.id,choice:middle});act({type:'acknowledge'});
+      act({type:'advance',to:'event'});assert.equal(state.day,5);
+      state=JSON.parse(JSON.stringify(state));event=state.eventQueue[0];
+      const final=occupation==='farmer'?(path==='evidence'?'restore':'rent'):(path==='evidence'?'publish':'patron');
+      if(path==='money')assert.equal(apply(state,{type:'eventChoice',eventId:event.id,choice:occupation==='farmer'?'restore':'publish'}).state,state);
+      const before=state.cash;act({type:'eventChoice',eventId:event.id,choice:final});assert.equal(state.jobStory.stage,'complete');
+      if(occupation==='farmer'&&path==='evidence')assert.equal(state.cash,before-12);
+      if(occupation==='clerk'&&path==='evidence'){assert.equal(state.councilRecommendation,true);assert.equal(state.witness,false);assert.equal(state.policeRecommendation,false)}
+      act({type:'acknowledge'});
+      const wageBefore=state.cash;act({type:'work'});
+      assert.equal(state.cash-wageBefore,occupation==='clerk'?(path==='money'?17:15):13);
+      const dayBefore=state.cash;act({type:'advance'});
+      assert.equal(dayBefore-state.cash,occupation==='farmer'&&path==='money'?5:3);
+    }
+  }
+}
+const clerkRecommendation={...fresh(),day:21,career:'clerk',councilRecommendation:true};
+assert.equal(apply(clerkRecommendation,{type:'join',career:'councillor'}).state.career,'councillor');
+assert.equal(apply(clerkRecommendation,{type:'join',career:'investigator'}).state,clerkRecommendation);
+console.log('농촌·서기 8경로·사본 조건·우물 복구비·물값 생활비·서기 승급·독립 추천 권한 통과');

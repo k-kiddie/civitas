@@ -12,7 +12,7 @@
       surveyed: false, testimony: false, funding: null, built: null, flooded: null,
       candidate: false, election: null, policy: null, support: 25, memories: [], journal: [],
       promise: null, notices: [], witness: false,
-      underReview: false, barredInvestigator: false, policeRecommendation: false,
+      underReview: false, barredInvestigator: false, policeRecommendation: false, councilRecommendation: false,
       career: 'worker', treasury: 40, caseStage: 'closed', contractRelief: false,
       hearing: null, bill: null, hearingRecord: null, eventQueue: [], storyHistory: [], followUps: [],
       jobStory: { stage:'none', opening:null, evidence:false, wageBonus:0, outcome:null },
@@ -23,12 +23,12 @@
   function normalize(state) {
     const result = { ...fresh(), ...state };
     result.startConfigured = state.startConfigured ?? (state.profileSet || state.day > 1 || state.journal.length > 0);
-    if (!state.jobStory && ['apprentice','policeAide'].includes(result.startingOccupation)) {
+    if (!state.jobStory && starts.occupations[result.startingOccupation]?.firstEpisode) {
       const opening = result.storyHistory.find(item => item.id === 'opening');
       if (opening) {
         result.jobStory.opening = opening.choice;
         result.jobStory.stage = 'waiting';
-        result.followUps = [...result.followUps, {type:'job', episode:result.startingOccupation === 'apprentice' ? 'factoryRecords' : 'policeSearch', day:result.day + 2}];
+        result.followUps = [...result.followUps, {type:'job', episode:starts.occupations[result.startingOccupation].firstEpisode, day:result.day + 2}];
       }
     }
     if (result.election?.won) result.career = 'mayor';
@@ -203,8 +203,8 @@
         else next.support += event.occupation === 'apprentice' ? 6 : 3;
         remember(next, job.person, result);
         next.jobStory.opening = choice.id;
-        if (event.occupation !== 'worker') {
-          next.followUps.push({ type:'job', episode:event.occupation === 'apprentice' ? 'factoryRecords' : 'policeSearch', day:next.day + 2 });
+        if (starts.occupations[event.occupation].firstEpisode) {
+          next.followUps.push({ type:'job', episode:starts.occupations[event.occupation].firstEpisode, day:next.day + 2 });
           next.jobStory.stage = 'waiting';
         }
       } else if (event.id === 'oversight') {
@@ -351,7 +351,7 @@
         const job = starts.occupations[next.career] || starts.occupations.worker;
         if (!spend(job.energy)) break;
         const toll = next.career === 'worker' && next.funding === 'merchant' && next.flooded !== null && !next.contractRelief;
-        const bonus = next.career === 'apprentice' ? next.jobStory.wageBonus : 0;
+        const bonus = next.career === next.startingOccupation ? next.jobStory.wageBonus : 0;
         const wage = (toll ? 10 : job.wage) + bonus;
         next.cash += wage;
         message = `${job.name} 업무로 ${wage}크라운을 받았다.${toll ? ' 선주 계약의 사용료 6크라운이 공제됐다.' : ''}`;
@@ -423,7 +423,7 @@
         message = '골목 집회에서 주민들의 이야기를 들었다. 예상 지지가 올랐다.';
         break;
       case 'join':
-        if (next.day < 21 || !Object.hasOwn(starts.occupations, next.career) || !['investigator', 'councillor'].includes(action.career) || (action.career === 'investigator' && next.barredInvestigator) || !(next.witness || (action.career === 'investigator' && next.policeRecommendation)) || !spend()) break;
+        if (next.day < 21 || !Object.hasOwn(starts.occupations, next.career) || !['investigator', 'councillor'].includes(action.career) || (action.career === 'investigator' && next.barredInvestigator) || !(next.witness || (action.career === 'investigator' && next.policeRecommendation) || (action.career === 'councillor' && next.councilRecommendation)) || !spend()) break;
         next.career = action.career;
         next.caseStage = action.career === 'investigator' ? 'open' : next.caseStage;
         message = action.career === 'investigator' ? '민석의 추천으로 항만 수사관이 됐다. 임명은 선거 당선과 다른 경로의 권한을 열었다.' : '지안의 추천으로 주민 협의회 위원에 위촉됐다. 안건을 제출하고 공개 청문회를 소집할 수 있다.';
@@ -489,7 +489,7 @@
         if (next.hearing && next.hearing.day > next.day) target = Math.min(target, next.hearing.day);
         while (next.day < target) {
           next.day += 1;
-          next.cash -= 3 + (next.day % 7 === 0 ? 12 : 0);
+          next.cash -= 3 + (next.jobStory.livingExpense || 0) + (next.day % 7 === 0 ? 12 : 0);
           next.energy = Math.max(0, Math.min(100, next.energy + 20) - (next.cash < 0 ? 10 : 0));
           const due = next.followUps.filter(item => item.day <= next.day);
           next.followUps = next.followUps.filter(item => item.day > next.day);
