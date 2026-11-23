@@ -905,3 +905,86 @@ console.log('협약 수락/역제안/거절·신뢰·자격·재협상 차단·�
  assert.deepEqual(chamber.council.history[1],recordedChamber);
  console.log('의회 11석·최대잔여 배분·무소속 정부·협약/노선 찬반·부결 무지출·다음 날 재상정·수정 협상·8석 가결·공금 추가 비용·중복 집행 차단·개표 저장·임기 교체·구형 저장 통과');
 }
+
+{
+ const Council=require('../council');
+ function memberFixture(){
+  const s={...fresh(),day:21,actions:2,career:'mayor',cash:500,treasury:100,support:40,flooded:18};
+  s.election={round:1,day:20,ran:true,won:true,winnerId:'player',playerName:s.name,totals:{player:34,sora:33,doyun:33},candidates:{sora:{name:'소라',platform:'housing',partyName:'생활노동연대'},doyun:{name:'도윤',platform:'trade',partyName:'도시경제당'}}};
+  s.parties.membership='civic';s.parties.registry.civic.members.player={name:s.name};s.parties.registry.civic.leader='player';s.parties.standing=80;
+  s.parties.registry.civic.nomination={round:1,id:'player'};s.politics.round=2;s.politics.nextDay=48;
+  s.pacts.trust.labor=20;s.pacts.agreements=[{id:'member-pact',party:'civic',partyName:'시민개혁당',target:'labor',targetName:'생활노동연대',round:1,policy:'security',status:'governing',dueDay:27}];
+  Council.seatElection(s,s.election);
+  for(const member of s.council.chamber.members){member.independence=25;member.relationship=45;member.district=0;}
+  return apply(s,{type:'councilSubmit',policy:'security'}).state;
+ }
+ function meet(s,member,choice){
+  s=apply(s,{type:'councilMeet',policy:'security',member}).state;
+  const event=s.eventQueue[0];assert(event.councilMeeting);
+  const replay=JSON.parse(JSON.stringify(s));
+  s=apply(s,{type:'eventChoice',eventId:event.id,choice}).state;
+  assert(s.eventQueue[0].resolved);
+  assert.deepEqual(apply(replay,{type:'eventChoice',eventId:event.id,choice}).state.council,s.council);
+  assert.equal(apply(s,{type:'eventChoice',eventId:event.id,choice}).state,s);
+  return apply(s,{type:'acknowledge'}).state;
+ }
+ let personal=memberFixture();
+ const government=personal.council.chamber.members.find(member=>member.group==='civic');
+ const outsider=personal.council.chamber.members.find(member=>member.group==='commerce');
+ government.independence=80;government.district=1;
+ outsider.independence=80;outsider.platform='security';
+ const bill=Council.billFor(personal,'security');
+ const preview=Council.preview(personal,bill);
+ assert.equal(preview.members.length,11);assert.equal(preview.yes,4);
+ assert(preview.members.find(member=>member.id===government.id).defected);
+ assert(preview.members.find(member=>member.id===outsider.id).defected);
+ assert.equal(preview.votes.find(group=>group.id==='civic').yesCount,3);
+ assert.equal(preview.votes.find(group=>group.id==='commerce').yesCount,1);
+ const noSpending=personal.treasury;
+ personal=meet(personal,government.id,'hearing');assert.equal(Council.cost(personal,'security',20),22);
+ assert.equal(personal.treasury,noSpending);assert.equal(Council.preview(personal,Council.billFor(personal,'security')).yes,5);
+ personal=apply(personal,{type:'advance'}).state;
+ const second=personal.council.chamber.members.find(member=>member.group==='commerce'&&member.id!==outsider.id);
+ personal=meet(personal,second.id,'hearing');assert.equal(Council.preview(personal,Council.billFor(personal,'security')).yes,6);
+ assert.equal(Council.cost(personal,'security',20),24);
+ assert.equal(apply(personal,{type:'councilMeet',policy:'security',member:second.id}).state,personal);
+ personal=apply(personal,{type:'councilVote',policy:'security'}).state;
+ assert.equal(Council.billFor(personal,'security').status,'passed');
+ const recorded=JSON.parse(JSON.stringify(Council.billFor(personal,'security').ballots[0]));
+ personal.eventQueue=[];personal=apply(personal,{type:'advance'}).state;
+ const funds=personal.treasury,opinion=personal.support;
+ personal=apply(personal,{type:'pactDeliver',policy:'security'}).state;
+ assert.equal(personal.treasury,funds-24);assert.equal(personal.support,opinion+5);
+ personal.council.chamber.members[0].relationship=99;
+ assert.deepEqual(Council.billFor(personal,'security').ballots[0],recorded);
+ assert.deepEqual(JSON.parse(JSON.stringify(personal)).council,personal.council);
+ let scandal=memberFixture();scandal.promise='broken';
+ const critic=scandal.council.chamber.members.find(member=>member.group==='civic');critic.independence=80;
+ assert(!Council.memberIntent(scandal,Council.billFor(scandal,'security'),critic).yes);
+ critic.relationship=60;assert(Council.memberIntent(scandal,Council.billFor(scandal,'security'),critic).yes);
+ let explained=memberFixture();const persuadable=explained.council.chamber.members.find(member=>member.group==='commerce');
+ persuadable.platform='security';const relation=persuadable.relationship;
+ explained=meet(explained,persuadable.id,'explain');
+ assert(Council.memberIntent(explained,Council.billFor(explained,'security'),explained.council.chamber.members.find(member=>member.id===persuadable.id)).yes);
+ assert.equal(Council.cost(explained,'security',20),20);
+ assert.equal(explained.council.chamber.members.find(member=>member.id===persuadable.id).relationship,relation+3);
+ let refused=memberFixture();const rebel=refused.council.chamber.members.find(member=>member.group==='civic');rebel.independence=80;rebel.district=1;
+ refused=meet(refused,rebel.id,'explain');assert(!Council.memberIntent(refused,Council.billFor(refused,'security'),refused.council.chamber.members.find(member=>member.id===rebel.id)).yes);
+ refused.actions=2;assert.equal(apply(refused,{type:'councilMeet',policy:'security',member:rebel.id}).state,refused);
+ let listened=memberFixture();const listener=listened.council.chamber.members.find(member=>member.group==='commerce');
+ listened=meet(listened,listener.id,'listen');assert.equal(listened.council.chamber.members.find(member=>member.id===listener.id).relationship,53);
+ assert.equal(Council.cost(listened,'security',20),20);
+ let stale=memberFixture();const staleMember=stale.council.chamber.members.find(member=>member.group==='commerce');
+ stale=apply(stale,{type:'councilMeet',policy:'security',member:staleMember.id}).state;
+ Council.billFor(stale,'security').status='rejected';const staleId=stale.eventQueue[0].id;
+ assert.equal(apply(stale,{type:'eventChoice',eventId:staleId,choice:'hearing'}).state,stale);
+ stale=apply(stale,{type:'eventChoice',eventId:staleId,choice:'listen'}).state;assert.equal(Council.cost(stale,'security',20),20);
+ const legacy=memberFixture();delete legacy.council.chamber.members;
+ Council.billFor(legacy,'security').ballots=[{day:20,yes:4,no:7,status:'rejected',votes:[]}];
+ const historical=JSON.parse(JSON.stringify(legacy.council.bills));
+ const restored=require('../campaign').normalize(legacy);
+ assert.equal(restored.council.chamber.members.length,11);assert(!legacy.council.chamber.members);
+ assert.deepEqual(restored.council.bills,historical);assert.deepEqual(require('../campaign').normalize(restored).council,restored.council);
+ assert.equal(new Set(restored.council.chamber.members.map(member=>member.name)).size,11);
+ console.log('의원 11명·개별 찬반 합산·여당 반란/야당 소신표·면담 3선택·설득 성공/실패·지역 조항 예산·6표 가결·중복 면담/효과 차단·낡은 면담 종료·표결 명부 보존·구형 의회 보완 통과');
+}

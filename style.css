@@ -43,3 +43,5 @@ dialog{color:var(--text);background:var(--surface);border:1px solid #ffffff16;bo
 .network-input{display:block;width:100%;padding:12px;background:#101a26;color:var(--text);border:1px solid #546574;border-radius:8px;margin:8px 0 16px;font:inherit}.card summary{min-height:44px;cursor:pointer;display:flex;align-items:center}
 
 .council-seats{display:grid;grid-template-columns:repeat(11,minmax(0,1fr));gap:4px;margin:16px 0}.council-seat{display:flex;align-items:center;justify-content:center;min-width:0;min-height:30px;background:#293747;color:#d0d8e2;border-radius:4px;font-size:9px;overflow:hidden}.council-seat.government{background:#235954;color:#b9fff0}
+
+.councillor{padding:12px 0;border-bottom:1px solid #293747}.councillor:last-child{border-bottom:0}.councillor h4{margin:8px 0;font-size:15px}

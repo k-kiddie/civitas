@@ -56,6 +56,7 @@
       result.followUps = [...result.followUps, { type: 'oversight', day: result.day + 3 }];
     }
     result.council={...council.fresh(),...state.council};
+    council.restore(result);
     result.pacts={...pacts.fresh(),...state.pacts};
     result.politics={...result.politics};
     politics.ensureField(result);
@@ -107,6 +108,7 @@
     return [{ speaker: event.id.includes('housing') ? '윤' : '소라', text: event.text }];
   }
   function eventReply(event, choice) {
+    if(event.councilMeeting)return council.meetingReply(event,choice);
     if(event.pactOffer)return pacts.reply(event,choice);
     if(event.partyDecision)return parties.decisionReply(choice);
     if(event.underworldRole || event.underworldReview)return underworld.reply(event,choice);
@@ -140,6 +142,7 @@
   }
   function eventChoices(state, event) {
     if (!event || event.resolved) return [];
+    if(event.councilMeeting)return council.meetingChoices(state,event);
     if(event.pactOffer)return pacts.choices(state,event);
     if(event.partyDecision)return parties.decisionChoices();
     if(event.underworldRole || event.underworldReview)return underworld.choices(state,event);
@@ -224,7 +227,9 @@
       const choice = eventChoices(next, event).find(item => item.id === action.choice);
       if (!event || event.id !== action.eventId || !choice || choice.disabled) return { state, message: '지금은 이 선택을 할 수 없다.' };
       let result = '';
-      if(event.pactOffer){
+      if(event.councilMeeting){
+        result=council.resolveMeeting(next,event,choice.id);
+      } else if(event.pactOffer){
         result=pacts.resolve(next,event,choice.id);
       } else if(event.partyDecision){
         result=parties.resolve(next,event,choice.id);
