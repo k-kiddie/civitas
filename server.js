@@ -11,6 +11,7 @@ const routes = new Map([
   ['/institutions.js',['institutions.js','text/javascript; charset=utf-8']],
   ['/agencies.js',['agencies.js','text/javascript; charset=utf-8']],
   ['/random-events.js',['random-events.js','text/javascript; charset=utf-8']],
+  ['/underworld.js',['underworld.js','text/javascript; charset=utf-8']],
   ['/starts.js',['starts.js','text/javascript; charset=utf-8']],
   ['/campaign.js',['campaign.js','text/javascript; charset=utf-8']],
   ['/game.js',['game.js','text/javascript; charset=utf-8']],

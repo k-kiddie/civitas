@@ -1,5 +1,6 @@
 'use strict';
 (function (root) {
+  const underworld = typeof module !== 'undefined' ? require('./underworld') : root.Underworld;
   const randomEvents = typeof module !== 'undefined' ? require('./random-events') : root.RandomEvents;
   const agencies = typeof module !== 'undefined' ? require('./agencies') : root.Agencies;
   const institutions = typeof module !== 'undefined' ? require('./institutions') : root.Institutions;
@@ -12,7 +13,7 @@
     none: { name: '공사를 보류한다', cost: 0, homes: 0, description: '돈을 쓰지 않는다. 장마 때 34가구가 침수된다.' }
   };
   function fresh() {
-    return { version: 3, day: 1, actions: 2, cash: 32, energy: 80, name: '시민', gender: 'unspecified', profileSet: false, place: 'harbor', startConfigured: false, background: 'worker', startingOccupation: 'worker',
+    return { version: 3, age:24, underworld:underworld.fresh(), day: 1, actions: 2, cash: 32, energy: 80, name: '시민', gender: 'unspecified', profileSet: false, place: 'harbor', startConfigured: false, background: 'worker', startingOccupation: 'worker',
       surveyed: false, testimony: false, funding: null, built: null, flooded: null,
       candidate: false, election: null, policy: null, support: 25, memories: [], journal: [],
       promise: null, notices: [], witness: false,
@@ -103,6 +104,7 @@
     return [{ speaker: event.id.includes('housing') ? '윤' : '소라', text: event.text }];
   }
   function eventReply(event, choice) {
+    if(event.underworldRole || event.underworldReview)return underworld.reply(event,choice);
     if (event.randomType) return randomEvents.reply(event,choice);
     if (event.institutionAudit) return institutions.auditReply(choice);
     if (event.recruitCareer || event.missionCareer) return careers.reply(event,choice);
@@ -133,6 +135,7 @@
   }
   function eventChoices(state, event) {
     if (!event || event.resolved) return [];
+    if(event.underworldRole || event.underworldReview)return underworld.choices(state,event);
     if (event.randomType) return randomEvents.choices(state,event);
     if (event.institutionAudit) return institutions.auditChoices(state);
     if (event.recruitCareer || event.missionCareer) return careers.choices(state,event);
@@ -177,6 +180,7 @@
       next.gender = action.gender;
       next.profileSet = true;
       next.startConfigured = true;
+      next.underworld.seed=Number.isInteger(action.seed)?(action.seed>>>0)||0x713a91:0x713a91;
       next.randomState.seed=Number.isInteger(action.seed)&&(action.seed>>>0)!==0?action.seed>>>0:0x61c1a5;
       next.background = action.background;
       next.startingOccupation = action.occupation;
@@ -206,7 +210,10 @@
       const choice = eventChoices(next, event).find(item => item.id === action.choice);
       if (!event || event.id !== action.eventId || !choice || choice.disabled) return { state, message: '지금은 이 선택을 할 수 없다.' };
       let result = '';
-      if (event.randomType) {
+      if(event.underworldRole || event.underworldReview){
+        result=underworld.resolve(next,event,choice.id);
+        underworld.review(next);
+      } else if (event.randomType) {
         result=randomEvents.resolve(next,event,choice.id);
         remember(next,event.randomPerson,result);
       } else if (event.institutionAudit) {
@@ -330,11 +337,19 @@
     }
     if (action.type === 'acknowledge') {
       next.eventQueue.shift();
+      underworld.review(next);
       return { state: next, message: '' };
     }
     const inHearing = next.hearing && next.hearing.day <= next.day;
     if (inHearing && !['question', 'evidence', 'verdict'].includes(action.type)) {
       return { state, message: '청문회가 진행 중이다. 증언을 듣고 표결 또는 합의를 선택하자.' };
+    }
+    const undergroundResult=underworld.act(next,action);
+    if(undergroundResult){
+      if(!undergroundResult.ok)return {state,message:undergroundResult.message};
+      record(next,undergroundResult.message);
+      institutions.checkAudit(next);
+      return {state:next,message:undergroundResult.message};
     }
     const reformResult=agencies.propose(next,action);
     if(reformResult) {
@@ -590,6 +605,10 @@
           const due = next.followUps.filter(item => item.day <= next.day);
           next.followUps = next.followUps.filter(item => item.day > next.day);
           for (const item of due) {
+            if(item.type==='underworld'){
+              if(next.underworld.role===item.role){next.eventQueue.push(underworld.encounter(item.role,next,true));record(next,'병행하는 활동의 첫 의뢰가 도착했다.');}
+              continue;
+            }
             if(item.type==='agencyReform') {
               const report=agencies.process(next,item);
               if(report){next.eventQueue.push(report);record(next,report.text);}
@@ -714,7 +733,7 @@
     careers.schedule(next);
     return { state: next, message };
   }
-  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices, eventDialogue, eventReply, starts, careers, institutions, randomEvents };
+  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices, eventDialogue, eventReply, starts, careers, institutions, randomEvents, underworld };
   if (typeof module !== 'undefined') module.exports = api;
   root.Campaign = api;
 })(globalThis);

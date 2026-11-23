@@ -525,3 +525,54 @@ const source=RandomEvents.templates.find(item=>item.id==='source');
 lowEnergy.eventQueue=[{id:'source-test',randomType:'source',randomChoices:source.choices,randomPerson:source.person}];
 assert.equal(apply(lowEnergy,{type:'eventChoice',eventId:'source-test',choice:'verify'}).state,lowEnergy);
 assert.equal(apply(lowEnergy,{type:'eventChoice',eventId:'source-test',choice:'decline'}).state.eventQueue[0].resolved.choice,'decline');
+const Underworld=require('../underworld');
+assert.equal(Object.keys(Underworld.catalog).length,26);
+for(const [id,role] of Object.entries(Underworld.catalog)){
+ for(const choice of ['careful','bold','quit']){
+  let state={...fresh(),day:8,cash:100,energy:100,career:'teacher',underworld:{...Underworld.fresh(),discovered:[id]},eventQueue:[Underworld.encounter(id,{day:8})]};
+  const act=action=>{state=apply(state,action).state};
+  act({type:'eventChoice',eventId:'under-offer-'+id,choice:'accept'});
+  assert.equal(state.career,'teacher');assert.equal(state.underworld.role,id);
+  act({type:'acknowledge'});act({type:'advance',to:'event'});
+  assert.equal(state.day,9);assert.equal(state.eventQueue[0].underworldMission,true);
+  const before=state.cash;act({type:'eventChoice',eventId:'under-mission-'+id,choice});
+  assert.equal(apply(state,{type:'eventChoice',eventId:'under-mission-'+id,choice}).state,state);
+  assert.equal(state.career,'teacher');
+  if(choice==='quit'){assert.equal(state.underworld.role,null);continue;}
+  assert.equal(state.underworld.missions[id],'complete');
+  assert.equal(state.cash-before,choice==='careful'?8:id==='sexWorker'?0:role.pay);
+  if(!role.crime)assert.equal(state.underworld.heat,0);
+  act({type:'acknowledge'});
+  act({type:'underworldWork'});
+  assert.equal(state.underworld.lastWork,state.day);
+  assert.equal(apply(state,{type:'underworldWork'}).state,state);
+  state=JSON.parse(JSON.stringify(state));assert(state.underworld.completed.includes(id));
+  act({type:'leaveUnderworld'});act({type:'revisitUnderworld',role:id});
+  act({type:'eventChoice',eventId:'under-offer-'+id,choice:'accept'});
+  assert.equal(state.followUps.filter(item=>item.type==='underworld').length,0);
+ }
+}
+let known={...fresh(),skills:{investigation:1},underworld:Underworld.fresh()};
+for(const circle of Object.keys(Underworld.circles)){
+ let state=apply(known,{type:'exploreUnderworld',circle}).state;
+ assert.equal(state.underworld.discovered.length,1);
+ assert.equal(Underworld.catalog[state.underworld.discovered[0]].circle,circle);
+ assert.equal(apply(state,{type:'exploreUnderworld',circle}).state,state);
+}
+let stopped={...fresh(),day:8,underworld:{...Underworld.fresh(),role:'smuggler',missions:{smuggler:'pending'}},followUps:[{type:'underworld',role:'smuggler',day:9}]};
+stopped=apply(stopped,{type:'leaveUnderworld'}).state;assert.equal(stopped.followUps.length,0);
+let reviewState={...fresh(),cash:0,underworld:{...Underworld.fresh(),role:'smuggler',heat:60}};
+Underworld.review(reviewState);assert(reviewState.eventQueue[0].underworldReview);
+assert.equal(Underworld.choices(reviewState,reviewState.eventQueue[0])[0].disabled,true);
+reviewState=apply(reviewState,{type:'eventChoice',eventId:reviewState.eventQueue[0].id,choice:'leave'}).state;assert.equal(reviewState.underworld.role,null);
+let privacy={...fresh(),underworld:{...Underworld.fresh(),role:'sexWorker',exposure:60}};
+Underworld.review(privacy);assert.equal(privacy.eventQueue[0].underworldReview,'privacy');
+privacy=apply(privacy,{type:'eventChoice',eventId:privacy.eventQueue[0].id,choice:'affirm'}).state;
+assert.equal(privacy.underworld.role,'sexWorker');assert.equal(privacy.underworld.heat,0);assert.equal(privacy.underworld.exposure,20);
+console.log('음지 26경로×3선택·정식 직업 병행·첫 의뢰·동의/거절·중복 수입 차단·재접속·연락망 탐색·수사/사생활 구분 통과');
+for(const id of Object.keys(Underworld.catalog)){
+ const state={...fresh(),career:'teacher',eventQueue:[Underworld.encounter(id,{day:1})]};
+ const declined=apply(state,{type:'eventChoice',eventId:'under-offer-'+id,choice:'decline'}).state;
+ assert.equal(declined.underworld.role,null);assert.equal(declined.career,'teacher');assert.equal(declined.followUps.length,0);
+}
+const notAdult={...fresh(),age:19};assert.equal(apply(notAdult,{type:'exploreUnderworld',circle:'nightlife'}).state,notAdult);
