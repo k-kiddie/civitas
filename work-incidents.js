@@ -14,7 +14,7 @@
     patrol:[{id:'crossing',title:'물길에 막힌 밤길',text:'침수된 길을 빼면 안내 경로가 달라진다. 주민에게 우회 시간을 묻거나 공개된 길만 확인하거나, 안내 구역을 줄여야 한다.',line:'집 앞과 통행 시간을 묻는다면 먼저 동의를 구해 줘요. 개인의 동선까지 공개하지 말아요.',labels:['주민의 동의를 구하며 우회 경로를 확인한다','공개된 길과 조명 상태만 직접 확인한다','확인된 일부 구역의 밤길만 맡는다']},
       {id:'doorsteps',title:'집 앞까지 들어가는 안내도',text:'편리한 밤길 안내를 만들려다 주민의 귀가 시간과 집 위치를 자세히 적게 됐다. 동의와 공개 범위를 결정해야 한다.',line:'안전한 길을 알려 주는 지도라면 좋겠어요. 누가 언제 집을 비우는지 드러내는 표가 되지는 않았으면 해요.',labels:['동의를 구하고 개인 동선을 뺀 경로를 확인한다','공개된 길과 조명 상태만 안내한다','이번에는 일부 공용 구역의 안내만 맡는다']}]
   };
-  function create({actor,templates,agreements,pool,money,relation,log}){
+  function create({actor,templates,agreements,pool,money,relation,log,terms}){
     function prepare(state,r){
       const previous=state.life.projects.runs.filter(p=>p.id!==r.id&&p.actor===r.actor&&p.type===r.type&&p.incident).at(-1);
       let seed=(state.randomState.seed^r.id)>>>0;for(const char of r.partner||r.actor)seed=Math.imul(seed^char.charCodeAt(0),16777619)>>>0;
@@ -52,9 +52,9 @@
     function choices(state,r){const c=data(r),p=state.life.people[r.partner];
       const all=plans(r).map((p,index)=>({id:'field:'+index,plan:p,title:c.labels[index]}));
       if(plans(r)[0].cash===4&&agreements.canSupport(state,r))all.push({id:'field:fund',plan:plan(r,'field:fund'),title:'공동 준비금을 써서 '+c.labels[0].replace(/^준비비를 들여 /,'').replace(/^개인 준비비로 /,'')});
-      return all.map(({id,plan:p,title})=>{const answer=reaction(r,p),sharedOkay=!p.peerCash||Boolean(state.life.people[r.partner]&&state.life.people[r.partner].wealth>=p.peerCash&&state.life.people[r.partner].relationship>=55&&r.incident.opinion.community>=50),fundOkay=!p.fund||agreements.canSupport(state,r)&&!answer.leaves;
+      return all.map(({id,plan:p,title})=>{const cap=p.cap?p.cap*terms(r).multiplier:terms(r).budget;const answer=reaction(r,p),sharedOkay=!p.peerCash||Boolean(state.life.people[r.partner]&&state.life.people[r.partner].wealth>=p.peerCash&&state.life.people[r.partner].relationship>=55&&r.incident.opinion.community>=50),fundOkay=!p.fund||agreements.canSupport(state,r)&&!answer.leaves;
         const peer=state.life.people[r.partner],refusal=!p.peerCash||sharedOkay?null:!peer?'비용을 나눌 동료가 없다.':peer.wealth<p.peerCash?peer.name+'의 개인 돈이 부족하다.':peer.relationship<55?peer.name+'은 비용을 나눌 만큼 신뢰하지 않는다.':peer.name+'은 추가 비용 분담에 동의하지 않는다.';
-        const detail='행동 1 · 기력 '+p.energy+(p.cash?' · 내 돈 '+p.cash:'')+(p.peerCash?' + 동료 돈 '+p.peerCash+' · 동료 동의 필요':'')+(p.fund?' · 공동 준비금 '+p.fund:'')+' · 현장 확인 +'+p.score+(p.delay?' · 다음 비교 '+p.delay+'일 연기':'')+(p.cap?' · 선정 보수 '+p.cap+' / 남은 '+(24-p.cap)+'은 의뢰인 반환':' · 선정 보수 24')+' · '+(refusal||answer.text);
+        const detail='행동 1 · 기력 '+p.energy+(p.cash?' · 내 돈 '+p.cash:'')+(p.peerCash?' + 동료 돈 '+p.peerCash+' · 동료 동의 필요':'')+(p.fund?' · 공동 준비금 '+p.fund:'')+' · 현장 확인 +'+p.score+(p.delay?' · 다음 비교 '+p.delay+'일 연기':'')+(p.cap?' · 선정 보수 '+cap+' / 남은 '+(terms(r).budget-cap)+'은 의뢰인 반환':' · 선정 보수 '+terms(r).budget)+' · '+(refusal||answer.text);
         return {id,title,detail,disabled:state.actions<1||state.energy<p.energy||((p.cash||0)>0&&state.cash<p.cash)||!sharedOkay||!fundOkay};});
     }
     function resolve(state,r,id){
@@ -62,7 +62,7 @@
       const entry=r.choices.at(-1);entry.cash=p.cash||0;entry.personCash=p.peerCash||0;entry.fund=p.fund||0;
       state.actions--;state.energy-=p.energy;money(state,actor(state),-(p.cash||0));if(p.peerCash)money(state,peer,-p.peerCash);
       if(p.fund)agreements.support(state,r,'현장 의뢰: '+data(r).title);
-      r.incident.choice=id;r.incident.selectedDay=state.day;r.incident.cost={actor:p.cash||0,person:p.peerCash||0,fund:p.fund||0};r.incident.effect={score:p.score,cap:p.cap||24,delay:p.delay||0};r.incident.reaction=answer.text;r.awardCap=p.cap||24;
+      r.incident.choice=id;r.incident.selectedDay=state.day;r.incident.cost={actor:p.cash||0,person:p.peerCash||0,fund:p.fund||0};r.incident.effect={score:p.score,cap:p.cap?p.cap*terms(r).multiplier:terms(r).budget,delay:p.delay||0};r.incident.reaction=answer.text;r.awardCap=p.cap?p.cap*terms(r).multiplier:terms(r).budget;
       if(peer&&answer.delta)relation(state,r,peer,answer.delta,answer.text);
       if(answer.leaves){const settlement=agreements.depart(state,r,answer.text);if(settlement)r.incident.reaction+=' '+settlement;r.formerPartner=peer;r.partner=null;r.partnerScore=0;r.agreement=null;state.life.people[peer].workLinks[r.actor].lastOutcome='steppedAway';}
       r.stage='contest';r.dueDay=Math.max(state.day+1,r.contestDay+(p.delay||0));log(state,r,data(r).title+' · '+data(r).labels[id==='field:fund'?0:Number(id.slice(6))]+' · '+answer.text);

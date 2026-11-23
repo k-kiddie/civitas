@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js",
-    "test": "node scripts/check-playthrough.js && node scripts/check-life.js && node scripts/check-family.js && node scripts/check-succession.js && node scripts/check-society.js && node scripts/check-long-life.js && node scripts/check-chronicles.js && node scripts/check-career-echoes.js && node scripts/check-work-projects.js && node scripts/check-work-agreements.js && node scripts/check-work-incidents.js"
+    "test": "node scripts/check-playthrough.js && node scripts/check-life.js && node scripts/check-family.js && node scripts/check-succession.js && node scripts/check-society.js && node scripts/check-long-life.js && node scripts/check-chronicles.js && node scripts/check-career-echoes.js && node scripts/check-work-projects.js && node scripts/check-work-agreements.js && node scripts/check-work-incidents.js && node scripts/check-work-careers.js"
   },
   "engines": {
     "node": ">=18"
