@@ -672,7 +672,45 @@ for(const decision of ['accept','independent']){
  assert.equal(nomination.candidate,decision==='independent');assert.equal(nomination.parties.membership,decision==='accept'?'civic':null);
 }
 let leadership=apply({...fresh(),cash:100},{type:'partyJoin',party:'labor'}).state;leadership.parties.standing=60;
-leadership=apply(leadership,{type:'partyLeadership'}).state;assert.equal(leadership.parties.registry.labor.leader,'player');
+const leadershipBefore=JSON.parse(JSON.stringify(leadership));
+leadership=apply(leadership,{type:'partyLeadership'}).state;
+assert.equal(leadership.parties.registry.labor.leader,'sora'); // 60 is eligibility, not an automatic victory.
+const lostBallot=leadership.parties.ballots[0];
+assert.equal(lostBallot.votes.length,6);
+assert.equal(Object.values(lostBallot.totals).reduce((sum,count)=>sum+count,0),6);
+assert(lostBallot.votes.every(vote=>vote.reasons.length&&lostBallot.candidates[vote.choice]));
+assert.deepEqual(apply(leadershipBefore,{type:'partyLeadership'}).state.parties.ballots[0],lostBallot);
+leadership=apply(leadership,{type:'acknowledge'}).state;
+leadership.actions=2;leadership.parties.standing=100;
+assert.equal(apply(leadership,{type:'partyLeadership'}).state,leadership);
+leadership.parties.membership=null;delete leadership.parties.registry.labor.members.player;
+leadership=apply(leadership,{type:'partyJoin',party:'labor'}).state;leadership.parties.standing=100;
+assert.equal(apply(leadership,{type:'partyLeadership'}).state,leadership); // Rejoining cannot reroll.
+leadership.politics.round++;leadership.actions=2;
+leadership=apply(leadership,{type:'partyLeadership'}).state;
+assert.equal(leadership.parties.registry.labor.leader,'player');
+assert.equal(leadership.parties.ballots.length,2);
+assert.deepEqual(JSON.parse(JSON.stringify(leadership)).parties.ballots,leadership.parties.ballots);
+// A previously off-ballot party member can win nomination and really enter the public poll.
+let outsider=apply({...fresh(),cash:100},{type:'partyJoin',party:'civic'}).state;
+outsider.candidate=true;outsider.parties.registry.civic.leader='seoyun';
+outsider=apply(outsider,{type:'partyNominate'}).state;
+assert.equal(outsider.parties.registry.civic.nomination.id,'seoyun');
+assert(Politics.pool(outsider).seoyun);
+assert.equal(Politics.result(outsider).candidates.seoyun.partyName,'시민개혁당');
+const alreadyNominated={...outsider,actions:2};assert.equal(apply(alreadyNominated,{type:'partyNominate'}).state,alreadyNominated);
+const archived=JSON.parse(JSON.stringify(outsider.parties.ballots[0]));
+outsider.name='바뀐 이름';outsider.politics.round++;
+assert(!Politics.pool(outsider).seoyun);assert.deepEqual(outsider.parties.ballots[0],archived);
+const platformVotes={};
+for(const platform of ['housing','transparency']){
+ let aligned=apply({...fresh(),cash:100},{type:'partyJoin',party:'civic'}).state;
+ aligned.parties.standing=80;aligned.politics.platform=platform;
+ aligned=apply(aligned,{type:'partyLeadership'}).state;
+ platformVotes[platform]=aligned.parties.ballots[0].totals.player;
+}
+assert(platformVotes.transparency>platformVotes.housing);
+console.log('개별 경선 표수 보존·표별 이유·조건 충족 후 패배·활동 후 승리·재가입 재추첨 차단·다음 회차 재도전·명부 밖 당원 공천·저장 기록 통과');
 let civicGroup=apply({...fresh(),cash:100},{type:'foundNetwork',kind:'public',name:'시민 발기 모임'}).state;assert(civicGroup.network);assert.equal(civicGroup.career,'worker');
 const rebel={...fresh(),day:13,network:{name:'모임',members:[{id:'planner',loyalty:10,competence:80}]},institution:{...institutions.fresh(),scrutiny:60}};
 Politics.tick(rebel);assert(Object.keys(rebel.parties.registry).some(id=>id.startsWith('breakaway-')));

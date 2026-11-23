@@ -6,7 +6,7 @@
     labor:{name:'생활노동연대',platform:'housing',leader:'sora',funds:30,members:{sora:{name:'소라'},dasol:{name:'다솔'}},alliances:[],nomination:null},
     commerce:{name:'도시경제당',platform:'trade',leader:'doyun',funds:40,members:{doyun:{name:'도윤'}},alliances:[],nomination:null},
     civic:{name:'시민개혁당',platform:'transparency',leader:'jian',funds:25,members:{jian:{name:'지안'},seoyun:{name:'서윤'}},alliances:[],nomination:null}
-  },membership:null,standing:0,lastActivity:0,nextId:1,history:[]};}
+  },membership:null,standing:0,lastActivity:0,nextId:1,history:[],ballots:[]};}
   function affiliation(state,id){
     if(id==='player')return state.parties.membership;
     return Object.keys(state.parties.registry).find(key=>state.parties.registry[key].members[id])||null;
@@ -40,6 +40,61 @@
         delete state.parties.registry[id];
       }
     }
+  }
+  const localPreferences=['trade','housing','transparency'];
+  const localNames=['항구','어촌','언덕'];
+  const memberPreferences={planner:'transparency',accountant:'transparency',personnel:'housing',officer:'security'};
+  function profile(state,id,party,field){
+    if(id==='player')return {name:state.name,platform:state.politics.platform,base:[state.support,state.support,state.support]};
+    if(field[id])return field[id];
+    const networkId=id.replace('network-','');
+    return {name:party.members[id].name,platform:memberPreferences[networkId]||party.platform,
+      base:[28,28,28],pledge:positions[memberPreferences[networkId]||party.platform]+' 지역 의제',occupation:'정당 활동가'};
+  }
+  function contested(state,partyId,kind){
+    return (state.parties.ballots||[]).some(result=>result.partyId===partyId&&result.kind===kind&&result.round===state.politics.round);
+  }
+  function ballot(state,partyId,kind,field){
+    const party=state.parties.registry[partyId];
+    const people=Object.fromEntries(Object.keys(party.members).map(id=>[id,profile(state,id,party,field)]));
+    const voters=Object.keys(people).map((id,index)=>({id,name:people[id].name,platform:people[id].platform,district:index%3}));
+    for(let index=0;index<3;index++)voters.push({id:'delegate-'+index,name:localNames[index]+' 지역 대표',platform:localPreferences[index],district:index});
+    const candidateIds=Object.keys(people);
+    const votes=[];const totals=Object.fromEntries(Object.keys(people).map(id=>[id,0]));
+    for(const voter of voters){
+      const ranked=Object.entries(people).map(([id,person])=>{
+        const network=state.network?.members.find(member=>'network-'+member.id===voter.id);
+        const factors=[
+          ['당내 활동 기반',id==='player'?state.parties.standing*0.65:31],
+          ['주민 지지와 지역 활동',id==='player'?state.support*0.1:0],
+          ['노선 일치',person.platform===voter.platform?20:0],
+          ['지역 기반',person.base[voter.district]*0.25],
+          ['공개 선거 활동',(state.politics.activity[id]||0)*3],
+          ['현 지도부 신뢰',id===party.leader?12:0],
+          ['자기 후보 지지',id===voter.id?35:0],
+          ['동료와 쌓은 신뢰',id==='player'&&network?network.loyalty*0.15:0]
+        ];
+        return {id,value:factors.reduce((sum,[,value])=>sum+value,0),
+          reasons:factors.filter(([,value])=>value>0).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([label])=>label)};
+      }).sort((a,b)=>b.value-a.value||Number(b.id===party.leader)-Number(a.id===party.leader)||candidateIds.indexOf(a.id)-candidateIds.indexOf(b.id));
+      const choice=ranked[0];totals[choice.id]++;
+      votes.push({voter:voter.id,name:voter.name,choice:choice.id,reasons:choice.reasons});
+    }
+    const order=Object.keys(people).sort((a,b)=>totals[b]-totals[a]||Number(b===party.leader)-Number(a===party.leader)||candidateIds.indexOf(a)-candidateIds.indexOf(b));
+    const result={partyId,partyName:party.name,kind,round:state.politics.round,day:state.day,
+      winner:order[0],candidates:people,totals,votes,tied:totals[order[0]]===totals[order[1]]};
+    state.parties.ballots=state.parties.ballots||[];state.parties.ballots.unshift(result);
+    return result;
+  }
+  function report(state,result,decision){
+    const title=result.kind==='leadership'?'당대표 경선 결과':'공천 경선 결과';
+    const summary=Object.entries(result.totals).map(([id,count])=>result.candidates[id].name+' '+count+'표').join(' · ');
+    state.eventQueue.push({id:'party-ballot-'+result.partyId+'-'+result.kind+'-'+result.round,
+      day:state.day,scene:'hearing',partyBallot:true,title:decision?'당은 다른 후보를 택했다':title,
+      text:summary,destination:'power',...(decision?{partyDecision:result.partyId}:{}),
+      dialogue:[{speaker:'당 선거관리위원',text:result.partyName+'의 '+title+'입니다. '+summary+'. '+result.candidates[result.winner].name+' 후보가 선출됐습니다.'},
+        {speaker:'당 선거관리위원',text:'주요 당원과 항구·어촌·언덕 대표가 각각 한 표씩 행사했습니다. 최다 득표자를 선출하며, 동률이면 현 대표 우선, 그다음 후보 명부 순으로 결정합니다. 표별 선택 이유는 정당 화면에서 확인할 수 있습니다.'},
+        ...(decision?[{speaker:'당 선거관리위원',text:'당 후보를 지지하고 출마를 철회하시겠습니까, 탈당해 무소속 출마를 이어가시겠습니까?'}]:[])]});
   }
   function act(state,action,field){
     if(!['partyJoin','partyLeave','partyOrganize','partyFound','partySplit','partyMerge','partyDissolve','partyAlliance','partyLeadership','partyNominate'].includes(action.type))return null;
@@ -80,19 +135,20 @@
       state.energy-=10;data.lastActivity=state.day;data.standing=Math.min(100,data.standing+6);own.funds+=2;state.support=Math.min(100,state.support+2);
       text='지역 당원 모임을 열었다. 당내 기반 +6 · 공개 소액 후원금 2가 당 재정에 들어왔다.';
     }else if(action.type==='partyLeadership'){
-      if(own.leader==='player'||data.standing<60)return fail('당대표 경선에는 당내 기반 60이 필요하다.');
-      own.leader='player';text='당대표 경선에서 당원들의 지지를 얻어 대표로 선출됐다.';
+      if(own.leader==='player'||data.standing<40||contested(state,data.membership,'leadership'))return fail('당내 기반 40이 필요하며 같은 회차에는 다시 도전할 수 없다.');
+      const result=ballot(state,data.membership,'leadership',field);
+      own.leader=result.winner;report(state,result,false);
+      text=result.candidates[result.winner].name+' 후보가 당대표로 선출됐다. 개별 투표와 선택 이유를 경선 기록에 남겼다.';
     }else if(action.type==='partyNominate'){
-      if(!state.candidate||own.nomination?.round===state.politics.round)return fail('후보 등록과 이번 회차 공천 여부를 확인하자.');
-      const rival=nominee(state,data.membership,field);
-      const rivalScore=rival&&field[rival]?score([rival,field[rival]],own):45;
-      const playerScore=data.standing+(state.politics.platform===own.platform?15:0);
-      if(playerScore>=rivalScore){own.nomination={round:state.politics.round,id:'player'};text=own.name+'의 공천을 받았다. 당 조직과 연대의 지원이 득표에 반영된다.';}
-      else{
-        own.nomination={round:state.politics.round,id:rival};
-        state.eventQueue.push({id:'nomination-'+state.politics.round,day:state.day,scene:'hearing',title:'당은 다른 후보를 택했다',text:'공천 결과를 받아들이거나 탈당해 무소속 출마를 이어갈 수 있다.',destination:'power',partyDecision:data.membership,dialogue:[{speaker:'당 선거관리위원',text:own.name+'의 공천은 '+(field[rival]?.name||'다른 후보')+'에게 돌아갔습니다. 어떻게 하시겠습니까?'}]});
-        text='공천 경선에서 패했다. 사건창에서 다음 행동을 고르자.';
+      if(!state.candidate||own.nomination?.round===state.politics.round||contested(state,data.membership,'nomination'))return fail('후보 등록과 이번 회차 공천 여부를 확인하자.');
+      const result=ballot(state,data.membership,'nomination',field);
+      own.nomination={round:state.politics.round,id:result.winner};
+      if(result.winner!=='player'){
+        state.politics.partyCandidates=state.politics.partyCandidates||{};
+        state.politics.partyCandidates[result.winner]={...result.candidates[result.winner],round:state.politics.round};
       }
+      report(state,result,result.winner!=='player');
+      text=result.winner==='player'?own.name+'의 공천을 받았다. 당 조직과 연대의 지원이 득표에 반영된다.':'공천 경선에서 패했다. 사건창에서 다음 행동을 고르자.';
     }else{
       if(own.leader!=='player')return fail('당대표 권한이 필요하다.');
       const target=Object.hasOwn(data.registry,action.party)?data.registry[action.party]:null;
@@ -144,7 +200,7 @@
       }
     }
   }
-  const api={fresh,positions,affiliation,founders,nominee,bonus,ballotLabel,act,decisionChoices,decisionReply,resolve,registerIndependent,settleElection};
+  const api={fresh,positions,contested,affiliation,founders,nominee,bonus,ballotLabel,act,decisionChoices,decisionReply,resolve,registerIndependent,settleElection};
   if(typeof module!=='undefined')module.exports=api;
   root.Parties=api;
 })(globalThis);

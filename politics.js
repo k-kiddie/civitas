@@ -47,6 +47,7 @@
     const field={...(state.politics.fieldRound===state.politics.round?state.politics.field:candidates)};
     for(const [id,person] of Object.entries(challengers))if(person.eligible(state))field[id]=profileOf(person);
     for(const person of Object.values(state.politics.independents||{}))field[person.id]=person;
+    for(const [id,person] of Object.entries(state.politics.partyCandidates||{}))if(person.round===state.politics.round)field[id]=person;
     return field;
   }
   function preferences(id){return {planner:['transparency','jian'],accountant:['transparency','jian'],personnel:['housing','sora'],officer:['security','doyun']}[id]||['housing','sora'];}
