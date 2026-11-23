@@ -54,7 +54,7 @@ if ! id civitas >/dev/null 2>&1; then
 fi
 release="/opt/civitas/releases/$(date -u +%Y%m%d%H%M%S)-$$"
 install -d -m 755 "$release"
-for file in index.html style.css game.js campaign.js starts.js job-stories.js careers.js institutions.js agencies.js random-events.js underworld.js politics.js parties.js council.js pacts.js family.js succession.js society.js career-echoes.js chronicles.js life.js server.js; do
+for file in index.html style.css game.js campaign.js starts.js job-stories.js careers.js institutions.js agencies.js random-events.js underworld.js politics.js parties.js council.js pacts.js family.js succession.js society.js career-echoes.js work-projects.js chronicles.js life.js server.js; do
   install -m 644 "$source_dir/$file" "$release/$file"
 done
 install -d -m 755 "$release/assets/events"
