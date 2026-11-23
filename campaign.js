@@ -1,5 +1,6 @@
 'use strict';
 (function (root) {
+  const pacts = typeof module !== 'undefined' ? require('./pacts') : root.Pacts;
   const parties = typeof module !== 'undefined' ? require('./parties') : root.Parties;
   const politics = typeof module !== 'undefined' ? require('./politics') : root.Politics;
   const underworld = typeof module !== 'undefined' ? require('./underworld') : root.Underworld;
@@ -17,7 +18,7 @@
   function fresh() {
     return { version: 3, age:null, ageChosen:false, underworld:underworld.fresh(), day: 1, actions: 2, cash: 32, energy: 80, name: '시민', gender: 'unspecified', profileSet: false, place: 'harbor', startConfigured: false, background: 'worker', startingOccupation: 'worker',
       surveyed: false, testimony: false, funding: null, built: null, flooded: null,
-      parties:parties.fresh(), politics:politics.fresh(), candidate: false, election: null, policy: null, support: 25, memories: [], journal: [],
+      pacts:pacts.fresh(), parties:parties.fresh(), politics:politics.fresh(), candidate: false, election: null, policy: null, support: 25, memories: [], journal: [],
       promise: null, notices: [], witness: false,
       underReview: false, barredInvestigator: false, policeRecommendation: false, councilRecommendation: false,
       agencies: agencies.initial(), unassignedOfficials: 30, agencyProposal: null, agencyHistory: [], nextAgencyProposal: 1,
@@ -53,6 +54,7 @@
     if (result.caseStage === 'sealed' && !result.underReview && !result.followUps.some(item => item.type === 'oversight')) {
       result.followUps = [...result.followUps, { type: 'oversight', day: result.day + 3 }];
     }
+    result.pacts={...pacts.fresh(),...state.pacts};
     result.politics={...result.politics};
     politics.ensureField(result);
     return result;
@@ -103,6 +105,7 @@
     return [{ speaker: event.id.includes('housing') ? '윤' : '소라', text: event.text }];
   }
   function eventReply(event, choice) {
+    if(event.pactOffer)return pacts.reply(event,choice);
     if(event.partyDecision)return parties.decisionReply(choice);
     if(event.underworldRole || event.underworldReview)return underworld.reply(event,choice);
     if (event.randomType) return randomEvents.reply(event,choice);
@@ -135,6 +138,7 @@
   }
   function eventChoices(state, event) {
     if (!event || event.resolved) return [];
+    if(event.pactOffer)return pacts.choices(state,event);
     if(event.partyDecision)return parties.decisionChoices();
     if(event.underworldRole || event.underworldReview)return underworld.choices(state,event);
     if (event.randomType) return randomEvents.choices(state,event);
@@ -218,7 +222,9 @@
       const choice = eventChoices(next, event).find(item => item.id === action.choice);
       if (!event || event.id !== action.eventId || !choice || choice.disabled) return { state, message: '지금은 이 선택을 할 수 없다.' };
       let result = '';
-      if(event.partyDecision){
+      if(event.pactOffer){
+        result=pacts.resolve(next,event,choice.id);
+      } else if(event.partyDecision){
         result=parties.resolve(next,event,choice.id);
       } else if(event.underworldRole || event.underworldReview){
         result=underworld.resolve(next,event,choice.id);
@@ -354,9 +360,16 @@
     if (inHearing && !['question', 'evidence', 'verdict'].includes(action.type)) {
       return { state, message: '청문회가 진행 중이다. 증언을 듣고 표결 또는 합의를 선택하자.' };
     }
+    const pactResult=pacts.act(next,action);
+    if(pactResult){
+      if(!pactResult.ok)return {state,message:pactResult.message};
+      record(next,pactResult.message);
+      return {state:next,message:pactResult.message};
+    }
     const partyResult=parties.act(next,action,politics.pool(next));
     if(partyResult){
       if(!partyResult.ok)return {state,message:partyResult.message};
+      pacts.tick(next);
       record(next,partyResult.message);
       return {state:next,message:partyResult.message};
     }
@@ -711,7 +724,8 @@
             }
           }
           if (next.day > 20 && next.day % 7 === 0) {
-            next.treasury += 10;
+            next.treasury += 10+pacts.weeklyRevenue(next);
+            if(pacts.weeklyRevenue(next))record(next,'교역 지원 사업으로 공적 세수 4크라운이 추가로 들어왔다.');
             if (['mayor','investigator','councillor','official','soldier','defenseMinister'].includes(next.career) && !next.underReview) {
               next.cash += 18;
               record(next, '주급 18크라운을 받았다. 시 재정에는 세수 10크라운이 들어왔다.');
@@ -729,9 +743,13 @@
             record(next, '지안이 계약 재협상에 필요한 절차를 안내했다.');
           }
           for(const update of politics.tick(next))record(next,update);
+          const reportsBefore=next.eventQueue.length;
+          pacts.tick(next);
+          if(next.eventQueue.length>reportsBefore)target=next.day;
           if (next.day === next.politics.nextDay) {
             next.election = electionResult(next);
             parties.settleElection(next,next.election);
+            pacts.settleElection(next,next.election);
             if(next.election.won){
               if(next.career!=='mayor')next.politics.returnCareer=starts.occupations[next.career]?next.career:'worker';
               next.career='mayor';next.officeResigned=false;
@@ -759,11 +777,12 @@
       }
     }
     if (!message) return { state, message: '지금은 이 행동을 할 수 없다. 비용, 기력, 일정 조건을 확인하자.' };
+    pacts.tick(next);
     record(next, message);
     careers.schedule(next);
     return { state: next, message };
   }
-  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices, eventDialogue, eventReply, starts, careers, institutions, randomEvents, underworld, politics, parties };
+  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices, eventDialogue, eventReply, starts, careers, institutions, randomEvents, underworld, politics, parties, pacts };
   if (typeof module !== 'undefined') module.exports = api;
   root.Campaign = api;
 })(globalThis);

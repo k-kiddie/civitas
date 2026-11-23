@@ -716,3 +716,105 @@ const rebel={...fresh(),day:13,network:{name:'모임',members:[{id:'planner',loy
 Politics.tick(rebel);assert(Object.keys(rebel.parties.registry).some(id=>id.startsWith('breakaway-')));
 assert.equal(JSON.parse(JSON.stringify(partyState)).parties.membership,'civic');
 console.log('창당·가입·활동·공천 수락/탈당·당대표·분당·합당·해산 자금 보존·선거연대·일반 시민 발기모임·NPC 신당 통과');
+
+// Public policy contracts: negotiate before an election, deliver from the public purse after it.
+{
+const Pacts=require('../pacts');
+function pactCandidate(){
+ const state={...fresh(),day:19,actions:2,cash:500,treasury:100,support:95,candidate:true,flooded:18,built:'short',residents:{harbor:48,village:8,hill:12}};
+ state.parties.membership='civic';state.parties.standing=80;
+ Object.assign(state.parties.registry.civic,{leader:'player',nomination:{round:1,id:'player'}});
+ state.parties.registry.civic.members.player={name:state.name};
+ state.politics.platform='transparency';
+ return state;
+}
+function signPact(state,target,choice='accept'){
+ state=apply(state,{type:'pactOffer',party:target}).state;
+ const event=state.eventQueue[0];assert(event.pactOffer);
+ const before=JSON.parse(JSON.stringify(state));
+ state=apply(state,{type:'eventChoice',eventId:event.id,choice}).state;
+ assert(state.eventQueue[0].resolved);
+ assert.equal(apply(state,{type:'eventChoice',eventId:event.id,choice}).state,state);
+ // Replaying the same saved negotiation always yields the same terms.
+ assert.deepEqual(apply(before,{type:'eventChoice',eventId:event.id,choice}).state.pacts,state.pacts);
+ return apply(state,{type:'acknowledge'}).state;
+}
+function winPactElection(state){
+ state=apply(state,{type:'advance'}).state;assert(state.election.won);assert.equal(state.pacts.agreements[0].status,'governing');
+ assert.equal(state.pacts.agreements[0].dueDay,27);
+ state.eventQueue=[];state=apply(state,{type:'advance'}).state;
+ return state;
+}
+let contracted=pactCandidate();const supportBeforePact=Politics.result(contracted).totals.player;
+contracted=signPact(contracted,'labor');assert.equal(Pacts.electionBonus(contracted),2);
+assert(Politics.result(contracted).totals.player>supportBeforePact);
+assert.equal(apply(contracted,{type:'pactOffer',party:'labor'}).state,contracted);
+const signedCopy=JSON.parse(JSON.stringify(contracted.pacts));
+contracted=winPactElection(contracted);
+const publicFunds=contracted.treasury,privateFunds=contracted.cash,partyFunds=contracted.parties.registry.civic.funds;
+let poorTreasury={...contracted,treasury:0};assert.equal(apply(poorTreasury,{type:'pactDeliver',policy:'housing'}).state,poorTreasury);
+contracted=apply(contracted,{type:'policy',policy:'housing'}).state;
+assert.equal(contracted.policy,'housing');assert.equal(contracted.treasury,publicFunds-20);
+assert.equal(contracted.cash,privateFunds);assert.equal(contracted.parties.registry.civic.funds,partyFunds);
+assert.equal(contracted.residents.village,16);assert.equal(contracted.pacts.agreements[0].status,'fulfilled');
+assert.equal(Pacts.trust(contracted,'labor'),65);
+assert.equal(apply(contracted,{type:'pactDeliver',policy:'housing'}).state,contracted);
+assert.equal(apply(contracted,{type:'policy',policy:'housing'}).state,contracted);
+assert.deepEqual(JSON.parse(JSON.stringify(contracted)).pacts,contracted.pacts);
+assert.equal(signedCopy.agreements[0].status,'signed');
+let declined=signPact(pactCandidate(),'labor','decline');assert.equal(declined.pacts.agreements.length,0);assert.equal(Pacts.electionBonus(declined),0);
+assert.equal(apply(declined,{type:'pactOffer',party:'labor'}).state,declined);
+let counter=signPact(pactCandidate(),'labor','counter');assert.equal(counter.pacts.agreements[0].policy,'transparency');
+counter=winPactElection(counter);counter=apply(counter,{type:'pactDeliver',policy:'transparency'}).state;assert(counter.witness);
+let lowStanding=pactCandidate();lowStanding.parties.standing=50;lowStanding=apply(lowStanding,{type:'pactOffer',party:'labor'}).state;
+assert.equal(apply(lowStanding,{type:'eventChoice',eventId:lowStanding.eventQueue[0].id,choice:'counter'}).state,lowStanding);
+let badTrust=pactCandidate();badTrust.pacts.trust.labor=20;assert.equal(apply(badTrust,{type:'pactOffer',party:'labor'}).state,badTrust);
+let repair=pactCandidate();repair.pacts.trust.labor=25;
+const meetingFunds=repair.parties.registry.civic.funds;
+repair=apply(repair,{type:'pactRepair',party:'labor'}).state;
+assert.equal(Pacts.trust(repair,'labor'),35);assert.equal(repair.parties.registry.civic.funds,meetingFunds-4);
+assert.equal(apply(repair,{type:'pactRepair',party:'labor'}).state,repair);
+assert(apply(repair,{type:'pactOffer',party:'labor'}).state.eventQueue[0].pactOffer);
+let nonLeader=pactCandidate();nonLeader.parties.registry.civic.leader='jian';assert.equal(apply(nonLeader,{type:'pactOffer',party:'labor'}).state,nonLeader);
+let lateOffer=apply(pactCandidate(),{type:'pactOffer',party:'labor'}).state;lateOffer.day=20;lateOffer.politics.round=2;lateOffer.politics.nextDay=48;
+assert.equal(apply(lateOffer,{type:'eventChoice',eventId:lateOffer.eventQueue[0].id,choice:'accept'}).state,lateOffer);
+let missed=winPactElection(signPact(pactCandidate(),'labor'));
+missed.day=27;missed.eventQueue=[];missed.support=50;
+const trustBeforeMiss=Pacts.trust(missed,'labor');
+missed=apply(missed,{type:'advance'}).state;
+assert.equal(missed.pacts.agreements[0].status,'broken');assert.equal(missed.support,42);assert.equal(Pacts.trust(missed,'labor'),trustBeforeMiss-25);
+const penaltyOnce=missed.support;Pacts.tick(missed);assert.equal(missed.support,penaltyOnce);
+let onDeadline=winPactElection(signPact(pactCandidate(),'labor'));onDeadline.day=27;
+onDeadline=apply(onDeadline,{type:'pactDeliver',policy:'housing'}).state;assert.equal(onDeadline.pacts.agreements[0].status,'fulfilled');
+let resigned=winPactElection(signPact(pactCandidate(),'labor'));
+resigned=apply(resigned,{type:'resignOffice'}).state;assert.equal(resigned.pacts.agreements[0].status,'broken');assert.equal(resigned.career,'worker');
+let withdrawn=winPactElection(signPact(pactCandidate(),'labor'));
+const withdrawnId=withdrawn.pacts.agreements[0].id;
+withdrawn=apply(withdrawn,{type:'pactBreak',pact:withdrawnId}).state;
+assert.equal(withdrawn.pacts.agreements[0].status,'broken');
+assert.equal(apply(withdrawn,{type:'pactBreak',pact:withdrawnId}).state,withdrawn);
+let mergedPact=winPactElection(signPact(pactCandidate(),'commerce'));
+mergedPact.parties.registry.labor.platform='transparency';
+mergedPact=apply(mergedPact,{type:'partyMerge',party:'labor'}).state;
+assert.equal(mergedPact.parties.membership,'labor');assert.equal(mergedPact.pacts.agreements[0].status,'broken');
+let dissolved=winPactElection(signPact(pactCandidate(),'labor'));const dissolutionSupport=dissolved.support;
+delete dissolved.parties.registry.labor;Pacts.tick(dissolved);assert.equal(dissolved.pacts.agreements[0].status,'annulled');assert.equal(dissolved.support,dissolutionSupport);
+let lost=signPact(pactCandidate(),'labor');lost.support=0;lost=apply(lost,{type:'advance'}).state;
+assert(!lost.election.won);assert.equal(lost.pacts.agreements[0].status,'expired');assert.equal(Pacts.trust(lost,'labor'),50);
+// One shared project fulfills two same-policy contracts, without paying or granting effects twice.
+let shared=signPact(pactCandidate(),'labor','counter');shared=signPact(shared,'commerce','counter');
+shared=winPactElection(shared);const beforeShared=shared.treasury;
+shared=apply(shared,{type:'pactDeliver',policy:'transparency'}).state;
+assert.equal(shared.treasury,beforeShared-16);assert(shared.pacts.agreements.every(pact=>pact.status==='fulfilled'));
+let trade=winPactElection(signPact(pactCandidate(),'commerce'));
+trade=apply(trade,{type:'pactDeliver',policy:'trade'}).state;assert.equal(Pacts.weeklyRevenue(trade),4);
+trade.eventQueue=[];trade.day=27;const tradeTreasury=trade.treasury;
+trade=apply(trade,{type:'advance'}).state;assert.equal(trade.treasury,tradeTreasury+14);
+trade.election={...trade.election,round:2};assert.equal(Pacts.weeklyRevenue(trade),0);
+let security=pactCandidate();security.parties.registry.commerce.platform='security';
+security=winPactElection(signPact(security,'commerce'));
+security=apply(security,{type:'pactDeliver',policy:'security'}).state;assert.equal(Pacts.districtBonus(security,2),6);assert.equal(Pacts.districtBonus(security,0),0);
+security.officeResigned=true;assert.equal(Pacts.districtBonus(security,2),0);
+const prePactSave=fresh();delete prePactSave.pacts;assert.deepEqual(require('../campaign').normalize(prePactSave).pacts,Pacts.fresh());
+console.log('협약 수락/역제안/거절·신뢰·자격·재협상 차단·득표 지원·당선 의무·낙선 종료·공금 분리·중복 집행 차단·기한/사임 파기·상대 소멸·공동 사업·임기 세수/지역 기반·구형 저장 통과');
+}

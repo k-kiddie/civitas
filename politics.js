@@ -1,5 +1,6 @@
 'use strict';
 (function(root){
+  const pacts=typeof module!=='undefined'?require('./pacts'):root.Pacts;
   const parties=typeof module!=='undefined'?require('./parties'):root.Parties;
   const candidates={
     sora:{name:'소라',platform:'housing',pledge:'이재민 주거와 배급 우선',base:[28,50,26]},
@@ -69,7 +70,7 @@
       const favored={housing:1,trade:0,transparency:2,security:2}[state.politics.platform];
       if(index===favored)strength+=6;
       const allies=Object.values(state.politics.endorsements).filter(value=>value==='player').length;
-      strength=Math.max(5,Math.min(95,strength+allies*2+parties.bonus(state,'player',field)));
+      strength=Math.max(5,Math.min(95,strength+allies*2+parties.bonus(state,'player',field)+pacts.electionBonus(state)+pacts.districtBonus(state,index)));
       const raw=Object.fromEntries(Object.entries(field).map(([id,npc])=>[id,npc.base[index]+parties.bonus(state,id,field)+(state.politics.activity[id]||0)*2+(id==='sora'&&index===1&&state.flooded>0?8:0)+(id==='jian'&&state.institution.scrutiny>=60?10:0)]));
       for(const endorsement of Object.values(state.politics.endorsements))if(raw[endorsement]!==undefined)raw[endorsement]+=3;
       const npcTotal=Object.values(raw).reduce((a,b)=>a+b,0);
