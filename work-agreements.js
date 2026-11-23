@@ -86,7 +86,8 @@
     function forProject(state,run){return own(state).find(a=>active(a)&&a.type===run.type&&a.person===run.partner)||null;}
     function attach(state,run){run.agreement=forProject(state,run)?.id||null;}
     function canSupport(state,run){const a=get(state,run.agreement);return Boolean(a&&a.person===run.partner&&a.type===run.type&&a.balance>=4&&pool(state,run.type).some(p=>p.id===a.person)&&willing(state,state.life.people[a.person]));}
-    function support(state,run){const a=get(state,run.agreement);if(!canSupport(state,run))return false;a.balance-=4;a.spent+=4;a.expenses.push({day:state.day,project:run.id,amount:4,text:'공동 검증'});log(state,a,'공동 준비금 4로 원본과 현장을 함께 확인했다. 잔액 '+a.balance);return true;}
+    function support(state,run,label='공동 검증'){const a=get(state,run.agreement);if(!canSupport(state,run))return false;a.balance-=4;a.spent+=4;a.expenses.push({day:state.day,project:run.id,amount:4,text:label});log(state,a,'공동 준비금 4 사용: '+label+' · 잔액 '+a.balance);return true;}
+    function depart(state,run,text){const a=get(state,run.agreement);if(a){close(state,a,'mutual',text+' 남은 준비금을 정산했다.');return a.result;}return null;}
     function record(state,run){
       const a=get(state,run.agreement);if(!a||a.projectIds.includes(run.id))return;
       if(run.blame){close(state,a,'broken','공동 제안의 실패 책임을 동료에게 떠넘겨 약속이 깨졌다.',-4);return;}
@@ -102,7 +103,7 @@
       const due=own(state).filter(a=>active(a)&&Math.max(a.dueDay,a.reviewDay||0)<=state.day&&!busy(state,a)).sort((a,b)=>a.dueDay-b.dueDay||a.id-b.id)[0];if(due)offer(state,due);
     }
     function blocked(state){return own(state).some(active)?'동료와 맺은 개인 약속의 준비금을 정산한 뒤 은퇴하자.':'';}
-    return {restore,own,get,shares,reason,availability,options,choices,reply,resolve,act,attach,canSupport,support,record,tick,blocked};
+    return {restore,own,get,shares,reason,availability,options,choices,reply,resolve,act,attach,canSupport,support,depart,record,tick,blocked};
   }
   const api={create};if(typeof module!=='undefined')module.exports=api;root.WorkAgreements=api;
 })(globalThis);
