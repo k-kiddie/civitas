@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const root = __dirname;
 const port = Math.max(1, Number(process.argv[process.argv.indexOf('--port') + 1]) || Number(process.env.PORT) || 8080);
+const BASE = '/civitas';
 const routes = new Map([
   ['/',['index.html','text/html; charset=utf-8']],
   ['/job-stories.js',['job-stories.js','text/javascript; charset=utf-8']],
@@ -37,6 +38,9 @@ for (const scene of ['opening-farm', 'opening-clerk', 'opening-factory', 'openin
 }
 http.createServer((req,res)=>{
   const url = new URL(req.url,'http://localhost');
+  // free-village 서버가 80번 포트의 /civitas/ 아래로 넘겨 주는 요청도 같은 파일로 응답한다.
+  if (url.pathname === BASE) { res.writeHead(301, {location: `${BASE}/${url.search}`}); res.end(); return; }
+  if (url.pathname.startsWith(`${BASE}/`)) url.pathname = url.pathname.slice(BASE.length);
   if (url.pathname === '/healthz') {
     res.writeHead(200, {'content-type':'application/json'});
     res.end(JSON.stringify({status:'ok', game:'civitas'}));

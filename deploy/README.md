@@ -44,7 +44,24 @@ sudo bash deploy/install.sh 8090
 
 브라우저에서 `http://EC2공인IP:8090` 으로 접속합니다.
 
-## 업데이트
+## 자동 업데이트 설치 (free-village 서버와 같이 쓰기, 권장)
+
+free-village가 80번 포트에서 돌고 있으면 `http://주소/civitas`로 들어갈 수 있습니다. free-village 서버가 이 경로를 CIVITAS(127.0.0.1:8090)로 넘겨 주므로 보안 그룹에 8090을 열 필요가 없습니다. 8090을 열면 `http://주소:8090`으로도 열립니다.
+
+```sh
+sudo apt-get install -y gh           # 없을 때만
+gh auth login                        # 비공개 저장소 받기용, 한 번만
+gh repo clone k-kiddie/civitas ~/civitas
+sudo bash ~/civitas/deploy/install-auto.sh 8090
+```
+
+- `/opt/civitas/repo`에 main을 받아 그 자리에서 실행합니다.
+- 서비스가 시작·재시작될 때마다 `git pull --ff-only origin main`을 합니다. EC2를 켤 때마다 최신 main으로 실행됩니다. 받기에 실패해도 기존 코드로 켜집니다.
+- 받기는 설치한 계정의 `gh` 로그인 정보를 사용하고, 토큰을 따로 파일에 적지 않습니다. `gh auth logout`을 하면 자동 업데이트가 멈춥니다.
+- 켜진 상태에서 바로 반영하려면 `sudo systemctl restart civitas`를 실행합니다.
+- 반영 확인: `sudo git -C /opt/civitas/repo log --oneline -1`
+
+## 업데이트 (위 설치기를 쓰지 않은 경우)
 
 ```sh
 cd ~/civitas && git pull --ff-only     # B 방식은 압축 파일을 다시 전송
