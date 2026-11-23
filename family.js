@@ -21,10 +21,10 @@
     const left=ancestors(a),right=ancestors(b);
     return left.has(b.id)||right.has(a.id)||[...left].some(id=>right.has(id));
   }
-  function firstContact(p){return p.history.find(item=>item.type==='relationship')?.day;}
+  function firstContact(state,p){return p.history.find(item=>item.type==='relationship'&&(item.actor??'player')===activeId(state))?.day??p.society?.ties[activeId(state)]?.metDay;}
   function eligiblePartner(state,p){
     const player=currentPlayer(state);
-    return adult(player)&&adult(p)&&p.source==='resident'&&!p.family.partner&&!player.family.partner&&!relatives(state,player,p)&&p.relationship>=70&&state.day-(firstContact(p)??state.day)>=30;
+    return adult(player)&&adult(p)&&p.source==='resident'&&!p.family.partner&&!player.family.partner&&!relatives(state,player,p)&&p.relationship>=70&&state.day-(firstContact(state,p)??state.day)>=30;
   }
   function context(state,event){
     const offer=event.familyOffer;const player=currentPlayer(state);
@@ -50,7 +50,7 @@
     const age=plan.childAge;
     const child={id,name:plan.name,source:'family',baseAge:age,ageDay:day,age,gender:'unspecified',health:90,wealth:0,relationship:60,
       occupation:age>=6?'student':'child',jobTitle:age>=6?'학교에 다니는 아이':'보호받는 아이',rank:0,since:day,skills:{},history:[],lastDay:day,
-      family:{status:'dependent',partner:null,parents:[...plan.parents],children:[],joinedDay:day,method:plan.type},education:{path:null,years:0}};
+      family:{status:'dependent',partner:null,parents:[...plan.parents],children:[],joinedDay:day,method:plan.type,sharedCare:Boolean(plan.sharedCare)},education:{path:null,years:0}};
     state.life.people[id]=child;
     for(const parentId of plan.parents){const parent=state.life.people[parentId];if(!parent)continue;parent.family.children.push(id);log(parent,day,plan.name+'을 가족으로 맞이했다. '+(plan.type==='birth'?'출생':'입양')+' · 돌봄 책임을 함께 기록');}
     log(child,day,(plan.type==='birth'?'출생':'입양으로 가족에 합류')+' · 보호자 '+plan.parents.map(id=>state.life.people[id]?.name||id).join(' · '));
@@ -113,7 +113,7 @@
     }
     if(action.type==='familySeparate'){
       if(!spouse)return fail('현재 파트너가 없다.');
-      const name=spouse.name;player.family.status='single';player.family.partner=null;spouse.family.status='single';spouse.family.partner=null;spouse.relationship=Math.max(0,spouse.relationship-15);
+      const name=spouse.name;player.family.status='single';player.family.partner=null;player.family.sharedHome=false;spouse.family.status='single';spouse.family.partner=null;spouse.family.sharedHome=false;spouse.relationship=Math.max(0,spouse.relationship-15);
       log(player,state.day,name+'과 관계를 정리했다. 자녀·돌봄 관계와 이전 기록은 유지');log(spouse,state.day,player.name+'과 관계를 정리했다.');
       state.actions--;state.energy-=5;return {ok:true,message:name+'과 관계를 정리했다. 개인 관계 −15 · 자녀·돌봄 계획과 과거 기록은 유지된다. 재산을 강제로 가져오지 않는다.'};
     }
@@ -136,7 +136,9 @@
     const due=state.life.family.pending.filter(plan=>plan.dueDay<=day);
     state.life.family.pending=state.life.family.pending.filter(plan=>plan.dueDay>day);
     for(const plan of due){
-      const child=createChild(state,plan,day);state.eventQueue.push({id:'family-arrival-'+child.id,day,scene:'hearing',familyReport:true,title:'새 가족을 맞이했다',text:child.name+'이 가족으로 합류했다. 미성년 돌봄비 하루 2가 적용된다.',destination:'people',dialogue:[{speaker:'돌봄 담당자',text:child.name+'이 가족으로 합류했습니다. 기존 인물과 같은 생애 명부에서 성장과 건강을 기록합니다.'},{speaker:'돌봄 담당자',text:'돌봄과 교육을 선택할 수 있습니다. 성년이 되어도 부모·자녀 관계와 기록은 이어집니다.'}]});
+      const child=createChild(state,plan,day);
+      state.life.news.unshift({day,person:child.id,text:child.name+'이 '+plan.parents.map(id=>state.life.people[id]?.name||id).join(' · ')+'의 가족으로 합류했다.'});
+      if(!plan.autonomous||plan.parents.includes(activeId(state)))state.eventQueue.push({id:'family-arrival-'+child.id,day,scene:'hearing',familyReport:true,title:'새 가족을 맞이했다',text:child.name+'이 가족으로 합류했다. 미성년 돌봄비 하루 2가 적용된다.',destination:'people',dialogue:[{speaker:'돌봄 담당자',text:child.name+'이 가족으로 합류했습니다. 기존 인물과 같은 생애 명부에서 성장과 건강을 기록합니다.'},{speaker:'돌봄 담당자',text:'돌봄과 교육을 선택할 수 있습니다. 성년이 되어도 부모·자녀 관계와 기록은 이어집니다.'}]});
     }
     for(const child of Object.values(state.life.people)){
       if(child.source!=='family'||child.lastDay>=day)continue;
@@ -148,10 +150,15 @@
         child.jobTitle={apprentice:'공장 견습',clerk:'서기',medic:'진료소 보조',worker:'항구 노동자',unemployed:'구직 중'}[child.occupation];child.since=day;
         child.firstOccupation=child.occupation;child.family.status='single';child.goal={craft:'artisan',administration:'teacher',care:'medic',commerce:'trader'}[path]||'worker';
         log(child,day,'성년이 되어 '+child.jobTitle+' 생활을 시작했다. 부모·자녀 관계는 유지');
-        state.eventQueue.push({id:'family-adult-'+child.id,day,scene:'hearing',familyReport:true,title:child.name+'의 새로운 출발',text:'교육과 성장 기록에 따라 '+child.jobTitle+' 생활을 시작한다.',destination:'people',dialogue:[{speaker:child.name,text:'성년이 됐어요. 지금까지의 관계와 배운 것을 가지고 제 생활을 시작하겠습니다.'}]});
+        if(child.family.parents.includes(activeId(state)))state.eventQueue.push({id:'family-adult-'+child.id,day,scene:'hearing',familyReport:true,title:child.name+'의 새로운 출발',text:'교육과 성장 기록에 따라 '+child.jobTitle+' 생활을 시작한다.',destination:'people',dialogue:[{speaker:child.name,text:'성년이 됐어요. 지금까지의 관계와 배운 것을 가지고 제 생활을 시작하겠습니다.'}]});
         continue;
       }
       if(child.age>=6&&child.occupation!=='student'){child.occupation='student';child.jobTitle='학교에 다니는 아이';log(child,day,'학교 생활을 시작했다.');}
+      if(child.family.sharedCare){
+        for(const id of child.family.parents){const guardian=state.life.people[id];if(!guardian)continue;const fee=2/child.family.parents.length;if(id===activeId(state))state.cash-=fee;else guardian.wealth-=fee;}
+        const funds=child.family.parents.reduce((sum,id)=>sum+(id===activeId(state)?state.cash:state.life.people[id]?.wealth??0),0);
+        child.health=Math.max(0,Math.min(100,child.health+(funds>=0?1:-1)));continue;
+      }
       const guardian=state.life.people[child.family.parents[0]];
       if(guardian?.id===activeId(state))state.cash-=2;else if(guardian)guardian.wealth-=2;
       const funds=guardian?.id===activeId(state)?state.cash:guardian?.wealth??0;

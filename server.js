@@ -13,6 +13,7 @@ const routes = new Map([
   ['/random-events.js',['random-events.js','text/javascript; charset=utf-8']],
   ['/underworld.js',['underworld.js','text/javascript; charset=utf-8']],
   ['/politics.js',['politics.js','text/javascript; charset=utf-8']],
+  ['/society.js',['society.js','text/javascript; charset=utf-8']],
   ['/succession.js',['succession.js','text/javascript; charset=utf-8']],
   ['/family.js',['family.js','text/javascript; charset=utf-8']],
   ['/life.js',['life.js','text/javascript; charset=utf-8']],

@@ -14,6 +14,15 @@ function proposal(s,action,choice='accept'){
  assert.deepEqual(C.apply(replay,{type:'eventChoice',eventId:event.id,choice}).state.life,result.life);
  return C.apply(result,{type:'acknowledge'}).state;
 }
+// New reunions may interrupt a long period; these checks handle only those scenes and preserve family decisions.
+function period(s,days){
+ s=C.apply(s,{type:'lifePass',days,routine:'work'}).state;
+ for(let count=0;count<30&&s.eventQueue[0]?.reunion;count++){
+  const event=s.eventQueue[0];s=C.apply(s,{type:'eventChoice',eventId:event.id,choice:event.reunion.kind==='aspiration'?'respect':'talk'}).state;
+  s=C.apply(s,{type:'acknowledge'}).state;if(s.life.clock.plan)s=C.apply(s,{type:'lifeContinue'}).state;
+ }
+ return s;
+}
 let s=ready();assert.equal(s.life.people.player.family.status,'unset');assert.equal(s.life.people.player.family.children.length,0);
 const target=Object.values(s.life.people).find(p=>p.source==='resident');const job=target.occupation,money=target.wealth;
 let declined=proposal(s,{type:'familyDate',person:target.id},'wait');assert.equal(declined.life.people.player.family.partner,null);assert.equal(declined.cash,1000);
@@ -25,7 +34,7 @@ assert.equal(s.life.people.player.family.status,'married');assert.equal(s.life.p
 s.actions=2;const beforeBirthMoney=s.cash;
 s=proposal(s,{type:'familyChild',method:'birth',name:'새봄',childAge:0});assert.equal(s.cash,beforeBirthMoney-20);assert.equal(s.life.family.pending.length,1);assert.equal(s.life.family.pending[0].dueDay,460);
 const pendingCopy=JSON.parse(JSON.stringify(s));
-s=C.apply(s,{type:'lifePass',days:365,routine:'work'}).state;
+s=period(s,365);
 assert.equal(s.day,460);assert.equal(s.life.clock.plan.target,555);assert.equal(s.life.family.pending.length,0);assert(s.eventQueue[0].familyReport);
 const newborn=s.life.people[s.life.people.player.family.children[0]];
 assert.equal(newborn.age,0);assert.deepEqual(newborn.family.parents,['player',target.id]);assert(s.life.people[target.id].family.children.includes(newborn.id));assert.equal(newborn.wealth,0);
@@ -35,7 +44,7 @@ assert.equal(s.life.people[newborn.id].wealth,0);assert.equal(s.life.people[newb
 const count=Object.keys(s.life.people).length;C.life.tick(s);assert.equal(Object.keys(s.life.people).length,count);
 let separated=JSON.parse(JSON.stringify(pendingCopy));separated.actions=2;separated=C.apply(separated,{type:'familySeparate'}).state;
 assert.equal(separated.life.people.player.family.partner,null);assert.equal(separated.life.family.pending.length,1);
-separated=C.apply(separated,{type:'lifePass',days:365,routine:'work'}).state;
+separated=period(separated,365);
 const later=separated.life.people[separated.life.people.player.family.children[0]];assert.deepEqual(later.family.parents,['player',target.id]);assert.equal(separated.life.people[target.id].family.partner,null);
 let minor=ready();minor.life.people[target.id].age=17;assert.equal(C.apply(minor,{type:'familyDate',person:target.id}).state,minor);
 let early=ready();early.life.people[target.id].history=early.life.people[target.id].history.filter(item=>item.type!=='relationship');assert.equal(C.apply(early,{type:'familyDate',person:target.id}).state,early);
@@ -46,16 +55,16 @@ let adopt=ready();adopt=proposal(adopt,{type:'familyChild',method:'adoption',nam
 const childId=adopt.life.people.player.family.children[0];assert.equal(adopt.life.people[childId].age,16);assert.deepEqual(adopt.life.people[childId].family.parents,['player']);
 adopt=C.apply(adopt,{type:'familyEducate',person:childId,path:'craft'}).state;assert.equal(adopt.life.people[childId].education.years,1);
 adopt.actions=2;assert.equal(C.apply(adopt,{type:'familyEducate',person:childId,path:'craft'}).state,adopt);
-adopt=C.apply(adopt,{type:'lifePass',days:365,routine:'work'}).state;assert.equal(adopt.day,465);assert.equal(adopt.life.people[childId].age,17);assert.equal(adopt.life.people[childId].source,'family');
+adopt=period(adopt,365);assert.equal(adopt.day,465);assert.equal(adopt.life.people[childId].age,17);assert.equal(adopt.life.people[childId].source,'family');
 adopt=C.apply(adopt,{type:'familyEducate',person:childId,path:'craft'}).state;assert.equal(adopt.life.people[childId].education.years,2);
-const replay=JSON.parse(JSON.stringify(adopt));adopt=C.apply(adopt,{type:'lifePass',days:365,routine:'work'}).state;
-assert.deepEqual(C.apply(replay,{type:'lifePass',days:365,routine:'work'}).state.life,adopt.life);
+const replay=JSON.parse(JSON.stringify(adopt));adopt=period(adopt,365);
+assert.deepEqual(period(replay,365).life,adopt.life);
 assert.equal(adopt.day,830);assert.equal(adopt.life.people[childId].age,18);assert.equal(adopt.life.people[childId].source,'resident');assert.equal(adopt.life.people[childId].occupation,'apprentice');assert.deepEqual(adopt.life.people[childId].family.parents,['player']);
 assert(adopt.eventQueue.some(event=>event.id==='family-adult-'+childId));assert(!F.eligiblePartner(adopt,adopt.life.people[childId]));
 assert.equal(C.apply(adopt,{type:'familyEducate',person:childId,path:'craft'}).state,adopt);
 const oldFamily=JSON.parse(JSON.stringify(adopt.life.people[childId].family));adopt.eventQueue=[];adopt=C.apply(adopt,{type:'advance'}).state;assert.deepEqual(adopt.life.people[childId].family,oldFamily);
 const invalid=ready();assert.equal(C.apply(invalid,{type:'familyChild',method:'adoption',name:'',childAge:6}).state,invalid);assert.equal(C.apply(invalid,{type:'familyChild',method:'adoption',name:'아이',childAge:18}).state,invalid);
 const noMoney=ready();noMoney.cash=10;assert.equal(C.apply(noMoney,{type:'familyChild',method:'adoption',name:'아이',childAge:6}).state,noMoney);
-let school=ready();school=proposal(school,{type:'familyChild',method:'adoption',name:'한결',childAge:5});const schoolId=school.life.people.player.family.children[0];school=C.apply(school,{type:'lifePass',days:365,routine:'work'}).state;assert.equal(school.life.people[schoolId].occupation,'student');
+let school=ready();school=proposal(school,{type:'familyChild',method:'adoption',name:'한결',childAge:5});const schoolId=school.life.people.player.family.children[0];school=period(school,365);assert.equal(school.life.people[schoolId].occupation,'student');
 const old=ready();delete old.life.family;for(const person of Object.values(old.life.people))person.family={status:'unset'};const migrated=C.normalize(old);assert.deepEqual(migrated.life.people.player.family.children,[]);assert(!old.life.family);assert.deepEqual(C.normalize(migrated).life,migrated.life);
 console.log('단독 입양·실제 돌봄비·연간 교육 중복 차단·6세 학교·18세 진로·동일 인물/부모 관계 유지·성년 사건·가까운 가족 관계 제외·저장 복원·구형 저장 통과');

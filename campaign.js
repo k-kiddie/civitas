@@ -1,5 +1,6 @@
 'use strict';
 (function (root) {
+  const society = typeof module !== 'undefined' ? require('./society') : root.Society;
   const succession = typeof module !== 'undefined' ? require('./succession') : root.Succession;
   const family = typeof module !== 'undefined' ? require('./family') : root.Family;
   const life = typeof module !== 'undefined' ? require('./life') : root.Life;
@@ -36,7 +37,7 @@
   }
   function record(state, text) { state.journal.unshift({ day: state.day, text }); }
   function remember(state, person, text) { state.memories.push({ person, text, day: state.day }); }
-  function normalize(state) {
+  function normalize(state,owned=false) {
     const result = { ...fresh(), ...state };
     result.startConfigured = state.startConfigured ?? (state.profileSet || state.day > 1 || state.journal.length > 0);
     if (!state.jobStory && starts.occupations[result.startingOccupation]?.firstEpisode) {
@@ -63,7 +64,7 @@
     result.pacts={...pacts.fresh(),...state.pacts};
     result.politics={...result.politics};
     politics.ensureField(result);
-    life.restore(result,lifeDescriptor(result));
+    life.restore(result,lifeDescriptor(result),owned);
     return result;
   }
   function electionResult(state) { return politics.result(state.politics?state:normalize(state)); }
@@ -112,6 +113,7 @@
     return [{ speaker: event.id.includes('housing') ? '윤' : '소라', text: event.text }];
   }
   function eventReply(event, choice) {
+    if(event.reunion)return society.reply(event,choice);
     if(event.successionOffer)return succession.reply(event,choice);
     if(event.familyOffer)return family.reply(event,choice);
     if(event.councilMeeting)return council.meetingReply(event,choice);
@@ -148,6 +150,7 @@
   }
   function eventChoices(state, event) {
     if (!event || event.resolved) return [];
+    if(event.reunion)return society.choices(state,event);
     if(event.successionOffer)return succession.choices(state,event);
     if(event.familyOffer)return family.choices(state,event);
     if(event.councilMeeting)return council.meetingChoices(state,event);
@@ -180,8 +183,8 @@
     ];
     return [];
   }
-  function transition(state, action) {
-    const next = normalize(JSON.parse(JSON.stringify(state)));
+  function transition(state, action,owned=false) {
+    const next = normalize(owned?state:JSON.parse(JSON.stringify(state)),owned);
     let message = '';
     const spend = (energy = 0) => {
       if (next.actions < 1 || next.energy < energy) return false;
@@ -235,7 +238,9 @@
       const choice = eventChoices(next, event).find(item => item.id === action.choice);
       if (!event || event.id !== action.eventId || !choice || choice.disabled) return { state, message: '지금은 이 선택을 할 수 없다.' };
       let result = '';
-      if(event.successionOffer){
+      if(event.reunion){
+        result=society.resolve(next,event,choice.id);
+      } else if(event.successionOffer){
         result=succession.resolve(next,event,choice.id);
       } else if(event.familyOffer){
         result=family.resolve(next,event,choice.id);
@@ -674,7 +679,7 @@
         if (next.hearing && next.hearing.day > next.day) target = Math.min(target, next.hearing.day);
         while (next.day < target) {
           next.day += 1;
-          next.cash -= 3 + (next.jobStory.livingExpense || 0) + (next.day % 7 === 0 ? 12 : 0);
+          next.cash -= 3 + (next.jobStory.livingExpense || 0) + (next.day % 7 === 0 ? life.rent(next,life.player(next)) : 0);
           next.energy = Math.max(0, Math.min(100, next.energy + 20) - (next.cash < 0 ? 10 : 0));
           const due = next.followUps.filter(item => item.day <= next.day);
           next.followUps = next.followUps.filter(item => item.day > next.day);
@@ -853,16 +858,16 @@
       if(next.day>=next.politics.nextDay-10&&plan.electionSeen!==next.politics.round){plan.electionSeen=next.politics.round;reason='선거운동 기간에 들어섰다. 출마와 선거 활동을 직접 결정하자.';break;}
       next.life.processing=true;
       if(next.actions&&next.energy>=20&&plan.routine==='work'&&[1,3,5].includes(next.day%7)){
-        const worked=transition(next,{type:'work'});
+        const worked=transition(next,{type:'work'},true);
         if(worked.state!==next){
           life.observe(worked.state,next,{type:'work'},lifeDescriptor(worked.state));next=worked.state;
           const index=next.journal.findIndex(item=>item.day===next.day&&item.text===worked.message);if(index>=0)next.journal.splice(index,1);
         }
       }else if(next.actions&&next.energy<70){
-        const rested=transition(next,{type:'rest'});
+        const rested=transition(next,{type:'rest'},true);
         if(rested.state!==next){life.observe(rested.state,next,{type:'rest'},lifeDescriptor(rested.state));next=rested.state;next.journal=next.journal.filter(item=>!(item.day===next.day&&item.text===rested.message));}
       }
-      const moved=transition(next,{type:'advance',to:'day'});
+      const moved=transition(next,{type:'advance',to:'day'},true);
       if(moved.state===next){reason=moved.message;break;}
       life.observe(moved.state,next,{type:'advance'},lifeDescriptor(moved.state));next=moved.state;
       next.journal=next.journal.filter(item=>!(item.day===next.day&&item.text===moved.message));
@@ -891,7 +896,7 @@
     if(result.state!==state)life.observe(result.state,state,action,lifeDescriptor(result.state));
     return result;
   }
-  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices, eventDialogue, eventReply, starts, careers, institutions, randomEvents, underworld, politics, parties, pacts, council, life, family, succession };
+  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices, eventDialogue, eventReply, starts, careers, institutions, randomEvents, underworld, politics, parties, pacts, council, life, family, succession, society };
   if (typeof module !== 'undefined') module.exports = api;
   root.Campaign = api;
 })(globalThis);

@@ -42,15 +42,16 @@
     if(id==='stay')return '은퇴를 미뤘다. 조작 인물과 재산을 그대로 유지한다.';
     if(!validOffer(state,event))return '조건이 바뀌어 인계를 진행하지 않았다.';
     const offer=event.successionOffer,old=player(state),heir=state.life.people[offer.to],day=state.day;
-    old.controlArchive={day,career:state.career,title:old.jobTitle,skills:copy(state.skills),institution:copy(state.institution),network:copy(state.network),party:state.parties.membership,support:state.support,memories:copy(state.memories),underworld:copy(state.underworld),pacts:copy(state.pacts),partyStanding:state.parties.standing,promise:state.promise};
+    old.controlArchive={day,training:copy(old.society?.training||null),career:state.career,title:old.jobTitle,skills:copy(state.skills),institution:copy(state.institution),network:copy(state.network),party:state.parties.membership,support:state.support,memories:copy(state.memories),underworld:copy(state.underworld),pacts:copy(state.pacts),partyStanding:state.parties.standing,promise:state.promise};
     old.history.push({day,type:'succession',text:'은퇴하고 '+heir.name+'에게 개인 돈 '+offer.amount+'을 인계했다. 남은 개인 돈 '+offer.remaining});
+    if(old.society)old.society.training=null;
     old.source='resident';old.occupation='retired';old.jobTitle='은퇴 생활';old.rank=0;old.since=day;old.wealth=offer.remaining;old.lastDay=day;old.skills=copy(state.skills);
     heir.originalAgeAnchor=heir.originalAgeAnchor||{baseAge:heir.baseAge,ageDay:heir.ageDay};
     heir.baseAge=heir.age;heir.ageDay=day;heir.source='player';heir.started=true;heir.lastDay=day;heir.wealth=offer.total;heir.sideRole=null;
     heir.history.push({day,type:'succession',text:old.name+'의 은퇴 후 조작 인물이 됐다. 기존 개인 돈 '+offer.toCash+' + 인계 '+offer.amount+' = '+offer.total});
     for(const p of Object.values(state.life.people)){
       p.relations={...p.relations,[offer.from]:p.relationship};
-      p.relationship=p.relations[heir.id]??(relate(p,heir.id)||relate(heir,p.id)?60:45);
+      p.relationship=p.relations[heir.id]??p.society?.ties[heir.id]?.bond??(p.family.partner===heir.id?85:relate(p,heir.id)||relate(heir,p.id)?60:45);
       if(p.councilId){
         const member=state.council.chamber?.members.find(member=>member.id===p.councilId);if(member)member.relationship=p.relationship;
         if(state.council.people[p.councilId])state.council.people[p.councilId].relationship=p.relationship;
