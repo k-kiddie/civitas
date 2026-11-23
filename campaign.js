@@ -1,5 +1,6 @@
 'use strict';
 (function (root) {
+  const politics = typeof module !== 'undefined' ? require('./politics') : root.Politics;
   const underworld = typeof module !== 'undefined' ? require('./underworld') : root.Underworld;
   const randomEvents = typeof module !== 'undefined' ? require('./random-events') : root.RandomEvents;
   const agencies = typeof module !== 'undefined' ? require('./agencies') : root.Agencies;
@@ -15,7 +16,7 @@
   function fresh() {
     return { version: 3, age:null, ageChosen:false, underworld:underworld.fresh(), day: 1, actions: 2, cash: 32, energy: 80, name: '시민', gender: 'unspecified', profileSet: false, place: 'harbor', startConfigured: false, background: 'worker', startingOccupation: 'worker',
       surveyed: false, testimony: false, funding: null, built: null, flooded: null,
-      candidate: false, election: null, policy: null, support: 25, memories: [], journal: [],
+      politics:politics.fresh(), candidate: false, election: null, policy: null, support: 25, memories: [], journal: [],
       promise: null, notices: [], witness: false,
       underReview: false, barredInvestigator: false, policeRecommendation: false, councilRecommendation: false,
       agencies: agencies.initial(), unassignedOfficials: 30, agencyProposal: null, agencyHistory: [], nextAgencyProposal: 1,
@@ -40,25 +41,20 @@
         result.followUps = [...result.followUps, {type:'job', episode:starts.occupations[result.startingOccupation].firstEpisode, day:result.day + 2}];
       }
     }
+    if(!state.politics && result.election)result.election={...result.election,day:result.election.day??20,ran:result.election.ran??Boolean(result.election.won||state.candidate)};
+    if(!state.politics && state.day>=20){
+      result.politics.nextDay=20+(Math.floor((state.day-20)/28)+1)*28;
+      result.politics.round=Math.floor((state.day-20)/28)+2;
+      result.candidate=false;
+    }
+    if(result.politics.nextDay<=state.day)result.politics={...result.politics,nextDay:result.politics.nextDay+28*(Math.floor((state.day-result.politics.nextDay)/28)+1)};
     if (result.election?.won && !result.officeResigned) result.career = 'mayor';
     if (result.caseStage === 'sealed' && !result.underReview && !result.followUps.some(item => item.type === 'oversight')) {
       result.followUps = [...result.followUps, { type: 'oversight', day: result.day + 3 }];
     }
     return result;
   }
-  function electionResult(state) {
-    const common = state.support - 25;
-    const fulfilled = state.promise === 'kept' ? 8 : state.promise === 'broken' ? -15 : 0;
-    const limit = value => Math.max(5, Math.min(95, Math.round(value)));
-    const districts = [
-      { name: '항구', voters: 48, share: limit(35 + common + (state.funding === 'merchant' ? -12 : 0)) },
-      { name: '어촌', voters: 26, share: limit(25 + common + fulfilled + (state.flooded === 0 ? 10 : -12)) },
-      { name: '언덕', voters: 12, share: limit(30 + common + (state.witness ? 10 : 0)) }
-    ];
-    const votes = Math.round(districts.reduce((sum, district) => sum + district.voters * district.share, 0) / 86);
-    const won = state.candidate && votes >= 50;
-    return { won, winner: won ? state.name : '소라', votes, districts };
-  }
+  function electionResult(state) { return politics.result(state.politics?state:normalize(state)); }
   function hearingStrength(state) {
     const hearing = state.hearing;
     if (!hearing) return 0;
@@ -87,13 +83,13 @@
       { speaker: '윤', text: state.flooded === 0 ? '제방은 버텼지만 배급과 물자 정리는 남았어. 누군가는 도와야 해.' : '복구하려면 돈도, 손도 필요해. 그전에 누가 무엇을 잃었는지부터 알아야 하고.' },
       { speaker: '소라', text: '여기 남아서 도와줄 건가요? 당신도 먹고살아야 한다는 건 알아요.' }
     ];
-    if (event.id === 'election' && state.election?.won) return [
+    if (event.id === 'election' && (event.election || state.election)?.won) return [
       { speaker: '지안', text: `${state.name} 님, 개표가 끝났어요. 당신이 동장이에요.` },
       { speaker: '소라', text: state.promise === 'broken' ? '당선된 건 인정해요. 하지만 지난번 약속도 잊지는 않았어요.' : '축하 인사는 내일 할게요. 오늘도 집에 못 돌아간 사람들이 있어요.' },
       { speaker: '지안', text: '첫 예산과 첫 일정에 무슨 말을 적을까요?' }
     ];
     if (event.id === 'election') return [
-      { speaker: '지안', text: state.candidate ? '개표가 끝났어요. 이번 선거는 소라가 이겼어요.' : '소라가 동장으로 선출됐어요. 주민들이 회의장으로 가고 있어요.' },
+      { speaker: '지안', text: (event.election || state.election)?.ran ? '개표가 끝났어요. 이번 선거는 '+(event.election || state.election).winner+' 후보가 이겼어요.' : (event.election || state.election).winner+' 후보가 선출됐어요. 주민들이 회의장으로 가고 있어요.' },
       { speaker: '소라', text: '선거가 끝났다고 동네 일이 끝나는 건 아니잖아요. 다음 회의에 같이 와 줄래요?' }
     ];
     if (event.scene === 'hearing') return [
@@ -151,7 +147,7 @@
       { id: 'organize', title: '소라와 피해 주민의 증언을 모은다', detail: '기력 10 · 주민 지지 +4 · 청문회 증언 확보', disabled: state.energy < 10 },
       { id: 'livelihood', title: '긴급 하역 일자리를 맡는다', detail: '수입 +6크라운 · 주민 지지 −4', disabled: false }
     ];
-    if (event.id === 'election' && state.election?.won) return [
+    if (event.id === 'election' && (event.election || state.election)?.won) return [
       { id: 'housing', title: '첫 예산을 주거 복구에 배정한다', detail: '공금 12 · 사흘 뒤 최대 4가구 복귀', disabled: state.treasury < 12 },
       { id: 'audit', title: '첫 일정으로 항만 계약 청문회를 잡는다', detail: '기력 10 · 사흘 뒤 청문회 개회', disabled: state.energy < 10 || Boolean(state.hearing) || Boolean(state.bill) },
       { id: 'pause', title: '취임 전 하루는 나를 위해 쉰다', detail: '기력 +15 · 주민 지지 −3', disabled: false }
@@ -350,6 +346,12 @@
     if (inHearing && !['question', 'evidence', 'verdict'].includes(action.type)) {
       return { state, message: '청문회가 진행 중이다. 증언을 듣고 표결 또는 합의를 선택하자.' };
     }
+    const politicalResult=politics.act(next,action);
+    if(politicalResult){
+      if(!politicalResult.ok)return {state,message:politicalResult.message};
+      record(next,politicalResult.message);
+      return {state:next,message:politicalResult.message};
+    }
     const undergroundResult=underworld.act(next,action);
     if(undergroundResult){
       if(!undergroundResult.ok)return {state,message:undergroundResult.message};
@@ -528,14 +530,14 @@
         break;
       }
       case 'run':
-        if (next.candidate || next.day >= 20 || next.cash < 8 || !spend()) break;
+        if (next.candidate || next.day >= next.politics.nextDay || next.cash < 8 || !spend()) break;
         next.cash -= 8;
         next.candidate = true;
-        message = '기록관 지안에게 후보 등록서를 맡겼다. 선거일은 20일이다.';
+        message = '기록관 지안에게 후보 등록서를 맡겼다. 선거일은 '+next.politics.nextDay+'일이다.';
         remember(next, '지안', '후보 등록 서류를 함께 작성했다.');
         break;
       case 'campaign':
-        if (!next.candidate || next.day >= 20 || !spend(10)) break;
+        if (!next.candidate || next.day >= next.politics.nextDay || !spend(10)) break;
         next.support = Math.min(90, next.support + 7);
         message = '골목 집회에서 주민들의 이야기를 들었다. 예상 지지가 올랐다.';
         break;
@@ -587,9 +589,9 @@
         break;
       }
       case 'policy':
-        if (!next.election || next.policy || next.day < 21 || !spend()) break;
+        if (!next.election || next.policy || next.day < (next.election.day ?? 20)+1 || !spend()) break;
         next.policy = action.policy === 'housing' ? 'housing' : 'audit';
-        message = next.election.won ? '첫 예산안을 집행했다.' : `${next.election.winner} 동장에게 주민 청원을 제출했다.`;
+        message = next.career==='mayor' ? '첫 예산안을 집행했다.' : `${next.election.winner} 동장에게 주민 청원을 제출했다.`;
         if (next.policy === 'housing') {
           const returned = Math.min(8, 86 - Object.values(next.residents).reduce((a, b) => a + b, 0));
           next.residents.village += returned;
@@ -600,7 +602,7 @@
         }
         break;
       case 'advance': {
-        let target = action.to === 'event' ? (next.day < 12 ? 12 : next.day < 20 ? 20 : next.day < 21 ? 21 : next.day + 7) : next.day + 1;
+        let target = action.to === 'event' ? (next.day < 12 ? 12 : next.day < 20 ? 20 : next.day === 20 ? 21 : Math.min(next.day+7,next.politics.nextDay)) : next.day + 1;
         const upcoming = next.followUps.filter(item => item.day > next.day).map(item => item.day);
         if (upcoming.length) target = Math.min(target, ...upcoming);
         if (next.hearing && next.hearing.day > next.day) target = Math.min(target, next.hearing.day);
@@ -712,16 +714,23 @@
             next.notices.unshift('지안이 재협상안 제출을 권했다. 수사관은 장부를 조사하고, 동장과 협의회 위원은 안건을 제출할 수 있다.');
             record(next, '지안이 계약 재협상에 필요한 절차를 안내했다.');
           }
-          if (next.day === 20) {
+          for(const update of politics.tick(next))record(next,update);
+          if (next.day === next.politics.nextDay) {
             next.election = electionResult(next);
-            if (next.election.won) next.career = 'mayor';
+            if(next.election.won){
+              if(next.career!=='mayor')next.politics.returnCareer=starts.occupations[next.career]?next.career:'worker';
+              next.career='mayor';next.officeResigned=false;
+            }else if(next.career==='mayor')next.career=next.politics.returnCareer;
+            next.policy=null;
             next.eventQueue.push({
-              id: 'election', day: next.day, scene: next.election.won ? 'election-win' : 'election-loss',
+              id: 'election', election:JSON.parse(JSON.stringify(next.election)), day: next.day, scene: next.election.won ? 'election-win' : 'election-loss',
               title: next.election.won ? '광장이 당신의 이름을 부른다' : next.candidate ? '광장은 다른 이름을 불렀다' : '당신이 지켜본 선거',
-              text: `${next.election.winner} 동장 당선. ${next.candidate ? '당신의 득표율 ' + next.election.votes + '%.' : '당신은 출마하지 않았다.'} 내일도 도시의 삶은 이어진다.`,
+              text: `${next.election.winner} 동장 당선. ${next.election.ran ? '당신의 득표율 ' + next.election.votes + '%.' : '당신은 출마하지 않았다.'} 내일도 도시의 삶은 이어진다.`,
               quote: next.election.won ? '지안 “이제 약속을 예산으로 옮길 차례예요.”' : '소라 “내일 아침, 우리 동네에서 만나요.”', destination: 'power'
             });
-            record(next, `${next.election.winner} 동장 당선. ${next.candidate ? '당신의 득표율 ' + next.election.votes + '%' : '당신은 출마하지 않았다.'}`);
+            next.politics.history.unshift(JSON.parse(JSON.stringify(next.election)));
+            next.politics.nextDay+=28;next.politics.round++;next.politics.activity={sora:0,doyun:0,jian:0};next.politics.endorsements={};next.politics.requested=[];next.candidate=false;
+            record(next, `${next.election.winner} 동장 당선. ${next.election.ran ? '당신의 득표율 ' + next.election.votes + '%' : '당신은 출마하지 않았다.'}`);
           }
           careers.schedule(next);
           const incidental=randomEvents.schedule(next);
@@ -739,7 +748,7 @@
     careers.schedule(next);
     return { state: next, message };
   }
-  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices, eventDialogue, eventReply, starts, careers, institutions, randomEvents, underworld };
+  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices, eventDialogue, eventReply, starts, careers, institutions, randomEvents, underworld, politics };
   if (typeof module !== 'undefined') module.exports = api;
   root.Campaign = api;
 })(globalThis);

@@ -51,7 +51,7 @@ for (const plan of ['long', 'short']) {
   assert.equal(campaign.memories.length,count);
   act({type:'advance',to:'event'});
   assert.equal(campaign.election.districts.length,3);
-  assert.notEqual(campaign.election.districts[0].share,campaign.election.districts[1].share);
+  assert.notEqual(campaign.election.districts[0].shares.sora,campaign.election.districts[1].shares.sora);
 }
 console.log('공개 약속 이행/위반·증인 확보·중복 사건 방지·구역별 개표 통과');
 for (const career of ['investigator', 'councillor', 'mayor']) {
@@ -593,3 +593,25 @@ oldAge=require('../campaign').normalize(oldAge);assert.equal(oldAge.ageChosen,fa
 oldAge=apply(oldAge,{type:'profile',name:'기존 인물',gender:'unspecified',age:39}).state;
 assert.equal(oldAge.age,39);assert.equal(oldAge.day,17);assert.equal(oldAge.cash,58);
 console.log('시작 나이 직접 입력·범위와 정수 검증·편집 시 경력/자원 유지·기존 24세 저장 수정 통과');
+const Politics=require('../politics');
+for(const id of Object.keys(Politics.candidates)){
+ const state={...fresh(),day:19,politics:{...Politics.fresh(),activity:{sora:0,doyun:0,jian:0}}};
+ state.politics.activity[id]=6;
+ const result=Politics.result(state);
+ assert.equal(result.winnerId,id);
+ for(const district of result.districts)assert(Math.abs(Object.values(district.shares).reduce((a,b)=>a+b,0)-100)<.0001);
+}
+let political={...fresh(),candidate:true,cash:100,network:{name:'모임',members:[{id:'accountant',loyalty:40,competence:75}]}};
+political=apply(political,{type:'seekEndorsement',person:'accountant'}).state;assert.equal(political.politics.endorsements.accountant,'jian');
+political=apply(political,{type:'choosePlatform',platform:'transparency'}).state;assert.equal(political.politics.endorsements.accountant,'player');
+let deserter={...fresh(),day:12,network:{name:'조직',members:[{id:'planner',loyalty:10,competence:80}]},institution:{...institutions.fresh(),scrutiny:60}};
+deserter=apply(deserter,{type:'advance'}).state;assert.equal(deserter.network.members.length,0);assert(deserter.journal.some(item=>item.text.includes('떠났다')));
+let reelection={...fresh(),day:19,career:'clerk',support:90,candidate:true,cash:300};
+reelection=apply(reelection,{type:'advance'}).state;assert.equal(reelection.election.won,true);assert.equal(reelection.career,'mayor');assert.equal(reelection.politics.nextDay,48);assert.equal(reelection.candidate,false);
+reelection=apply(reelection,{type:'acknowledge'}).state;
+reelection=apply(reelection,{type:'run'}).state;assert.equal(reelection.candidate,true);
+reelection=JSON.parse(JSON.stringify(reelection));
+while(reelection.day<47)reelection=apply(reelection,{type:'advance'}).state;
+reelection.support=0;
+reelection=apply(reelection,{type:'advance'}).state;assert.equal(reelection.day,48);assert.equal(reelection.election.won,false);assert.equal(reelection.career,'clerk');assert.equal(reelection.politics.nextDay,76);assert.equal(reelection.politics.history.length,2);
+console.log('NPC 3후보 당선 가능·구역 합계·공약과 독립 지지·조직 이탈·20/48일 선거·임기 종료·재출마·저장 이력 통과');
