@@ -2,15 +2,15 @@
 # CIVITAS 자동 업데이트 설치기.
 # /opt/civitas/repo 에 저장소를 두고, 서비스가 시작·재시작될 때마다 main을 받아(git pull --ff-only) 실행한다.
 # 받기에 실패해도(네트워크·인증 문제) 기존 코드로 서버는 켜진다.
-# 사용: gh auth login 을 한 계정에서  sudo bash deploy/install-auto.sh [포트]   (기본 8090)
+# 사용: gh auth login 을 한 계정에서  sudo bash deploy/install-auto.sh [포트]   (기본 8090, 단독 서버면 80)
 set -euo pipefail
 if [ "$(id -u)" -ne 0 ]; then
   echo 'sudo bash deploy/install-auto.sh [포트]로 실행하세요.' >&2
   exit 1
 fi
 port="${1:-8090}"
-if ! [[ "$port" =~ ^[0-9]+$ ]] || ((port < 1024 || port > 65535)); then
-  echo '포트는 1024~65535 정수여야 합니다.' >&2
+if ! [[ "$port" =~ ^[0-9]+$ ]] || ((port < 1 || port > 65535)); then
+  echo '포트는 1~65535 정수여야 합니다. (80: http://주소 로 바로 접속)' >&2
   exit 1
 fi
 node_ok() {
@@ -92,6 +92,8 @@ User=civitas
 Group=civitas
 WorkingDirectory=$repo
 Environment=PORT=$port
+# 1024 미만 포트(80 등)는 서비스 계정에 포트 열기 권한만 준다.
+$( ((port < 1024)) && printf 'AmbientCapabilities=CAP_NET_BIND_SERVICE\nCapabilityBoundingSet=CAP_NET_BIND_SERVICE\n' )
 # 시작할 때 main 받기(+: root 권한, -: 실패해도 계속).
 ExecStartPre=+-/usr/bin/timeout 60 /usr/bin/env HOME=/root GIT_TERMINAL_PROMPT=0 $git_bin -C $repo pull --ff-only --quiet origin main
 ExecStart=$node_bin $repo/server.js
