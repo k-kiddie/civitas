@@ -386,3 +386,57 @@ assert.equal(require('../campaign').normalize(retired).career,'worker');
 assert.equal(retired.election.won,true);
 assert.equal(apply({...fresh(),underReview:true},{type:'applyJob',career:'farmer'}).state.underReview,true);
 console.log('일반직 11종·훈련 조건·품삯·비밀 영입 2종·수락/거절·첫 임무·중복/직접진입 차단·동장 사임 통과');
+const institutions=require('../institutions');
+for(const department of Object.keys(institutions.departments)) {
+  let state={...fresh(),day:2,cash:500,energy:100,support:90};
+  const act=action=>{state=apply(state,action).state};
+  const agency=institutions.departments[department];
+  assert.equal(apply(state,{type:'enlist',department}).state,state);
+  act({type:'train',skill:agency.skill});act({type:'enlist',department});
+  assert.equal(state.institution.department,department);
+  for(let days=0;state.institution.rank<4 && days<30;days++){
+    act({type:'advance'});
+    if(department==='army'&&!state.skills.administration)act({type:'train',skill:'administration'});
+    act({type:'officialDuty'});
+    const original=state;act({type:'officialDuty'});assert.equal(state,original);
+    if(!institutions.promotionReason(state))act({type:'promote'});
+  }
+  assert.equal(state.institution.rank,4);
+  assert.match(institutions.title(state),department==='army'?/장군/:/청장|처장/);
+  act({type:'advance'});
+  act({type:'foundNetwork',kind:'secret',name:'동기 모임'});
+  assert.equal(state.network.kind,'secret');
+  act({type:'recruitMember',person:'officer'});
+  act({type:'advance'});act({type:'recruitMember',person:'accountant'});
+  assert.equal(state.network.members.length,2);
+  act({type:'minister'});
+  assert.equal(state.career,'defenseMinister');
+  assert.equal(state.institution.department,'army');
+  act({type:'advance'});
+  const personalCash=state.cash;const budget=state.institution.agencyBudget;
+  act({type:'agencyOrder'});
+  assert.equal(state.cash,personalCash);assert.equal(state.institution.agencyBudget,budget-12);
+  const before=state.cash;act({type:'work'});assert.equal(state.cash-before,30);
+  state=JSON.parse(JSON.stringify(state));assert.equal(state.network.members.length,2);
+}
+let networkState={...fresh(),day:10,cash:100,career:'official',institution:{...institutions.fresh(),department:'audit',rank:2,merit:25},network:{name:'인사 모임',kind:'secret',members:[{id:'personnel',loyalty:40,competence:65}]}};
+for(let i=0;i<3;i++){
+ networkState=apply(networkState,{type:'appointMember',person:'personnel',choice:'loyalty'}).state;
+ if(i<2){networkState=apply(networkState,{type:'advance'}).state;networkState=apply(networkState,{type:'advance'}).state;networkState=apply(networkState,{type:'advance'}).state;}
+}
+assert.equal(networkState.institution.scrutiny,60);
+assert.equal(networkState.eventQueue.filter(event=>event.institutionAudit).length,1);
+networkState.eventQueue=networkState.eventQueue.filter(event=>event.institutionAudit);
+networkState=apply(networkState,{type:'eventChoice',eventId:networkState.eventQueue[0].id,choice:'resign'}).state;
+assert.equal(networkState.career,'worker');assert.equal(networkState.network.members.length,1);
+assert.equal(networkState.institution.appointments.length,3);
+assert.equal(networkState.institution.scrutiny,0);
+console.log('행정 3기관·군 경력 실무 승진·기관장/장군·장관 임명·공금 분리·조직 영입·측근 인사 감사·사임 기록 보존 통과');
+const junior={...fresh(),career:'soldier',institution:{...institutions.fresh(),department:'army'}};
+assert.equal(apply(junior,{type:'agencyOrder'}).state,junior);
+assert.equal(apply(junior,{type:'minister'}).state,junior);
+assert.equal(apply({...junior,career:'worker'},{type:'officialDuty'}).state.career,'worker');
+let disclosure={...fresh(),cash:30,career:'official',institution:{...institutions.fresh(),department:'audit',merit:20,scrutiny:60},eventQueue:[{id:'audit-test',institutionAudit:true}]};
+disclosure=apply(disclosure,{type:'eventChoice',eventId:'audit-test',choice:'disclose'}).state;
+assert.equal(disclosure.cash,18);assert.equal(disclosure.institution.merit,12);assert.equal(disclosure.institution.scrutiny,0);assert.equal(disclosure.career,'official');
+assert.equal(apply(disclosure,{type:'eventChoice',eventId:'audit-test',choice:'disclose'}).state,disclosure);

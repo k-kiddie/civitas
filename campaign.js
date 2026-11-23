@@ -1,5 +1,6 @@
 'use strict';
 (function (root) {
+  const institutions = typeof module !== 'undefined' ? require('./institutions') : root.Institutions;
   const jobStories = typeof module !== 'undefined' ? require('./job-stories') : root.JobStories;
   const careers = typeof module !== 'undefined' ? require('./careers') : root.Careers;
   const starts = typeof module !== 'undefined' ? require('./starts') : root.Starts;
@@ -14,6 +15,7 @@
       candidate: false, election: null, policy: null, support: 25, memories: [], journal: [],
       promise: null, notices: [], witness: false,
       underReview: false, barredInvestigator: false, policeRecommendation: false, councilRecommendation: false,
+      institution: institutions.fresh(), network: null,
       skills: {}, recruitment: {}, careerDutyDay: 0, secretMissionDone: false, officeResigned: false,
       career: 'worker', treasury: 40, caseStage: 'closed', contractRelief: false,
       hearing: null, bill: null, hearingRecord: null, eventQueue: [], storyHistory: [], followUps: [],
@@ -97,6 +99,7 @@
     return [{ speaker: event.id.includes('housing') ? '윤' : '소라', text: event.text }];
   }
   function eventReply(event, choice) {
+    if (event.institutionAudit) return institutions.auditReply(choice);
     if (event.recruitCareer || event.missionCareer) return careers.reply(event,choice);
     if (event.jobEpisode) {
       const item = event.jobChoices.find(option => option.id === choice);
@@ -125,6 +128,7 @@
   }
   function eventChoices(state, event) {
     if (!event || event.resolved) return [];
+    if (event.institutionAudit) return institutions.auditChoices(state);
     if (event.recruitCareer || event.missionCareer) return careers.choices(state,event);
     if (event.jobEpisode) return jobStories.choices(state,event);
     if (event.id === 'opening') return starts.occupations[event.occupation].options.map(option => ({ id: option.id, title: option.reply, detail: option.detail, disabled: state.energy < 10 }));
@@ -195,7 +199,16 @@
       const choice = eventChoices(next, event).find(item => item.id === action.choice);
       if (!event || event.id !== action.eventId || !choice || choice.disabled) return { state, message: '지금은 이 선택을 할 수 없다.' };
       let result = '';
-      if (event.missionCareer) {
+      if (event.institutionAudit) {
+        if(choice.id==='disclose') {
+          next.cash-=12;next.institution.merit=Math.max(0,next.institution.merit-8);
+          result='인사 자료를 공개하고 시정 비용 12크라운을 부담했다. 실적 8을 잃고 감사 주목도는 초기화됐다.';
+        }else{
+          next.career='worker';result='측근 인사 논란으로 보직에서 사임했다. 사조직과 과거 인사 명단은 남았다.';
+        }
+        next.institution.scrutiny=0;
+        remember(next,'지안',result);
+      } else if (event.missionCareer) {
         if(choice.id==='protect') {
           next.energy-=8;
           next.support=Math.min(100,next.support+6);
@@ -312,6 +325,14 @@
     if (inHearing && !['question', 'evidence', 'verdict'].includes(action.type)) {
       return { state, message: '청문회가 진행 중이다. 증언을 듣고 표결 또는 합의를 선택하자.' };
     }
+    const officialResult = institutions.apply(next, action);
+    if (officialResult) {
+      if (!officialResult.ok) return { state, message: officialResult.message };
+      record(next,officialResult.message);
+      const agency=institutions.departments[next.institution.department];
+      remember(next,institutions.colleagues[action.person]?.name || agency?.person || '지안',officialResult.message);
+      return { state:next, message:officialResult.message };
+    }
     switch (action.type) {
       case 'train': {
         if (!Object.hasOwn(careers.skills,action.skill) || (next.skills[action.skill]||0)>=1 || next.cash<8 || !spend(10)) break;
@@ -406,7 +427,7 @@
 
       case 'place': next.place = action.place; return { state: next, message: '' };
       case 'work': {
-        const job = careers.jobs[next.career] || starts.occupations.worker;
+        const job = institutions.job(next) || careers.jobs[next.career] || starts.occupations.worker;
         if (!spend(job.energy)) break;
         const toll = next.career === 'worker' && next.funding === 'merchant' && next.flooded !== null && !next.contractRelief;
         const bonus = next.career === next.startingOccupation ? next.jobStory.wageBonus : 0;
@@ -619,9 +640,16 @@
             record(next, report);
             remember(next, '소라', plan === 'long' ? '어촌이 장마를 버텼다. 공사에 참여한 당신을 기억한다.' : '어촌 18가구가 침수됐다. 당신이 어떤 결정을 했는지 기억한다.');
           }
+          if (next.day % 7 === 0 && institutions.active(next)) {
+            next.institution.agencyBudget+=8;
+            if(next.institution.department==='army') {
+              next.institution.supplies=Math.max(0,next.institution.supplies-4);
+              if(next.institution.supplies<20) next.institution.readiness=Math.max(0,next.institution.readiness-5);
+            }
+          }
           if (next.day > 20 && next.day % 7 === 0) {
             next.treasury += 10;
-            if (['mayor','investigator','councillor'].includes(next.career) && !next.underReview) {
+            if (['mayor','investigator','councillor','official','soldier','defenseMinister'].includes(next.career) && !next.underReview) {
               next.cash += 18;
               record(next, '주급 18크라운을 받았다. 시 재정에는 세수 10크라운이 들어왔다.');
             }
@@ -662,7 +690,7 @@
     careers.schedule(next);
     return { state: next, message };
   }
-  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices, eventDialogue, eventReply, starts, careers };
+  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices, eventDialogue, eventReply, starts, careers, institutions };
   if (typeof module !== 'undefined') module.exports = api;
   root.Campaign = api;
 })(globalThis);
