@@ -38,7 +38,7 @@
     sectPreacher:{name:'사이비 종교 설교자',circle:'nightlife',pay:21,risk:10,crime:false,hook:'후원자가 헌금과 조직 운영 내역을 공개하지 말라고 요구한다.',careful:'헌금 사용 내역을 공개하겠습니다.',bold:'후원자의 조건대로 비공개로 운영하겠습니다.'}
   };
   function fresh(){return {role:null,completed:[],discovered:[],missions:{},heat:0,exposure:0,trust:0,lastWork:0,lastExplore:0,seed:0x713a91};}
-  function canAct(state){return state.age>=20&&!state.underReview&&!state.hearing;}
+  function canAct(state){return state.age>=18&&!state.underReview&&!state.hearing;}
   function encounter(id,state,mission=false){
     const role=catalog[id],circle=circles[role.circle];
     return {id:(mission?'under-mission-':'under-offer-')+id,day:state.day,scene:circle.scene,title:mission?role.name+'의 첫 의뢰':'공개 공고에는 없는 제안',text:mission?role.hook:circle.name+'에서 '+role.name+' 일을 소개받았다. 주간 직업은 유지할 수 있다.',destination:'jobs',underworldRole:id,underworldMission:mission,

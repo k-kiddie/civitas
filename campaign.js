@@ -13,7 +13,7 @@
     none: { name: '공사를 보류한다', cost: 0, homes: 0, description: '돈을 쓰지 않는다. 장마 때 34가구가 침수된다.' }
   };
   function fresh() {
-    return { version: 3, age:24, underworld:underworld.fresh(), day: 1, actions: 2, cash: 32, energy: 80, name: '시민', gender: 'unspecified', profileSet: false, place: 'harbor', startConfigured: false, background: 'worker', startingOccupation: 'worker',
+    return { version: 3, age:null, ageChosen:false, underworld:underworld.fresh(), day: 1, actions: 2, cash: 32, energy: 80, name: '시민', gender: 'unspecified', profileSet: false, place: 'harbor', startConfigured: false, background: 'worker', startingOccupation: 'worker',
       surveyed: false, testimony: false, funding: null, built: null, flooded: null,
       candidate: false, election: null, policy: null, support: 25, memories: [], journal: [],
       promise: null, notices: [], witness: false,
@@ -171,6 +171,12 @@
       next.energy -= energy;
       return true;
     };
+    if (['start','profile'].includes(action.type)) {
+      const age=action.age===undefined ? (state.age ?? 24) : action.age;
+      if(!Number.isInteger(age)||age<18||age>100)return {state,message:'나이는 18~100 사이의 정수로 입력해 주세요.'};
+      next.age=age;
+      next.ageChosen=true;
+    }
     if (action.type === 'start') {
       if (next.startConfigured || typeof action.name !== 'string' || !action.name.trim() || !['male','female','unspecified'].includes(action.gender)) return { state, message: '시작 설정을 확인해 주세요.' };
       const background = starts.backgrounds[action.background];

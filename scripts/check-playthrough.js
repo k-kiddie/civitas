@@ -525,11 +525,12 @@ const source=RandomEvents.templates.find(item=>item.id==='source');
 lowEnergy.eventQueue=[{id:'source-test',randomType:'source',randomChoices:source.choices,randomPerson:source.person}];
 assert.equal(apply(lowEnergy,{type:'eventChoice',eventId:'source-test',choice:'verify'}).state,lowEnergy);
 assert.equal(apply(lowEnergy,{type:'eventChoice',eventId:'source-test',choice:'decline'}).state.eventQueue[0].resolved.choice,'decline');
+function adultState(){return {...fresh(),age:24,ageChosen:true};}
 const Underworld=require('../underworld');
 assert.equal(Object.keys(Underworld.catalog).length,26);
 for(const [id,role] of Object.entries(Underworld.catalog)){
  for(const choice of ['careful','bold','quit']){
-  let state={...fresh(),day:8,cash:100,energy:100,career:'teacher',underworld:{...Underworld.fresh(),discovered:[id]},eventQueue:[Underworld.encounter(id,{day:8})]};
+  let state={...adultState(),day:8,cash:100,energy:100,career:'teacher',underworld:{...Underworld.fresh(),discovered:[id]},eventQueue:[Underworld.encounter(id,{day:8})]};
   const act=action=>{state=apply(state,action).state};
   act({type:'eventChoice',eventId:'under-offer-'+id,choice:'accept'});
   assert.equal(state.career,'teacher');assert.equal(state.underworld.role,id);
@@ -552,27 +553,43 @@ for(const [id,role] of Object.entries(Underworld.catalog)){
   assert.equal(state.followUps.filter(item=>item.type==='underworld').length,0);
  }
 }
-let known={...fresh(),skills:{investigation:1},underworld:Underworld.fresh()};
+let known={...adultState(),skills:{investigation:1},underworld:Underworld.fresh()};
 for(const circle of Object.keys(Underworld.circles)){
  let state=apply(known,{type:'exploreUnderworld',circle}).state;
  assert.equal(state.underworld.discovered.length,1);
  assert.equal(Underworld.catalog[state.underworld.discovered[0]].circle,circle);
  assert.equal(apply(state,{type:'exploreUnderworld',circle}).state,state);
 }
-let stopped={...fresh(),day:8,underworld:{...Underworld.fresh(),role:'smuggler',missions:{smuggler:'pending'}},followUps:[{type:'underworld',role:'smuggler',day:9}]};
+let stopped={...adultState(),day:8,underworld:{...Underworld.fresh(),role:'smuggler',missions:{smuggler:'pending'}},followUps:[{type:'underworld',role:'smuggler',day:9}]};
 stopped=apply(stopped,{type:'leaveUnderworld'}).state;assert.equal(stopped.followUps.length,0);
-let reviewState={...fresh(),cash:0,underworld:{...Underworld.fresh(),role:'smuggler',heat:60}};
+let reviewState={...adultState(),cash:0,underworld:{...Underworld.fresh(),role:'smuggler',heat:60}};
 Underworld.review(reviewState);assert(reviewState.eventQueue[0].underworldReview);
 assert.equal(Underworld.choices(reviewState,reviewState.eventQueue[0])[0].disabled,true);
 reviewState=apply(reviewState,{type:'eventChoice',eventId:reviewState.eventQueue[0].id,choice:'leave'}).state;assert.equal(reviewState.underworld.role,null);
-let privacy={...fresh(),underworld:{...Underworld.fresh(),role:'sexWorker',exposure:60}};
+let privacy={...adultState(),underworld:{...Underworld.fresh(),role:'sexWorker',exposure:60}};
 Underworld.review(privacy);assert.equal(privacy.eventQueue[0].underworldReview,'privacy');
 privacy=apply(privacy,{type:'eventChoice',eventId:privacy.eventQueue[0].id,choice:'affirm'}).state;
 assert.equal(privacy.underworld.role,'sexWorker');assert.equal(privacy.underworld.heat,0);assert.equal(privacy.underworld.exposure,20);
 console.log('음지 26경로×3선택·정식 직업 병행·첫 의뢰·동의/거절·중복 수입 차단·재접속·연락망 탐색·수사/사생활 구분 통과');
 for(const id of Object.keys(Underworld.catalog)){
- const state={...fresh(),career:'teacher',eventQueue:[Underworld.encounter(id,{day:1})]};
+ const state={...adultState(),career:'teacher',eventQueue:[Underworld.encounter(id,{day:1})]};
  const declined=apply(state,{type:'eventChoice',eventId:'under-offer-'+id,choice:'decline'}).state;
  assert.equal(declined.underworld.role,null);assert.equal(declined.career,'teacher');assert.equal(declined.followUps.length,0);
 }
-const notAdult={...fresh(),age:19};assert.equal(apply(notAdult,{type:'exploreUnderworld',circle:'nightlife'}).state,notAdult);
+const notAdult={...adultState(),age:17};assert.equal(apply(notAdult,{type:'exploreUnderworld',circle:'nightlife'}).state,notAdult);
+assert.equal(fresh().age,null);
+for(const age of [18,27,65,100]){
+ const started=apply(fresh(),{type:'start',name:'선택한 인물',gender:'female',background:'merchant',occupation:'clerk',age}).state;
+ assert.equal(started.age,age);assert.equal(started.ageChosen,true);assert.equal(started.career,'clerk');
+ const edited=apply({...started,day:9,cash:77},{type:'profile',name:'선택한 인물',gender:'female',age:age===100?50:age+1}).state;
+ assert.equal(edited.day,9);assert.equal(edited.cash,77);assert.equal(edited.career,'clerk');
+ assert.equal(edited.age,age===100?50:age+1);
+}
+for(const age of [null,17,101,22.5,NaN,'25']){
+ const state=fresh();assert.equal(apply(state,{type:'start',name:'시민',gender:'male',background:'worker',occupation:'worker',age}).state,state);
+}
+let oldAge={...fresh(),age:24,profileSet:true,startConfigured:true,day:17,cash:58};delete oldAge.ageChosen;
+oldAge=require('../campaign').normalize(oldAge);assert.equal(oldAge.ageChosen,false);
+oldAge=apply(oldAge,{type:'profile',name:'기존 인물',gender:'unspecified',age:39}).state;
+assert.equal(oldAge.age,39);assert.equal(oldAge.day,17);assert.equal(oldAge.cash,58);
+console.log('시작 나이 직접 입력·범위와 정수 검증·편집 시 경력/자원 유지·기존 24세 저장 수정 통과');
