@@ -268,3 +268,48 @@ priorSave.day=22;priorSave.cash=73;
 assert.equal(require('../campaign').normalize(priorSave).startConfigured,true);
 assert.equal(require('../campaign').normalize(priorSave).cash,73);
 console.log('출신 3종×직업 3종·시작 장면·초기 자원·직업별 품삯·중복 시작 차단·기존 저장 유지 통과');
+for (const occupation of ['apprentice','policeAide']) {
+  for (const opening of ['help','earn']) {
+    for (const path of ['evidence','money']) {
+      let state = apply(fresh(),{type:'start',name:'연속 시민',gender:'unspecified',occupation,background:'worker'}).state;
+      const act = action => { state = apply(state,action).state; };
+      act({type:'eventChoice',eventId:'opening',choice:opening});
+      act({type:'acknowledge'});
+      act({type:'advance',to:'event'});
+      assert.equal(state.day,3);
+      const first = state.eventQueue[0];
+      assert.equal(first.jobEpisode,occupation === 'apprentice' ? 'factoryRecords' : 'policeSearch');
+      act({type:'eventChoice',eventId:first.id,choice:occupation === 'apprentice' ? (path === 'evidence' ? 'copy':'envelope') : (path === 'evidence' ? 'preserve':'obey')});
+      act({type:'acknowledge'});
+      act({type:'advance',to:'event'});
+      assert.equal(state.day,5);
+      state = JSON.parse(JSON.stringify(state));
+      const final = state.eventQueue[0];
+      const evidenceChoice = occupation === 'apprentice' ? 'collective':'report';
+      if (path === 'money') assert.equal(apply(state,{type:'eventChoice',eventId:final.id,choice:evidenceChoice}).state,state);
+      const choice = path === 'evidence' ? evidenceChoice : occupation === 'apprentice' ? 'personal':'close';
+      act({type:'eventChoice',eventId:final.id,choice});
+      assert.equal(state.jobStory.stage,'complete');
+      assert.equal(apply(state,{type:'eventChoice',eventId:final.id,choice}).state,state);
+      if (occupation === 'policeAide') {
+        assert.equal(state.policeRecommendation,path === 'evidence');
+        assert.equal(state.witness,false);
+      }
+      act({type:'acknowledge'});
+      const before = state.cash;
+      act({type:'work'});
+      assert.equal(state.cash-before,occupation === 'apprentice' ? (path === 'money' ? 16:14):12);
+      assert.equal(state.followUps.filter(item=>item.type === 'job').length,0);
+    }
+  }
+}
+const legacyJob = {...fresh(),day:8,startingOccupation:'apprentice',career:'apprentice',storyHistory:[{id:'opening',choice:'help'}]};
+delete legacyJob.jobStory;
+const migratedJob = require('../campaign').normalize(legacyJob);
+assert.equal(migratedJob.followUps[0].day,10);
+assert.equal(require('../campaign').normalize(migratedJob).followUps.length,1);
+console.log('직업 연속사건 8경로·2회 지연·증거 없는 공개 차단·저장 복원·승급 품삯·중복 지급 방지·구형 시작 보완 통과');
+const recommended = {...fresh(),day:21,career:'policeAide',policeRecommendation:true};
+assert.equal(apply(recommended,{type:'join',career:'investigator'}).state.career,'investigator');
+assert.equal(apply(recommended,{type:'join',career:'councillor'}).state,recommended);
+assert.equal(recommended.witness,false);

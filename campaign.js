@@ -1,5 +1,6 @@
 'use strict';
 (function (root) {
+  const jobStories = typeof module !== 'undefined' ? require('./job-stories') : root.JobStories;
   const starts = typeof module !== 'undefined' ? require('./starts') : root.Starts;
   const plans = {
     short: { name: '항구 제방', cost: 24, homes: 68, description: '항구를 보호한다. 어촌 18가구가 침수된다.' },
@@ -11,9 +12,10 @@
       surveyed: false, testimony: false, funding: null, built: null, flooded: null,
       candidate: false, election: null, policy: null, support: 25, memories: [], journal: [],
       promise: null, notices: [], witness: false,
-      underReview: false, barredInvestigator: false,
+      underReview: false, barredInvestigator: false, policeRecommendation: false,
       career: 'worker', treasury: 40, caseStage: 'closed', contractRelief: false,
       hearing: null, bill: null, hearingRecord: null, eventQueue: [], storyHistory: [], followUps: [],
+      jobStory: { stage:'none', opening:null, evidence:false, wageBonus:0, outcome:null },
       residents: { harbor: 48, village: 26, hill: 12 } };
   }
   function record(state, text) { state.journal.unshift({ day: state.day, text }); }
@@ -21,6 +23,14 @@
   function normalize(state) {
     const result = { ...fresh(), ...state };
     result.startConfigured = state.startConfigured ?? (state.profileSet || state.day > 1 || state.journal.length > 0);
+    if (!state.jobStory && ['apprentice','policeAide'].includes(result.startingOccupation)) {
+      const opening = result.storyHistory.find(item => item.id === 'opening');
+      if (opening) {
+        result.jobStory.opening = opening.choice;
+        result.jobStory.stage = 'waiting';
+        result.followUps = [...result.followUps, {type:'job', episode:result.startingOccupation === 'apprentice' ? 'factoryRecords' : 'policeSearch', day:result.day + 2}];
+      }
+    }
     if (result.election?.won) result.career = 'mayor';
     if (result.caseStage === 'sealed' && !result.underReview && !result.followUps.some(item => item.type === 'oversight')) {
       result.followUps = [...result.followUps, { type: 'oversight', day: result.day + 3 }];
@@ -85,6 +95,10 @@
     return [{ speaker: event.id.includes('housing') ? '윤' : '소라', text: event.text }];
   }
   function eventReply(event, choice) {
+    if (event.jobEpisode) {
+      const item = event.jobChoices.find(option => option.id === choice);
+      return { reply:item.reply, speaker:event.jobPerson, reaction:item.reaction };
+    }
     const replies = {
       repay: ['받은 돈을 반환하고 기록을 바로잡겠습니다.', '민석', '반환 기록과 시정 보고서를 남기겠습니다. 같은 일이 반복되면 추천할 수 없습니다.'],
       defend: ['공개 청문회에서 증거와 함께 설명하겠습니다.', '민석', '사흘 뒤에 뵙겠습니다. 통과해도 받은 돈 20크라운은 환수됩니다. 부결되면 해임입니다.'],
@@ -108,6 +122,7 @@
   }
   function eventChoices(state, event) {
     if (!event || event.resolved) return [];
+    if (event.jobEpisode) return jobStories.choices(state,event);
     if (event.id === 'opening') return starts.occupations[event.occupation].options.map(option => ({ id: option.id, title: option.reply, detail: option.detail, disabled: state.energy < 10 }));
     if (event.id === 'oversight') return [
       { id: 'repay', title: '합의금 반환과 기록 시정', detail: '20크라운 반환 · 지지 −4 · 수사관 복직', disabled: state.cash < 20 },
@@ -176,7 +191,10 @@
       const choice = eventChoices(next, event).find(item => item.id === action.choice);
       if (!event || event.id !== action.eventId || !choice || choice.disabled) return { state, message: '지금은 이 선택을 할 수 없다.' };
       let result = '';
-      if (event.id === 'opening') {
+      if (event.jobEpisode) {
+        result = jobStories.resolve(next,event,choice.id);
+        remember(next,event.jobPerson,result);
+      } else if (event.id === 'opening') {
         const job = starts.occupations[event.occupation];
         result = job.options.find(option => option.id === choice.id).result;
         next.energy -= 10;
@@ -184,6 +202,11 @@
         else if (event.occupation === 'worker') next.surveyed = true;
         else next.support += event.occupation === 'apprentice' ? 6 : 3;
         remember(next, job.person, result);
+        next.jobStory.opening = choice.id;
+        if (event.occupation !== 'worker') {
+          next.followUps.push({ type:'job', episode:event.occupation === 'apprentice' ? 'factoryRecords' : 'policeSearch', day:next.day + 2 });
+          next.jobStory.stage = 'waiting';
+        }
       } else if (event.id === 'oversight') {
         if (choice.id === 'repay') {
           next.cash -= 20;
@@ -328,7 +351,8 @@
         const job = starts.occupations[next.career] || starts.occupations.worker;
         if (!spend(job.energy)) break;
         const toll = next.career === 'worker' && next.funding === 'merchant' && next.flooded !== null && !next.contractRelief;
-        const wage = toll ? 10 : job.wage;
+        const bonus = next.career === 'apprentice' ? next.jobStory.wageBonus : 0;
+        const wage = (toll ? 10 : job.wage) + bonus;
         next.cash += wage;
         message = `${job.name} 업무로 ${wage}크라운을 받았다.${toll ? ' 선주 계약의 사용료 6크라운이 공제됐다.' : ''}`;
         break;
@@ -399,7 +423,7 @@
         message = '골목 집회에서 주민들의 이야기를 들었다. 예상 지지가 올랐다.';
         break;
       case 'join':
-        if (next.day < 21 || !Object.hasOwn(starts.occupations, next.career) || !['investigator', 'councillor'].includes(action.career) || (action.career === 'investigator' && next.barredInvestigator) || !next.witness || !spend()) break;
+        if (next.day < 21 || !Object.hasOwn(starts.occupations, next.career) || !['investigator', 'councillor'].includes(action.career) || (action.career === 'investigator' && next.barredInvestigator) || !(next.witness || (action.career === 'investigator' && next.policeRecommendation)) || !spend()) break;
         next.career = action.career;
         next.caseStage = action.career === 'investigator' ? 'open' : next.caseStage;
         message = action.career === 'investigator' ? '민석의 추천으로 항만 수사관이 됐다. 임명은 선거 당선과 다른 경로의 권한을 열었다.' : '지안의 추천으로 주민 협의회 위원에 위촉됐다. 안건을 제출하고 공개 청문회를 소집할 수 있다.';
@@ -470,6 +494,15 @@
           const due = next.followUps.filter(item => item.day <= next.day);
           next.followUps = next.followUps.filter(item => item.day > next.day);
           for (const item of due) {
+            if (item.type === 'job') {
+              const episode = jobStories.create(item.episode,next);
+              if (episode) {
+                next.eventQueue.push(episode);
+                next.jobStory.stage = item.episode;
+                record(next,episode.title);
+              }
+              continue;
+            }
             if (item.type === 'oversight') {
               next.underReview = true;
               next.eventQueue.push({ id: 'oversight', day: next.day, scene: 'hearing', title: '봉인했던 기록이 돌아왔다', text: '민석이 합의금 지급 내역을 확보했다. 직무 심사에 앞서 당신의 답변을 요구한다.', quote: '민석 “돈을 받은 이유를 설명해 주십시오.”', destination: 'city' });
