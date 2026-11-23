@@ -9,6 +9,7 @@ const routes = new Map([
   ['/job-stories.js',['job-stories.js','text/javascript; charset=utf-8']],
   ['/careers.js',['careers.js','text/javascript; charset=utf-8']],
   ['/institutions.js',['institutions.js','text/javascript; charset=utf-8']],
+  ['/agencies.js',['agencies.js','text/javascript; charset=utf-8']],
   ['/starts.js',['starts.js','text/javascript; charset=utf-8']],
   ['/campaign.js',['campaign.js','text/javascript; charset=utf-8']],
   ['/game.js',['game.js','text/javascript; charset=utf-8']],

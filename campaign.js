@@ -1,5 +1,6 @@
 'use strict';
 (function (root) {
+  const agencies = typeof module !== 'undefined' ? require('./agencies') : root.Agencies;
   const institutions = typeof module !== 'undefined' ? require('./institutions') : root.Institutions;
   const jobStories = typeof module !== 'undefined' ? require('./job-stories') : root.JobStories;
   const careers = typeof module !== 'undefined' ? require('./careers') : root.Careers;
@@ -15,6 +16,7 @@
       candidate: false, election: null, policy: null, support: 25, memories: [], journal: [],
       promise: null, notices: [], witness: false,
       underReview: false, barredInvestigator: false, policeRecommendation: false, councilRecommendation: false,
+      agencies: agencies.initial(), unassignedOfficials: 30, agencyProposal: null, agencyHistory: [], nextAgencyProposal: 1,
       institution: institutions.fresh(), network: null,
       skills: {}, recruitment: {}, careerDutyDay: 0, secretMissionDone: false, officeResigned: false,
       career: 'worker', treasury: 40, caseStage: 'closed', contractRelief: false,
@@ -325,11 +327,17 @@
     if (inHearing && !['question', 'evidence', 'verdict'].includes(action.type)) {
       return { state, message: '청문회가 진행 중이다. 증언을 듣고 표결 또는 합의를 선택하자.' };
     }
+    const reformResult=agencies.propose(next,action);
+    if(reformResult) {
+      if(!reformResult.ok)return {state,message:reformResult.message};
+      record(next,reformResult.message);
+      return {state:next,message:reformResult.message};
+    }
     const officialResult = institutions.apply(next, action);
     if (officialResult) {
       if (!officialResult.ok) return { state, message: officialResult.message };
       record(next,officialResult.message);
-      const agency=institutions.departments[next.institution.department];
+      const agency=agencies.registry(next)[next.institution.department];
       remember(next,institutions.colleagues[action.person]?.name || agency?.person || '지안',officialResult.message);
       return { state:next, message:officialResult.message };
     }
@@ -573,6 +581,11 @@
           const due = next.followUps.filter(item => item.day <= next.day);
           next.followUps = next.followUps.filter(item => item.day > next.day);
           for (const item of due) {
+            if(item.type==='agencyReform') {
+              const report=agencies.process(next,item);
+              if(report){next.eventQueue.push(report);record(next,report.text);}
+              continue;
+            }
             if(item.type==='secretMission') {
               next.eventQueue.push(careers.mission(item.career,next));
               record(next,'비밀 직업의 첫 임무가 도착했다.');

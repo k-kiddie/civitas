@@ -440,3 +440,45 @@ let disclosure={...fresh(),cash:30,career:'official',institution:{...institution
 disclosure=apply(disclosure,{type:'eventChoice',eventId:'audit-test',choice:'disclose'}).state;
 assert.equal(disclosure.cash,18);assert.equal(disclosure.institution.merit,12);assert.equal(disclosure.institution.scrutiny,0);assert.equal(disclosure.career,'official');
 assert.equal(apply(disclosure,{type:'eventChoice',eventId:'audit-test',choice:'disclose'}).state,disclosure);
+const Agencies=require('../agencies');
+function reformState(){return {...fresh(),day:22,cash:100,support:70,career:'official',institution:{...institutions.fresh(),department:'reconstruction',rank:4,merit:40}};}
+for(const type of ['createAgency','splitAgency','mergeAgency','abolishAgency']){
+ let state=reformState();
+ const total=s=>Object.values(s.agencies).reduce((sum,item)=>sum+item.staff,0)+s.unassignedOfficials;
+ const beforeTotal=total(state),beforeBudget=state.institution.agencyBudget;
+ const original=JSON.stringify(state.agencies);
+ state=apply(state,{type,name:'재난대응청',target:'welfare'}).state;
+ assert.equal(state.agencyProposal.stage,'cabinet');assert.equal(JSON.stringify(state.agencies),original);
+ state=apply(state,{type:'advance',to:'event'}).state;
+ assert.equal(state.day,25);assert.equal(state.agencyProposal.stage,'legislature');assert.equal(JSON.stringify(state.agencies),original);
+ state=JSON.parse(JSON.stringify(state));
+ state=apply(state,{type:'advance',to:'event'}).state;
+ assert.equal(state.day,28);assert.equal(state.agencyProposal,null);assert.equal(state.agencyHistory[0].status,'enacted');
+ assert.equal(total(state),beforeTotal);
+ assert.equal(state.institution.agencyBudget,beforeBudget+(type==='abolishAgency'?0:8)-(type==='createAgency'?20:type==='splitAgency'?10:5));
+ if(type==='createAgency'||type==='splitAgency')assert(Object.values(state.agencies).some(item=>item.name==='재난대응청'));
+ if(type==='splitAgency')assert.equal(state.agencies.reconstruction.staff,12);
+ if(type==='mergeAgency'){assert.equal(state.institution.department,'welfare');assert.equal(state.agencies.welfare.staff,44)}
+ if(type==='abolishAgency'){assert.equal(state.career,'worker');assert.equal(state.institution.department,null)}
+}
+let rejected=reformState();rejected.support=40;
+rejected=apply(rejected,{type:'abolishAgency'}).state;
+rejected=apply(rejected,{type:'advance',to:'event'}).state;
+assert.equal(rejected.agencyProposal,null);assert.equal(rejected.agencyHistory[0].status,'rejected');assert(rejected.agencies.reconstruction);
+let withdrawn=apply(reformState(),{type:'mergeAgency',target:'welfare'}).state;
+withdrawn=apply(withdrawn,{type:'withdrawReform'}).state;
+assert.equal(withdrawn.followUps.filter(item=>item.type==='agencyReform').length,0);
+assert.equal(withdrawn.agencyHistory[0].status,'withdrawn');
+const same=reformState();assert.equal(apply(same,{type:'mergeAgency',target:'reconstruction'}).state,same);
+assert.equal(apply(same,{type:'createAgency',name:'도시재건청'}).state,same);
+assert.equal(apply({...fresh(),career:'worker'},{type:'abolishAgency'}).state.career,'worker');
+console.log('조직개편 건의→정부→법·예산 승인·신설/분리/흡수/폐지·정원 보존·보직 승계·부결·철회·중복 이름 방지 통과');
+let legislatureRejected=reformState();legislatureRejected.support=50;
+legislatureRejected=apply(legislatureRejected,{type:'splitAgency',name:'재난대응청'}).state;
+legislatureRejected=apply(legislatureRejected,{type:'advance',to:'event'}).state;
+assert.equal(legislatureRejected.agencyProposal.stage,'legislature');
+legislatureRejected=apply(legislatureRejected,{type:'advance',to:'event'}).state;
+assert.equal(legislatureRejected.agencyHistory[0].status,'rejected');
+assert.equal(legislatureRejected.agencies.reconstruction.staff,24);
+const noHistory={...fresh()};delete noHistory.agencies;delete noHistory.agencyHistory;
+assert.equal(Object.keys(require('../campaign').normalize(noHistory).agencies).length,10);

@@ -1,11 +1,7 @@
 'use strict';
 (function(root){
-  const departments={
-    reconstruction:{name:'도시재건청',branch:'civil',skill:'administration',duty:'복구 민원과 공사 장부를 처리했다.',person:'윤'},
-    welfare:{name:'주민복지처',branch:'civil',skill:'care',duty:'구호 대상 명부와 급수 민원을 처리했다.',person:'다솔'},
-    audit:{name:'공공감사청',branch:'civil',skill:'investigation',duty:'계약과 지출 내역을 대조했다.',person:'지안'},
-    army:{name:'벨라르 방위군',branch:'military',skill:'investigation',duty:'부대 훈련과 보급 점검을 마쳤다.',person:'민석'}
-  };
+  const agencies = typeof module !== 'undefined' ? require('./agencies') : root.Agencies;
+  const departments=agencies.initial();
   const ranks={civil:['실무관','과장','국장','차장','기관장'],military:['병사','부사관','장교','지휘관','장군']};
   const colleagues={
     planner:{name:'한결',role:'기획 담당',competence:80},
@@ -18,9 +14,9 @@
   function title(state){
     if(state.career==='defenseMinister')return '국방부장관';
     if(!active(state))return '';
-    const agency=departments[state.institution.department];
+    const agency=agencies.registry(state)[state.institution.department];
     if(!agency)return '';
-    if(state.institution.rank===4 && agency.branch==='civil')return agency.name.endsWith('처')?'복지처장':agency.name==='도시재건청'?'재건청장':'감사청장';
+    if(state.institution.rank===4 && agency.branch==='civil')return agency.name+'장';
     return agency.name+' '+ranks[agency.branch][state.institution.rank];
   }
   function job(state){return active(state)?{name:title(state),wage:state.career==='defenseMinister'?30:12+state.institution.rank*4,energy:12}:null;}
@@ -30,7 +26,7 @@
     if(item.rank>=4)return '현재 경로의 최고 직급';
     if(item.merit<(item.rank+1)*8)return `실적 ${(item.rank+1)*8} 필요`;
     if(state.day-item.lastPromotion<3)return '현 직급에서 3일 이상 근무 필요';
-    if(departments[item.department].branch==='military' && item.rank===1 && !(state.skills.administration>=1))return '장교 임관에 문서 훈련 1회 필요';
+    if(agencies.registry(state)[item.department].branch==='military' && item.rank===1 && !(state.skills.administration>=1))return '장교 임관에 문서 훈련 1회 필요';
     if(item.rank===3 && state.support<45)return '기관장·장군 임명에 주민 지지 45 필요';
     return '';
   }
@@ -42,7 +38,7 @@
     if(state.underReview||state.hearing)return error();
     let message='';
     if(action.type==='enlist'){
-      const agency=departments[action.department];
+      const agency=agencies.registry(state)[action.department];
       if(!agency||state.career==='mayor'||state.career==='defenseMinister'||(state.skills[agency.skill]||0)<1||!spend())return error();
       if(active(state)&&item.department===action.department){state.actions++;return error()}
       item.department=action.department;item.rank=0;item.merit=0;item.lastPromotion=state.day;
@@ -63,8 +59,8 @@
     else if(action.type==='officialDuty'){
       if(item.lastDuty===state.day||!spend(12))return error();
       item.lastDuty=state.day;item.merit+=4;
-      if(departments[item.department].branch==='military')item.readiness=Math.min(100,item.readiness+4);
-      message=departments[item.department].duty+' 실적 +4.';
+      if(agencies.registry(state)[item.department].branch==='military')item.readiness=Math.min(100,item.readiness+4);
+      message=agencies.registry(state)[item.department].duty+' 실적 +4.';
     }else if(action.type==='promote'){
       if(promotionReason(state)||!spend())return error();
       item.rank++;item.lastPromotion=state.day;
@@ -72,7 +68,7 @@
     }else if(action.type==='agencyOrder'){
       if(item.rank<1||item.agencyBudget<12||!spend())return error();
       item.agencyBudget-=12;
-      if(departments[item.department].branch==='military'){
+      if(agencies.registry(state)[item.department].branch==='military'){
         item.supplies=Math.min(100,item.supplies+12);
         message='기관 예산 12로 군수품을 조달했다. 부대 보급 +12.';
       }else{
