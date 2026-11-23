@@ -55,6 +55,7 @@ gh repo clone k-kiddie/civitas ~/civitas
 sudo bash ~/civitas/deploy/install-auto.sh 8090
 ```
 
+- free-village 없이 단독으로 쓰면 포트를 80으로 줍니다: `sudo bash ~/civitas/deploy/install-auto.sh 80`. `http://주소`와 `http://주소/civitas` 둘 다 열리고 보안 그룹은 80만 있으면 됩니다.
 - `/opt/civitas/repo`에 main을 받아 그 자리에서 실행합니다.
 - 서비스가 시작·재시작될 때마다 `git pull --ff-only origin main`을 합니다. EC2를 켤 때마다 최신 main으로 실행됩니다. 받기에 실패해도 기존 코드로 켜집니다.
 - 받기는 설치한 계정의 `gh` 로그인 정보를 사용하고, 토큰을 따로 파일에 적지 않습니다. `gh auth logout`을 하면 자동 업데이트가 멈춥니다.
