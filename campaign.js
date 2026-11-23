@@ -11,7 +11,7 @@
       candidate: false, election: null, policy: null, support: 25, memories: [], journal: [],
       promise: null, notices: [], witness: false,
       career: 'worker', treasury: 40, caseStage: 'closed', contractRelief: false,
-      hearing: null, bill: null, hearingRecord: null,
+      hearing: null, bill: null, hearingRecord: null, eventQueue: [],
       residents: { harbor: 48, village: 26, hill: 12 } };
   }
   function record(state, text) { state.journal.unshift({ day: state.day, text }); }
@@ -55,6 +55,10 @@
       next.energy -= energy;
       return true;
     };
+    if (action.type === 'acknowledge') {
+      next.eventQueue.shift();
+      return { state: next, message: '' };
+    }
     const inHearing = next.hearing && next.hearing.day <= next.day;
     if (inHearing && !['question', 'evidence', 'verdict'].includes(action.type)) {
       return { state, message: '청문회가 진행 중이다. 증언을 듣고 표결 또는 합의를 선택하자.' };
@@ -255,6 +259,14 @@
               remember(next, '소라', response);
               record(next, response);
             }
+            next.eventQueue.push({
+              id: 'storm', day: next.day,
+              scene: plan === 'long' ? 'storm-safe' : plan === 'short' ? 'storm-partial' : 'storm-flood',
+              title: plan === 'long' ? '물은 제방 밖에서 멈췄다' : '물이 빠진 뒤, 빈집이 남았다',
+              text: `${plans[plan].name}. ${next.flooded}가구가 침수되어 도시를 떠났다.`,
+              quote: next.promise === 'broken' ? '소라 “지켜 준다고 했잖아.”' : plan === 'long' ? '소라 “우리 집 문턱까지 왔다가 멈췄어.”' : '소라 “떠나는 사람들의 이름을 기억해 줘.”',
+              destination: 'city'
+            });
             const report = `첫 장마. ${next.flooded}가구가 침수되어 도시를 떠났다.`;
             record(next, report);
             remember(next, '소라', plan === 'long' ? '어촌이 장마를 버텼다. 공사에 참여한 당신을 기억한다.' : '어촌 18가구가 침수됐다. 당신이 어떤 결정을 했는지 기억한다.');
@@ -270,6 +282,7 @@
             next.hearing.heard = [];
             next.hearing.evidence = false;
             next.notices.unshift('청문회가 시작됐다. 증언과 증거를 확인하고 마지막 결정을 내려야 시간이 흐른다.');
+            next.eventQueue.push({ id: 'hearing-' + next.day, day: next.day, scene: 'hearing', title: '당신의 서명도 이 자리에 있다', text: '계약과 임금 장부가 증언대에 놓였다. 누구에게 질문하고 무엇을 공개할지 결정하자.', quote: '지안 “오늘의 말은 모두 기록에 남습니다.”', destination: 'city' });
             record(next, '청문회 개회. 윤·소라·민석·도윤이 참석했다.');
           }
           if (next.day === 24 && !next.hearing && !next.bill) {
@@ -279,6 +292,12 @@
           if (next.day === 20) {
             next.election = electionResult(next);
             if (next.election.won) next.career = 'mayor';
+            next.eventQueue.push({
+              id: 'election', day: next.day, scene: next.election.won ? 'election-win' : 'election-loss',
+              title: next.election.won ? '광장이 당신의 이름을 부른다' : next.candidate ? '광장은 다른 이름을 불렀다' : '당신이 지켜본 선거',
+              text: `${next.election.winner} 동장 당선. ${next.candidate ? '당신의 득표율 ' + next.election.votes + '%.' : '당신은 출마하지 않았다.'} 내일도 도시의 삶은 이어진다.`,
+              quote: next.election.won ? '지안 “이제 약속을 예산으로 옮길 차례예요.”' : '소라 “내일 아침, 우리 동네에서 만나요.”', destination: 'power'
+            });
             record(next, `${next.election.winner} 동장 당선. ${next.candidate ? '당신의 득표율 ' + next.election.votes + '%' : '당신은 출마하지 않았다.'}`);
           }
         }

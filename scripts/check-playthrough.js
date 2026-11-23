@@ -117,3 +117,18 @@ pending = JSON.parse(JSON.stringify(pending));
 assert.deepEqual(pending.hearing.heard,['민석']);
 assert.equal(apply(pending,{type:'evidence'}).state.hearing.evidence,true);
 console.log('직접 청문회·중복 질문 방지·부결/합의/철회·진행 중 저장·시간 차단 통과');
+for (const [plan, scene] of [['long','storm-safe'],['short','storm-partial'],['none','storm-flood']]) {
+  let state = {...fresh(),day:11,built:plan};
+  state = apply(state,{type:'advance'}).state;
+  assert.equal(state.eventQueue[0].scene,scene);
+  const saved = JSON.parse(JSON.stringify(state));
+  assert.equal(saved.eventQueue[0].id,'storm');
+  state = apply(state,{type:'acknowledge'}).state;
+  assert.equal(state.eventQueue.length,0);
+  state = apply(state,{type:'advance'}).state;
+  assert.equal(state.eventQueue.length,0);
+}
+const oldSave = fresh();
+delete oldSave.eventQueue;
+assert.deepEqual(require('../campaign').normalize(oldSave).eventQueue,[]);
+console.log('선택별 사건 그림·미확인 저장·확인 뒤 재등장 방지·기존 저장 보완 통과');

@@ -10,6 +10,9 @@ const routes = new Map([
   ['/game.js',['game.js','text/javascript; charset=utf-8']],
   ['/style.css',['style.css','text/css; charset=utf-8']],
 ]);
+for (const scene of ['storm-safe', 'storm-partial', 'storm-flood', 'election-win', 'election-loss', 'hearing']) {
+  routes.set(`/assets/events/${scene}.webp`, [`assets/events/${scene}.webp`, 'image/webp']);
+}
 http.createServer((req,res)=>{
   const url = new URL(req.url,'http://localhost');
   if (url.pathname === '/healthz') {

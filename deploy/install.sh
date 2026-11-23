@@ -57,6 +57,10 @@ install -d -m 755 "$release"
 for file in index.html style.css game.js campaign.js server.js; do
   install -m 644 "$source_dir/$file" "$release/$file"
 done
+install -d -m 755 "$release/assets/events"
+for asset in "$source_dir"/assets/events/*.webp; do
+  install -m 644 "$asset" "$release/assets/events/"
+done
 "$node_bin" --check "$release/server.js"
 "$node_bin" --check "$release/campaign.js"
 ln -s "$release" /opt/civitas/current-next
