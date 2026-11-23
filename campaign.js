@@ -1,5 +1,6 @@
 'use strict';
 (function (root) {
+  const parties = typeof module !== 'undefined' ? require('./parties') : root.Parties;
   const politics = typeof module !== 'undefined' ? require('./politics') : root.Politics;
   const underworld = typeof module !== 'undefined' ? require('./underworld') : root.Underworld;
   const randomEvents = typeof module !== 'undefined' ? require('./random-events') : root.RandomEvents;
@@ -16,7 +17,7 @@
   function fresh() {
     return { version: 3, age:null, ageChosen:false, underworld:underworld.fresh(), day: 1, actions: 2, cash: 32, energy: 80, name: '시민', gender: 'unspecified', profileSet: false, place: 'harbor', startConfigured: false, background: 'worker', startingOccupation: 'worker',
       surveyed: false, testimony: false, funding: null, built: null, flooded: null,
-      politics:politics.fresh(), candidate: false, election: null, policy: null, support: 25, memories: [], journal: [],
+      parties:parties.fresh(), politics:politics.fresh(), candidate: false, election: null, policy: null, support: 25, memories: [], journal: [],
       promise: null, notices: [], witness: false,
       underReview: false, barredInvestigator: false, policeRecommendation: false, councilRecommendation: false,
       agencies: agencies.initial(), unassignedOfficials: 30, agencyProposal: null, agencyHistory: [], nextAgencyProposal: 1,
@@ -102,6 +103,7 @@
     return [{ speaker: event.id.includes('housing') ? '윤' : '소라', text: event.text }];
   }
   function eventReply(event, choice) {
+    if(event.partyDecision)return parties.decisionReply(choice);
     if(event.underworldRole || event.underworldReview)return underworld.reply(event,choice);
     if (event.randomType) return randomEvents.reply(event,choice);
     if (event.institutionAudit) return institutions.auditReply(choice);
@@ -133,6 +135,7 @@
   }
   function eventChoices(state, event) {
     if (!event || event.resolved) return [];
+    if(event.partyDecision)return parties.decisionChoices();
     if(event.underworldRole || event.underworldReview)return underworld.choices(state,event);
     if (event.randomType) return randomEvents.choices(state,event);
     if (event.institutionAudit) return institutions.auditChoices(state);
@@ -215,7 +218,9 @@
       const choice = eventChoices(next, event).find(item => item.id === action.choice);
       if (!event || event.id !== action.eventId || !choice || choice.disabled) return { state, message: '지금은 이 선택을 할 수 없다.' };
       let result = '';
-      if(event.underworldRole || event.underworldReview){
+      if(event.partyDecision){
+        result=parties.resolve(next,event,choice.id);
+      } else if(event.underworldRole || event.underworldReview){
         result=underworld.resolve(next,event,choice.id);
         underworld.review(next);
       } else if (event.randomType) {
@@ -348,6 +353,12 @@
     const inHearing = next.hearing && next.hearing.day <= next.day;
     if (inHearing && !['question', 'evidence', 'verdict'].includes(action.type)) {
       return { state, message: '청문회가 진행 중이다. 증언을 듣고 표결 또는 합의를 선택하자.' };
+    }
+    const partyResult=parties.act(next,action,politics.pool(next));
+    if(partyResult){
+      if(!partyResult.ok)return {state,message:partyResult.message};
+      record(next,partyResult.message);
+      return {state:next,message:partyResult.message};
     }
     const politicalResult=politics.act(next,action);
     if(politicalResult){
@@ -720,6 +731,7 @@
           for(const update of politics.tick(next))record(next,update);
           if (next.day === next.politics.nextDay) {
             next.election = electionResult(next);
+            parties.settleElection(next,next.election);
             if(next.election.won){
               if(next.career!=='mayor')next.politics.returnCareer=starts.occupations[next.career]?next.career:'worker';
               next.career='mayor';next.officeResigned=false;
@@ -751,7 +763,7 @@
     careers.schedule(next);
     return { state: next, message };
   }
-  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices, eventDialogue, eventReply, starts, careers, institutions, randomEvents, underworld, politics };
+  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices, eventDialogue, eventReply, starts, careers, institutions, randomEvents, underworld, politics, parties };
   if (typeof module !== 'undefined') module.exports = api;
   root.Campaign = api;
 })(globalThis);

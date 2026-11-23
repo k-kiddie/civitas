@@ -45,13 +45,13 @@
       state.career=agency.branch==='civil'?'official':'soldier';
       message=agency.name+'에 입직했다. 실무와 훈련으로 경력을 쌓을 수 있다.';
     }else if(action.type==='foundNetwork'){
-      if(state.network||!active(state)||state.cash<10||!['public','secret'].includes(action.kind)||!spend())return error();
+      if(state.network||(!active(state)&&action.kind==='secret')||state.cash<10||!['public','secret'].includes(action.kind)||!spend())return error();
       state.cash-=10;
       if(action.kind==='secret')item.scrutiny+=10;
       state.network={name:String(action.name||'동료 연구회').trim().slice(0,24)||'동료 연구회',kind:action.kind,members:[]};
       message=state.network.name+'을 결성했다. 동료를 영입하고 인사에 영향력을 행사할 수 있다.';
     }else if(action.type==='recruitMember'){
-      if(!active(state)||!state.network||!colleagues[action.person]||state.network.members.some(member=>member.id===action.person)||state.cash<4||!spend())return error();
+      if(!state.network||!colleagues[action.person]||state.network.members.some(member=>member.id===action.person)||state.cash<4||!spend())return error();
       state.cash-=4;
       state.network.members.push({id:action.person,loyalty:state.network.kind==='secret'?45:40,competence:colleagues[action.person].competence});
       message=colleagues[action.person].name+'이 '+state.network.name+'에 합류했다. 공적 역량과 개인 충성은 별도로 기록한다.';

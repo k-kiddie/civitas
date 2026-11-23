@@ -640,3 +640,41 @@ for(let seed=1;seed<20;seed++){
 }
 assert(generatedWin);
 console.log('3명 고정 해제·상황별 후보·회차별 생성 인물·동일 저장 유지·이탈자 독립 출마·신규 후보 당선·과거 명부 보존 통과');
+const Parties=require('../parties');
+const founding=()=>({...fresh(),cash:100,support:50,network:{name:'시민 모임',kind:'public',members:[{id:'planner',loyalty:40,competence:80},{id:'accountant',loyalty:40,competence:75}]}});
+let partyState=founding();
+partyState=apply(partyState,{type:'partyFound',name:'새로운시민당',platform:'transparency'}).state;
+assert.equal(partyState.parties.membership,'party-1');assert.equal(partyState.cash,80);assert.equal(partyState.parties.registry['party-1'].funds,20);
+assert.equal(Object.keys(partyState.parties.registry['party-1'].members).length,3);
+partyState=apply(partyState,{type:'partyOrganize'}).state;
+assert.equal(apply(partyState,{type:'partyOrganize'}).state,partyState);
+partyState=apply(partyState,{type:'advance'}).state;partyState=apply(partyState,{type:'partyOrganize'}).state;
+partyState=apply(partyState,{type:'run'}).state;partyState=apply(partyState,{type:'advance'}).state;
+partyState=apply(partyState,{type:'partyNominate'}).state;
+assert.equal(partyState.parties.registry['party-1'].nomination.id,'player');
+const bonusBefore=Parties.bonus(partyState,'player',Politics.pool(partyState));
+partyState=apply(partyState,{type:'partyAlliance',party:'civic'}).state;
+assert(Parties.bonus(partyState,'player',Politics.pool(partyState))>bonusBefore);
+partyState=apply(partyState,{type:'advance'}).state;
+const fundTotal=Object.values(partyState.parties.registry).reduce((sum,party)=>sum+party.funds,0);
+partyState=apply(partyState,{type:'partyMerge',party:'civic'}).state;
+assert.equal(partyState.parties.membership,'civic');assert(!partyState.parties.registry['party-1']);assert.equal(Object.values(partyState.parties.registry).reduce((sum,party)=>sum+party.funds,0),fundTotal);
+let splitState=founding();splitState=apply(splitState,{type:'partyJoin',party:'civic'}).state;
+assert.equal(splitState.parties.registry.civic.funds,29);splitState.parties.standing=45;
+splitState=apply(splitState,{type:'partySplit',name:'분당개혁당',platform:'transparency'}).state;
+assert.equal(splitState.parties.membership,'party-1');assert(splitState.parties.registry.civic);assert(!splitState.parties.registry.civic.members.player);
+splitState=apply(splitState,{type:'advance'}).state;const funds=splitState.parties.registry['party-1'].funds,publicBefore=splitState.treasury,cashBefore=splitState.cash;
+splitState=apply(splitState,{type:'partyDissolve'}).state;assert.equal(splitState.parties.membership,null);assert.equal(splitState.treasury,publicBefore+funds);assert.equal(splitState.cash,cashBefore);
+for(const decision of ['accept','independent']){
+ let nomination={...fresh(),cash:100};nomination=apply(nomination,{type:'partyJoin',party:'civic'}).state;nomination=apply(nomination,{type:'run'}).state;nomination=apply(nomination,{type:'advance'}).state;
+ nomination=apply(nomination,{type:'partyNominate'}).state;assert(nomination.eventQueue[0].partyDecision);
+ nomination=apply(nomination,{type:'eventChoice',eventId:nomination.eventQueue[0].id,choice:decision}).state;
+ assert.equal(nomination.candidate,decision==='independent');assert.equal(nomination.parties.membership,decision==='accept'?'civic':null);
+}
+let leadership=apply({...fresh(),cash:100},{type:'partyJoin',party:'labor'}).state;leadership.parties.standing=60;
+leadership=apply(leadership,{type:'partyLeadership'}).state;assert.equal(leadership.parties.registry.labor.leader,'player');
+let civicGroup=apply({...fresh(),cash:100},{type:'foundNetwork',kind:'public',name:'시민 발기 모임'}).state;assert(civicGroup.network);assert.equal(civicGroup.career,'worker');
+const rebel={...fresh(),day:13,network:{name:'모임',members:[{id:'planner',loyalty:10,competence:80}]},institution:{...institutions.fresh(),scrutiny:60}};
+Politics.tick(rebel);assert(Object.keys(rebel.parties.registry).some(id=>id.startsWith('breakaway-')));
+assert.equal(JSON.parse(JSON.stringify(partyState)).parties.membership,'civic');
+console.log('창당·가입·활동·공천 수락/탈당·당대표·분당·합당·해산 자금 보존·선거연대·일반 시민 발기모임·NPC 신당 통과');

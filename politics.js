@@ -1,5 +1,6 @@
 'use strict';
 (function(root){
+  const parties=typeof module!=='undefined'?require('./parties'):root.Parties;
   const candidates={
     sora:{name:'소라',platform:'housing',pledge:'이재민 주거와 배급 우선',base:[28,50,26]},
     doyun:{name:'도윤',platform:'trade',pledge:'항만 교역과 일자리 확대',base:[40,18,28]},
@@ -67,11 +68,11 @@
       const favored={housing:1,trade:0,transparency:2,security:2}[state.politics.platform];
       if(index===favored)strength+=6;
       const allies=Object.values(state.politics.endorsements).filter(value=>value==='player').length;
-      strength=Math.max(5,Math.min(95,strength+allies*2));
-      const raw=Object.fromEntries(Object.entries(field).map(([id,npc])=>[id,npc.base[index]+(state.politics.activity[id]||0)*2+(id==='sora'&&index===1&&state.flooded>0?8:0)+(id==='jian'&&state.institution.scrutiny>=60?10:0)]));
+      strength=Math.max(5,Math.min(95,strength+allies*2+parties.bonus(state,'player',field)));
+      const raw=Object.fromEntries(Object.entries(field).map(([id,npc])=>[id,npc.base[index]+parties.bonus(state,id,field)+(state.politics.activity[id]||0)*2+(id==='sora'&&index===1&&state.flooded>0?8:0)+(id==='jian'&&state.institution.scrutiny>=60?10:0)]));
       for(const endorsement of Object.values(state.politics.endorsements))if(raw[endorsement]!==undefined)raw[endorsement]+=3;
       const npcTotal=Object.values(raw).reduce((a,b)=>a+b,0);
-      const baseline=Object.keys(candidates).reduce((sum,id)=>sum+(raw[id]||0),0);
+      const baseline=Object.values(candidates).reduce((sum,person)=>sum+person.base[index],0);
       const playerWeight=state.candidate?strength/(100-strength)*baseline:0;
       const total=npcTotal+playerWeight;
       const shares=Object.fromEntries(Object.entries(raw).map(([id,value])=>[id,100*value/total]));
@@ -81,7 +82,7 @@
     const totals=Object.fromEntries([...Object.keys(field),'player'].map(id=>[id,districts.reduce((sum,district)=>sum+district.voters*district.shares[id],0)/electorate]));
     const order=Object.entries(totals).sort((a,b)=>b[1]-a[1]);
     const winnerId=order[0][0];
-    return {won:winnerId==='player',winnerId,winner:winnerId==='player'?state.name:field[winnerId].name,votes:Math.round(totals.player),totals,districts,ran:state.candidate,playerName:state.name,day:state.day,round:state.politics.round,candidates:Object.fromEntries(Object.entries(field).map(([id,person])=>[id,{name:person.name,pledge:person.pledge,platform:person.platform,occupation:person.occupation||'지역 활동가'}]))};
+    return {won:winnerId==='player',winnerId,winner:winnerId==='player'?state.name:field[winnerId].name,votes:Math.round(totals.player),totals,districts,ran:state.candidate,playerName:state.name,day:state.day,round:state.politics.round,candidates:Object.fromEntries(Object.entries(field).map(([id,person])=>[id,{name:person.name,pledge:person.pledge,platform:person.platform,occupation:person.occupation||'지역 활동가',partyName:parties.ballotLabel(state,id,field)}]))};
   }
   function tick(state){
     ensureField(state);
@@ -105,6 +106,7 @@
           const independentId='independent-'+member.id;
           election.independents[independentId]={id:independentId,name,platform:preferences(member.id)[0],pledge:'측근 인사 청산과 조직 운영 개혁',base:[25,25,30],occupation:'이탈한 조직 구성원'};
           election.endorsements[member.id]=independentId;
+          parties.registerIndependent(state,independentId,election.independents[independentId]);
           state.network.members=state.network.members.filter(value=>value.id!==member.id);
           const text=name+'이 측근 인사에 반발해 조직을 떠나 독립 출마했다.';updates.push(text);state.memories.push({person:name,day:state.day,text});
         }
