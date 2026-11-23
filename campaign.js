@@ -1,5 +1,6 @@
 'use strict';
 (function (root) {
+  const chronicles = typeof module !== 'undefined' ? require('./chronicles') : root.Chronicles;
   const society = typeof module !== 'undefined' ? require('./society') : root.Society;
   const succession = typeof module !== 'undefined' ? require('./succession') : root.Succession;
   const family = typeof module !== 'undefined' ? require('./family') : root.Family;
@@ -113,6 +114,7 @@
     return [{ speaker: event.id.includes('housing') ? '윤' : '소라', text: event.text }];
   }
   function eventReply(event, choice) {
+    if(event.chronicle)return chronicles.reply(event,choice);
     if(event.reunion)return society.reply(event,choice);
     if(event.successionOffer)return succession.reply(event,choice);
     if(event.familyOffer)return family.reply(event,choice);
@@ -150,6 +152,7 @@
   }
   function eventChoices(state, event) {
     if (!event || event.resolved) return [];
+    if(event.chronicle)return chronicles.choices(state,event);
     if(event.reunion)return society.choices(state,event);
     if(event.successionOffer)return succession.choices(state,event);
     if(event.familyOffer)return family.choices(state,event);
@@ -238,7 +241,9 @@
       const choice = eventChoices(next, event).find(item => item.id === action.choice);
       if (!event || event.id !== action.eventId || !choice || choice.disabled) return { state, message: '지금은 이 선택을 할 수 없다.' };
       let result = '';
-      if(event.reunion){
+      if(event.chronicle){
+        result=chronicles.resolve(next,event,choice.id);
+      } else if(event.reunion){
         result=society.resolve(next,event,choice.id);
       } else if(event.successionOffer){
         result=succession.resolve(next,event,choice.id);
@@ -378,11 +383,17 @@
     if (action.type === 'acknowledge') {
       next.eventQueue.shift();
       underworld.review(next);
+      chronicles.tick(next);
       return { state: next, message: '' };
     }
     const inHearing = next.hearing && next.hearing.day <= next.day;
     if (inHearing && !['question', 'evidence', 'verdict'].includes(action.type)) {
       return { state, message: '청문회가 진행 중이다. 증언을 듣고 표결 또는 합의를 선택하자.' };
+    }
+    const chronicleResult=chronicles.act(next,action);
+    if(chronicleResult){
+      if(!chronicleResult.ok)return {state,message:chronicleResult.message};
+      record(next,chronicleResult.message);return {state:next,message:chronicleResult.message};
     }
     const successionResult=succession.act(next,action);
     if(successionResult){
@@ -896,7 +907,7 @@
     if(result.state!==state)life.observe(result.state,state,action,lifeDescriptor(result.state));
     return result;
   }
-  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices, eventDialogue, eventReply, starts, careers, institutions, randomEvents, underworld, politics, parties, pacts, council, life, family, succession, society };
+  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices, eventDialogue, eventReply, starts, careers, institutions, randomEvents, underworld, politics, parties, pacts, council, life, family, succession, society, chronicles };
   if (typeof module !== 'undefined') module.exports = api;
   root.Campaign = api;
 })(globalThis);
