@@ -1,6 +1,8 @@
 'use strict';
 (function(root){
   const paths={craft:'기술 교육',administration:'문서·교육',care:'돌봄 교육',commerce:'상업 교육'};
+  const activeId=state=>state.life.activeId||'player';
+  const currentPlayer=state=>state.life.people[activeId(state)];
   function fresh(){return {pending:[],nextChild:1,nextOffer:1};}
   function links(p){return {status:'unset',partner:null,children:[],parents:[],...p.family};}
   function restore(state){
@@ -9,7 +11,7 @@
   }
   function log(p,day,text){p.history.push({day,type:'family',text});}
   function adult(p){return p&&p.age>=18;}
-  function partner(state){const id=state.life.people.player.family.partner;return id?state.life.people[id]:null;}
+  function partner(state){const id=currentPlayer(state).family.partner;return id?state.life.people[id]:null;}
   function relatives(state,a,b){
     const ancestors=p=>{
       const found=new Set(),pending=[...p.family.parents];
@@ -21,18 +23,18 @@
   }
   function firstContact(p){return p.history.find(item=>item.type==='relationship')?.day;}
   function eligiblePartner(state,p){
-    const player=state.life.people.player;
+    const player=currentPlayer(state);
     return adult(player)&&adult(p)&&p.source==='resident'&&!p.family.partner&&!player.family.partner&&!relatives(state,player,p)&&p.relationship>=70&&state.day-(firstContact(p)??state.day)>=30;
   }
   function context(state,event){
-    const offer=event.familyOffer;const player=state.life.people.player;
+    const offer=event.familyOffer;const player=currentPlayer(state);
     const p=offer.person?state.life.people[offer.person]:null;
     let valid=state.startConfigured&&!state.hearing&&!state.underReview;
     if(offer.type==='date')valid=valid&&eligiblePartner(state,p);
-    if(offer.type==='marry')valid=valid&&adult(player)&&adult(p)&&player.family.partner===p?.id&&p.family.partner==='player'&&player.family.status==='dating'&&p.relationship>=80&&state.day-player.family.since>=90&&state.cash>=12;
+    if(offer.type==='marry')valid=valid&&adult(player)&&adult(p)&&player.family.partner===p?.id&&p.family.partner===activeId(state)&&player.family.status==='dating'&&p.relationship>=80&&state.day-player.family.since>=90&&state.cash>=12;
     if(['birth','adoption'].includes(offer.type)){
-      valid=valid&&adult(player)&&state.cash>=20&&!state.life.family.pending.some(plan=>plan.parents.includes('player'));
-      if(offer.partner)valid=valid&&player.family.partner===offer.partner&&state.life.people[offer.partner]?.family.partner==='player'&&state.life.people[offer.partner].relationship>=80;
+      valid=valid&&adult(player)&&state.cash>=20&&!state.life.family.pending.some(plan=>plan.parents.includes(activeId(state)));
+      if(offer.partner)valid=valid&&player.family.partner===offer.partner&&state.life.people[offer.partner]?.family.partner===activeId(state)&&state.life.people[offer.partner].relationship>=80;
       if(offer.type==='birth')valid=valid&&Boolean(offer.partner)&&player.family.status==='married'&&player.health>=40&&state.life.people[offer.partner]?.health>=40;
     }
     return {offer,player,p,valid};
@@ -59,7 +61,7 @@
     const {offer,player,p,valid}=context(state,event);
     if(!valid)return '조건이 바뀌어 가족 계획을 진행하지 않았다.';
     if(offer.type==='date'){
-      player.family={...player.family,status:'dating',partner:p.id,since:state.day};p.family={...p.family,status:'dating',partner:'player',since:state.day};
+      player.family={...player.family,status:'dating',partner:p.id,since:state.day};p.family={...p.family,status:'dating',partner:activeId(state),since:state.day};
       log(player,state.day,p.name+'과 서로 동의해 연인 관계를 시작했다.');log(p,state.day,player.name+'과 서로 동의해 연인 관계를 시작했다.');
       return p.name+'과 연인 관계를 시작했다. 성별로 관계나 출산 역할을 자동 지정하지 않는다.';
     }
@@ -69,7 +71,7 @@
       return p.name+'과 혼인했다. 준비비 12를 사용했고 서로의 돈과 직업은 합치지 않았다.';
     }
     state.cash-=20;
-    const plan={type:offer.type,name:offer.name,childAge:offer.childAge,parents:['player',...(offer.partner?[offer.partner]:[])],createdDay:state.day};
+    const plan={type:offer.type,name:offer.name,childAge:offer.childAge,parents:[activeId(state),...(offer.partner?[offer.partner]:[])],createdDay:state.day};
     if(offer.type==='adoption'){createChild(state,plan);return offer.name+'을 입양해 가족으로 맞이했다. 준비비 20 · 성년 전까지 돌봄비 하루 2.';}
     state.life.family.pending.push({...plan,dueDay:state.day+270});
     log(player,state.day,offer.name+'을 맞이할 출생·돌봄 계획에 합의했다. '+(state.day+270)+'일 예정');
@@ -81,10 +83,17 @@
     state.actions--;state.energy-=5;return {ok:true,message:'가족에 관한 대화를 시작했다. 사건창에서 진행 여부를 직접 결정하자.'};
   }
   function act(state,action){
-    if(!['familyDate','familyMarry','familySeparate','familyChild','familyEducate','familySingle'].includes(action.type))return null;
+    if(!['familyDate','familyMarry','familySeparate','familyChild','familyEducate','familySingle','familySupport'].includes(action.type))return null;
     const fail=message=>({ok:false,message});
     if(!state.startConfigured||!state.actions||state.energy<5||state.hearing||state.underReview||state.eventQueue.length)return fail('진행 중인 사건 · 행동 1 · 기력 5 · 심사 상태를 확인하자.');
-    const player=state.life.people.player;const spouse=partner(state);
+    const player=currentPlayer(state);const spouse=partner(state);
+    if(action.type==='familySupport'){
+      const relative=Object.hasOwn(state.life.people,action.person)?state.life.people[action.person]:null;
+      if(!relative||relative.id===activeId(state)||(!player.family.parents.includes(relative.id)&&!player.family.children.includes(relative.id))||state.cash<10||relative.family.supportDay===state.day)return fail('직계 가족 · 개인 돈 10 · 오늘의 지원 여부를 확인하자.');
+      state.cash-=10;relative.wealth+=10;relative.family.supportDay=state.day;state.actions--;state.energy-=5;
+      log(player,state.day,relative.name+'에게 생활비 10을 지원했다.');log(relative,state.day,player.name+'에게 생활비 10을 지원받았다.');
+      return {ok:true,message:relative.name+'에게 개인 돈 10을 보냈다. 공금과 당 자금은 사용하지 않았다.'};
+    }
     if(action.type==='familySingle'){
       if(player.family.partner)return fail('현재 관계를 먼저 정리하자.');
       if(player.family.status==='single')return fail('현재 이미 배우자 없이 살고 있다.');
@@ -111,13 +120,13 @@
     if(action.type==='familyChild'){
       const name=String(action.name||'').trim();const type=action.method;
       const childAge=type==='birth'?0:action.childAge;
-      if(!adult(player)||!['birth','adoption'].includes(type)||name.length<1||name.length>18||!Number.isInteger(childAge)||childAge<0||childAge>16||state.cash<20||state.life.family.pending.some(plan=>plan.parents.includes('player')))return fail('성인 · 이름 1~18자 · 입양 나이 0~16세 · 준비비 20 · 진행 중인 출생 계획을 확인하자.');
+      if(!adult(player)||!['birth','adoption'].includes(type)||name.length<1||name.length>18||!Number.isInteger(childAge)||childAge<0||childAge>16||state.cash<20||state.life.family.pending.some(plan=>plan.parents.includes(activeId(state))))return fail('성인 · 이름 1~18자 · 입양 나이 0~16세 · 준비비 20 · 진행 중인 출생 계획을 확인하자.');
       if(spouse&&spouse.relationship<80)return fail('함께 돌볼 파트너의 개인 관계 80과 동의가 필요하다.');
       if(type==='birth'&&(!spouse||player.family.status!=='married'||player.health<40||spouse.health<40))return fail('혼인한 파트너 · 양쪽 건강 40이 필요하다.');
       return offer(state,{type,name,childAge,partner:spouse?.id||null,speaker:spouse?.name||'돌봄 담당자',detail:type==='birth'?'개인 돈 20 · 270일 뒤 가족 합류 · 이후 미성년 돌봄비 하루 2':'개인 돈 20 · '+childAge+'세 자녀 합류 · 성년 전 돌봄비 하루 2'},type==='birth'?'새 가족을 맞이할 계획':'함께 살아갈 가족을 맞이한다',[type==='birth'?'새 가족을 맞이하는 일과 돌봄 책임을 함께 결정합시다. 출생 과정과 생물학적 역할은 현재 추상화합니다.':'준비된 돌봄 환경에서 아이를 가족으로 맞이할지 직접 결정합시다.',name+'의 이름과 나이, 앞으로의 생활비를 확인해 주세요. 자동 상속이나 후계자 승계까지 처리하는 단계는 아닙니다.']);
     }
     const child=Object.hasOwn(state.life.people,action.person)?state.life.people[action.person]:null;
-    if(!child||!child.family.parents.includes('player')||child.age<6||child.age>=18||!Object.hasOwn(paths,action.path)||state.cash<12||state.day-(child.education?.supportDay??-365)<365)return fail('6~17세 자녀 · 교육 분야 · 개인 돈 12 · 365일 간격의 교육 지원 여부를 확인하자.');
+    if(!child||!child.family.parents.includes(activeId(state))||child.age<6||child.age>=18||!Object.hasOwn(paths,action.path)||state.cash<12||state.day-(child.education?.supportDay??-365)<365)return fail('6~17세 자녀 · 교육 분야 · 개인 돈 12 · 365일 간격의 교육 지원 여부를 확인하자.');
     child.education={path:action.path,years:(child.education?.years||0)+1,year:Math.floor((state.day-1)/365),supportDay:state.day};
     state.cash-=12;state.actions--;state.energy-=5;log(child,state.day,paths[action.path]+' 지원을 받았다. 성년 진로에 반영');log(player,state.day,child.name+'의 '+paths[action.path]+'을 지원했다. 개인 돈 12');
     return {ok:true,message:child.name+'의 '+paths[action.path]+'을 지원했다. 365일 이내에 중복 지원할 수 없고 성년 진로에 반영된다.'};
@@ -137,14 +146,16 @@
         const path=child.education?.path,trained=(child.education?.years||0)>=2;
         child.source='resident';child.occupation=trained?({craft:'apprentice',administration:'clerk',care:'medic',commerce:'worker'}[path]||'unemployed'):'unemployed';
         child.jobTitle={apprentice:'공장 견습',clerk:'서기',medic:'진료소 보조',worker:'항구 노동자',unemployed:'구직 중'}[child.occupation];child.since=day;
-        child.family.status='single';child.goal={craft:'artisan',administration:'teacher',care:'medic',commerce:'trader'}[path]||'worker';
+        child.firstOccupation=child.occupation;child.family.status='single';child.goal={craft:'artisan',administration:'teacher',care:'medic',commerce:'trader'}[path]||'worker';
         log(child,day,'성년이 되어 '+child.jobTitle+' 생활을 시작했다. 부모·자녀 관계는 유지');
         state.eventQueue.push({id:'family-adult-'+child.id,day,scene:'hearing',familyReport:true,title:child.name+'의 새로운 출발',text:'교육과 성장 기록에 따라 '+child.jobTitle+' 생활을 시작한다.',destination:'people',dialogue:[{speaker:child.name,text:'성년이 됐어요. 지금까지의 관계와 배운 것을 가지고 제 생활을 시작하겠습니다.'}]});
         continue;
       }
       if(child.age>=6&&child.occupation!=='student'){child.occupation='student';child.jobTitle='학교에 다니는 아이';log(child,day,'학교 생활을 시작했다.');}
-      if(child.family.parents.includes('player'))state.cash-=2;
-      child.health=Math.max(0,Math.min(100,child.health+(state.cash>=0?1:-1)));
+      const guardian=state.life.people[child.family.parents[0]];
+      if(guardian?.id===activeId(state))state.cash-=2;else if(guardian)guardian.wealth-=2;
+      const funds=guardian?.id===activeId(state)?state.cash:guardian?.wealth??0;
+      child.health=Math.max(0,Math.min(100,child.health+(funds>=0?1:-1)));
     }
   }
   const api={fresh,paths,restore,partner,eligiblePartner,choices,reply,resolve,act,tick};

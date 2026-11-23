@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js",
-    "test": "node scripts/check-playthrough.js && node scripts/check-life.js && node scripts/check-family.js"
+    "test": "node scripts/check-playthrough.js && node scripts/check-life.js && node scripts/check-family.js && node scripts/check-succession.js"
   },
   "engines": {
     "node": ">=18"

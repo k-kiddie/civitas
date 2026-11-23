@@ -1,5 +1,6 @@
 'use strict';
 (function (root) {
+  const succession = typeof module !== 'undefined' ? require('./succession') : root.Succession;
   const family = typeof module !== 'undefined' ? require('./family') : root.Family;
   const life = typeof module !== 'undefined' ? require('./life') : root.Life;
   const council = typeof module !== 'undefined' ? require('./council') : root.Council;
@@ -53,7 +54,7 @@
       result.candidate=false;
     }
     if(result.politics.nextDay<=state.day)result.politics={...result.politics,nextDay:result.politics.nextDay+28*(Math.floor((state.day-result.politics.nextDay)/28)+1)};
-    if (result.election?.won && !result.officeResigned) result.career = 'mayor';
+    if (result.election?.won && (result.election.actor??'player')===(result.life?.activeId||'player') && !result.officeResigned) result.career = 'mayor';
     if (result.caseStage === 'sealed' && !result.underReview && !result.followUps.some(item => item.type === 'oversight')) {
       result.followUps = [...result.followUps, { type: 'oversight', day: result.day + 3 }];
     }
@@ -111,6 +112,7 @@
     return [{ speaker: event.id.includes('housing') ? '윤' : '소라', text: event.text }];
   }
   function eventReply(event, choice) {
+    if(event.successionOffer)return succession.reply(event,choice);
     if(event.familyOffer)return family.reply(event,choice);
     if(event.councilMeeting)return council.meetingReply(event,choice);
     if(event.pactOffer)return pacts.reply(event,choice);
@@ -146,6 +148,7 @@
   }
   function eventChoices(state, event) {
     if (!event || event.resolved) return [];
+    if(event.successionOffer)return succession.choices(state,event);
     if(event.familyOffer)return family.choices(state,event);
     if(event.councilMeeting)return council.meetingChoices(state,event);
     if(event.pactOffer)return pacts.choices(state,event);
@@ -232,7 +235,9 @@
       const choice = eventChoices(next, event).find(item => item.id === action.choice);
       if (!event || event.id !== action.eventId || !choice || choice.disabled) return { state, message: '지금은 이 선택을 할 수 없다.' };
       let result = '';
-      if(event.familyOffer){
+      if(event.successionOffer){
+        result=succession.resolve(next,event,choice.id);
+      } else if(event.familyOffer){
         result=family.resolve(next,event,choice.id);
       } else if(event.councilMeeting){
         result=council.resolveMeeting(next,event,choice.id);
@@ -373,6 +378,11 @@
     const inHearing = next.hearing && next.hearing.day <= next.day;
     if (inHearing && !['question', 'evidence', 'verdict'].includes(action.type)) {
       return { state, message: '청문회가 진행 중이다. 증언을 듣고 표결 또는 합의를 선택하자.' };
+    }
+    const successionResult=succession.act(next,action);
+    if(successionResult){
+      if(!successionResult.ok)return {state,message:successionResult.message};
+      record(next,successionResult.message);return {state:next,message:successionResult.message};
     }
     const familyResult=family.act(next,action);
     if(familyResult){
@@ -524,7 +534,7 @@
       case 'place': next.place = action.place; return { state: next, message: '' };
       case 'work': {
         const job = institutions.job(next) || careers.jobs[next.career] || starts.occupations.worker;
-        if (!spend(job.energy)) break;
+        if (next.career==='unemployed'||!spend(job.energy)) break;
         const toll = next.career === 'worker' && next.funding === 'merchant' && next.flooded !== null && !next.contractRelief;
         const bonus = next.career === next.startingOccupation ? next.jobStory.wageBonus : 0;
         const wage = (toll ? 10 : job.wage) + bonus;
@@ -881,7 +891,7 @@
     if(result.state!==state)life.observe(result.state,state,action,lifeDescriptor(result.state));
     return result;
   }
-  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices, eventDialogue, eventReply, starts, careers, institutions, randomEvents, underworld, politics, parties, pacts, council, life, family };
+  const api = { fresh, apply, plans, normalize, electionResult, hearingStrength, eventChoices, eventDialogue, eventReply, starts, careers, institutions, randomEvents, underworld, politics, parties, pacts, council, life, family, succession };
   if (typeof module !== 'undefined') module.exports = api;
   root.Campaign = api;
 })(globalThis);

@@ -46,7 +46,7 @@
     return Object.values({...state.council.people,...Object.fromEntries(members(state).map(member=>[member.id,member]))});
   }
   function rememberPerson(state,member,entry){
-    member.career=member.career||[];member.career.push(entry);
+    member.career=member.career||[];member.career.push({actor:state.life?.activeId||'player',...entry});
     state.council.people={...state.council.people,[member.id]:copy(member)};
   }
   function electionScore(state,member,chamber){
@@ -65,8 +65,13 @@
       for(const member of chamber.members){
         if(!bill.amendments.some(item=>item.member===member.id))continue;
         member.reputation=Math.max(0,(member.reputation??50)-10);
-        member.relationship=Math.max(0,member.relationship-8);
-        rememberPerson(state,member,{type:'unfulfilled',round:chamber.round,day:state.day,policy:bill.policy,text:'약속한 지역 공청회 사업이 임기 안에 집행되지 않았다. 평판 −10 · 개인 관계 −8.'});
+        const owner=bill.actor??'player';
+        if(owner===(state.life?.activeId||'player'))member.relationship=Math.max(0,member.relationship-8);
+        else {
+          const person=state.life?.people?.['council:'+member.id];
+          if(person){person.relations={...person.relations,[owner]:Math.max(0,(person.relations?.[owner]??45)-8)};}
+        }
+        rememberPerson(state,member,{actor:owner,type:'unfulfilled',round:chamber.round,day:state.day,policy:bill.policy,text:'약속한 지역 공청회 사업이 임기 안에 집행되지 않았다. 평판 −10 · 개인 관계 −8.'});
       }
     }
     state.council.reviewedRound=chamber.round;
@@ -208,7 +213,7 @@
   function authorized(state,policy){return !current(state)||billFor(state,policy)?.status==='passed';}
   function cost(state,policy,base){return base+(billFor(state,policy)?.amendments||[]).reduce((sum,item)=>sum+(item.cost??4),0);}
   function intent(state,bill,group){
-    const own=current(state)?.governmentGroup===group.id&&state.election?.won&&(!group.party||state.parties.membership===group.party);
+    const own=current(state)?.governmentGroup===group.id&&state.election?.won&&(state.election.actor??'player')===(state.life?.activeId||'player')&&!state.officeResigned&&(!group.party||state.parties.membership===group.party);
     const promised=state.pacts.agreements.some(pact=>pact.round===bill.round&&pact.status==='governing'&&pact.policy===bill.policy&&pact.target===group.party&&pact.party===state.parties.membership);
     const trust=group.party?(state.pacts.trust[group.party]??50):50;
     if(own)return {yes:true,reason:'소속 정부의 예산안'};
@@ -237,7 +242,7 @@
     const project=projects[action.policy];let bill=billFor(state,action.policy);
     if(action.type==='councilSubmit'){
       if(!project||bill||!state.pacts.agreements.some(pact=>pact.round===state.election.round&&pact.status==='governing'&&pact.policy===action.policy))return fail('이번 임기의 이행 대기 협약과 제출 여부를 확인하자.');
-      bill={id:'budget-'+state.council.nextId++,round:state.election.round,policy:action.policy,name:project.name,baseCost:project.cost,status:'draft',day:state.day,amendments:[],ballots:[]};
+      bill={actor:state.life?.activeId||'player',id:'budget-'+state.council.nextId++,round:state.election.round,policy:action.policy,name:project.name,baseCost:project.cost,status:'draft',day:state.day,amendments:[],ballots:[]};
       state.council.bills.unshift(bill);state.actions--;
       return {ok:true,message:project.name+' 예산안을 의회에 제출했다. 공금은 승인 후 실제 집행할 때 지출한다.'};
     }
@@ -253,7 +258,7 @@
       const member=members(state).find(item=>item.id===action.member);
       if(!member||state.energy<8||(bill.contacts||[]).includes(member.id)||memberIntent(state,bill,member).yes)return fail('반대 의원 · 기력 8 · 안건별 한 번의 면담 여부를 확인하자.');
       bill.contacts=bill.contacts||[];bill.contacts.push(member.id);state.actions--;state.energy-=8;
-      const memory=[...(member.career||[])].reverse().find(record=>record.round<bill.round&&['meeting','delivery','unfulfilled'].includes(record.type));
+      const memory=[...(member.career||[])].reverse().find(record=>record.round<bill.round&&(record.actor??'player')===(state.life?.activeId||'player')&&['meeting','delivery','unfulfilled'].includes(record.type));
       const group=current(state).groups.find(item=>item.id===member.group);
       state.eventQueue.push({id:bill.id+'-meet-'+member.id,day:state.day,scene:'hearing',councilReport:true,
         councilMeeting:{bill:bill.id,member:member.id,name:member.name},title:member.name+' 의원과의 면담',destination:'power',

@@ -1,10 +1,13 @@
 'use strict';
 (function(root){
+  const succession=typeof module!=='undefined'?require('./succession'):root.Succession;
   const family=typeof module!=='undefined'?require('./family'):root.Family;
   const jobs={worker:'항구 노동자',farmer:'농장 일꾼',apprentice:'공장 견습',clerk:'서기',artisan:'정비공',trader:'시장 상인',teacher:'야학 교사',medic:'진료소 보조',journalist:'신문 기자',guard:'순찰대원',soldier:'군인',official:'행정 공무원',unemployed:'구직 중',retired:'은퇴 생활',councillor:'지역 의원'};
   const income={worker:5,farmer:5,apprentice:5,clerk:6,artisan:7,trader:8,teacher:5,medic:5,journalist:6,guard:6,soldier:6,official:6,unemployed:0,retired:5,councillor:7};
   const copy=value=>JSON.parse(JSON.stringify(value));
-  function fresh(){return {people:{},lastDay:null,seeded:false,news:[],clock:{mode:'daily',plan:null}};}
+  const activeId=state=>state.life.activeId||'player';
+  const currentPlayer=state=>state.life.people[activeId(state)];
+  function fresh(){return {activeId:'player',people:{},lastDay:null,seeded:false,news:[],clock:{mode:'daily',plan:null}};}
   function age(person,day){return person.baseAge==null?null:person.baseAge+Math.max(0,Math.floor((day-person.ageDay)/365));}
   function calendar(day){const offset=(day-1)%365;return (Math.floor((day-1)/365)+1)+'년 '+['봄','여름','가을','겨울'][Math.min(3,Math.floor(offset/91))]+' '+(offset-Math.min(3,Math.floor(offset/91))*91+1)+'일';}
   function entry(person,day,type,text){person.history.push({day,type,text});}
@@ -55,8 +58,9 @@
     state.life={...fresh(),...state.life,people:copy(state.life?.people||{}),news:[...(state.life?.news||[])]};
     state.life.clock={mode:'daily',plan:null,...state.life.clock};
     if(state.life.lastDay==null)state.life.lastDay=state.day;
-    let player=state.life.people.player;
-    if(!player){player=person('player',state.name,state.career,'player',state.day,state.age);player.ageDay=1;state.life.people.player=player;}
+    if(!state.life.activeId)state.life.activeId='player';
+    let player=currentPlayer(state);
+    if(!player){player=person('player',state.name,state.career,'player',state.day,state.age);player.ageDay=1;state.life.people[state.life.activeId]=player;}
     player.baseAge=state.age;player.name=state.name;player.gender=state.gender;player.age=age(player,state.day);player.wealth=state.cash;
     player.publicSupport=state.support;
     if(!Object.hasOwn(player,'sideRole'))player.sideRole=state.underworld.role;
@@ -64,7 +68,7 @@
       player.started=true;player.jobTitle=descriptor.title;player.occupation=state.career;player.since=state.day;
       entry(player,state.day,'observed','생애 기록 시작 · '+descriptor.title+' · 현재 나이 '+(player.age??'미설정'));
     }
-    seedResidents(state);syncCouncil(state);family.restore(state);
+    seedResidents(state);syncCouncil(state);family.restore(state);succession.restore(state);
   }
   function news(state,p,text){state.life.news.unshift({day:state.day,person:p.id,text:p.name+' · '+text});}
   function npcDay(state,p,day){
@@ -72,7 +76,7 @@
     const oldAge=p.age;p.age=age(p,day);p.lastDay=day;
     if(p.age!==oldAge)entry(p,day,'age',p.age+'세가 됐다.');
     const resting=p.health<35;
-    const pay=resting&&p.occupation!=='retired'?0:(income[p.occupation]??5)+p.rank;
+    const pay=p.occupation==='retired'&&p.age<65?0:resting&&p.occupation!=='retired'?0:(income[p.occupation]??5)+p.rank;
     const expense=3+(day%7===0?12:0);
     p.wealth+=pay-expense;
     p.health=Math.max(0,Math.min(100,p.health+(resting?3:p.wealth<0?-1:1)));
@@ -118,20 +122,21 @@
   }
   function tick(state){
     if(state.day<=state.life.lastDay)return;
-    const player=state.life.people.player;
+    const player=currentPlayer(state);
     for(let day=state.life.lastDay+1;day<=state.day;day++){
       const oldAge=player.age;player.age=age(player,day);
       if(oldAge!==player.age)entry(player,day,'age',(player.age??'미설정')+'세가 됐다.');
       player.health=Math.max(0,Math.min(100,player.health+(state.cash<0?-1:state.energy>=60?1:0)-(state.energy<20?1:0)));
       family.tick(state,day);
-      for(const p of Object.values(state.life.people))if(p.id!=='player'&&p.source!=='family')npcDay(state,p,day);
+      for(const p of Object.values(state.life.people))if(p.id!==activeId(state)&&p.source!=='family')npcDay(state,p,day);
     }
     state.life.lastDay=state.day;
   }
   function observe(state,before,action,descriptor){
-    const p=state.life.people.player;
+    const p=currentPlayer(state);
     if(p.occupation!==state.career||p.jobTitle!==descriptor.title){changeJob(p,state.career,state.day,'직업·직급 변화',descriptor.title);}
     p.name=state.name;p.gender=state.gender;p.baseAge=state.age;p.age=age(p,state.day);p.wealth=state.cash;p.publicSupport=state.support;
+    if(activeId(state)!==(before.life?.activeId||'player')){seedResidents(state);syncCouncil(state);family.restore(state);succession.restore(state);return;}
     if(action.type==='profile'&&(before.age!==state.age||before.name!==state.name||before.gender!==state.gender))entry(p,state.day,'profile','인물 설정 수정 · 시작 나이 '+state.age+' · 현재 나이 '+p.age);
     if(action.type==='start')state.life.clock.mode='lifetime';
     if(!state.life.processing&&before.cash!==state.cash)entry(p,state.day,'finance','개인 돈 '+(state.cash-before.cash>=0?'+':'')+(state.cash-before.cash)+' → '+state.cash+' · 공금·당 자금은 별도');
@@ -140,13 +145,13 @@
     const role=state.underworld.role;
     if(p.sideRole!==role){entry(p,state.day,'career','병행 활동 '+(descriptor.sideTitle||'종료'));p.sideRole=role;}
     if(state.startConfigured&&!p.started){p.started=true;entry(p,state.day,'observed','선택한 출신과 직업으로 삶을 시작했다.');}
-    seedResidents(state);syncCouncil(state);family.restore(state);
+    seedResidents(state);syncCouncil(state);family.restore(state);succession.restore(state);
   }
   function act(state,action){
     if(!['lifeCare','lifeVisit','lifeRefer'].includes(action.type))return null;
     const fail=message=>({ok:false,message});
     if(!state.startConfigured||!state.actions||state.hearing||state.underReview)return fail('시작 설정 · 행동 · 진행 중인 심사를 확인하자.');
-    const player=state.life.people.player;
+    const player=currentPlayer(state);
     if(action.type==='lifeCare'){
       if(state.cash<6||player.careDay===state.day)return fail('개인 돈 6과 오늘의 건강 관리 여부를 확인하자.');
       state.cash-=6;state.actions--;state.energy=Math.min(100,state.energy+10);player.health=Math.min(100,player.health+12);player.careDay=state.day;
@@ -154,7 +159,7 @@
       return {ok:true,message:'식사와 휴식·진료에 개인 돈 6을 썼다. 건강 +12 · 기력 +10.'};
     }
     const p=Object.hasOwn(state.life.people,action.person)?state.life.people[action.person]:null;
-    if(!p||p.id==='player'||state.energy<5)return fail('대상 인물과 기력 5를 확인하자.');
+    if(!p||p.id===activeId(state)||state.energy<5)return fail('대상 인물과 기력 5를 확인하자.');
     if(action.type==='lifeVisit'){
       if(p.visitDay===state.day)return fail('오늘은 이미 이 인물과 안부를 나눴다.');
       p.visitDay=state.day;p.relationship=Math.min(100,p.relationship+6);state.actions--;state.energy-=5;
@@ -173,10 +178,10 @@
     return {ok:true,message:p.name+'에게 취업 준비비 4와 항구 일자리를 추천했다. 본인이 다음 날 구직을 마친다.'};
   }
   function summarize(state,day,cash){
-    const player=state.life.people.player;
+    const player=currentPlayer(state);
     entry(player,state.day,'living',day+'일부터 '+state.day+'일까지의 생활 · 개인 돈 '+(state.cash-cash>=0?'+':'')+(state.cash-cash)+' → '+state.cash);
   }
-  const api={summarize,fresh,jobs,age,calendar,restore,tick,observe,act};
+  const api={activeId,player:currentPlayer,summarize,fresh,jobs,age,calendar,restore,tick,observe,act};
   if(typeof module!=='undefined')module.exports=api;
   root.Life=api;
 })(globalThis);

@@ -52,7 +52,7 @@
       base:[28,28,28],pledge:positions[memberPreferences[networkId]||party.platform]+' 지역 의제',occupation:'정당 활동가'};
   }
   function contested(state,partyId,kind){
-    return (state.parties.ballots||[]).some(result=>result.partyId===partyId&&result.kind===kind&&result.round===state.politics.round);
+    return (state.parties.ballots||[]).some(result=>result.partyId===partyId&&result.kind===kind&&result.round===state.politics.round&&(result.actor??'player')===(state.life?.activeId||'player'));
   }
   function ballot(state,partyId,kind,field){
     const party=state.parties.registry[partyId];
@@ -81,7 +81,7 @@
       votes.push({voter:voter.id,name:voter.name,choice:choice.id,reasons:choice.reasons});
     }
     const order=Object.keys(people).sort((a,b)=>totals[b]-totals[a]||Number(b===party.leader)-Number(a===party.leader)||candidateIds.indexOf(a)-candidateIds.indexOf(b));
-    const result={partyId,partyName:party.name,kind,round:state.politics.round,day:state.day,
+    const result={actor:state.life?.activeId||'player',partyId,partyName:party.name,kind,round:state.politics.round,day:state.day,
       winner:order[0],candidates:people,totals,votes,tied:totals[order[0]]===totals[order[1]]};
     state.parties.ballots=state.parties.ballots||[];state.parties.ballots.unshift(result);
     return result;

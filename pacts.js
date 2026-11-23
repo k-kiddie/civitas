@@ -40,7 +40,7 @@
     if(id==='decline')return '정책 협약을 맺지 않았다. 이번 회차에 같은 당과 재협상할 수 없다.';
     const offer=event.pactOffer;
     const policy=id==='counter'?offer.counter:offer.policy;
-    const pact={...offer,id:'pact-'+state.pacts.nextId++,policy,status:'signed',signedDay:state.day};
+    const pact={...offer,actor:state.life?.activeId||'player',id:'pact-'+state.pacts.nextId++,policy,status:'signed',signedDay:state.day};
     state.pacts.agreements.unshift(pact);
     return offer.targetName+' 측과 '+projects[policy].name+' 협약에 서명했다. 공천 후보인 당신에게 선거 지원이 더해지며, 당선하면 7일 이내 공금으로 사업을 집행해야 한다.';
   }
@@ -88,8 +88,8 @@
     }
     const active=governing(state);
     if(action.type==='pactBreak'){
-      const pact=active.find(item=>item.id===action.pact);
-      if(!pact)return fail('현재 집행 중인 협약을 확인하자.');
+      const pact=state.pacts.agreements.find(item=>item.id===action.pact&&((item.status==='governing'&&item.round===state.election?.round)||(item.status==='signed'&&item.round===state.politics.round)));
+      if(!pact)return fail('현재 서명했거나 집행 중인 협약을 확인하자.');
       breach(state,pact,'플레이어가 공개적으로 협약을 철회했다.');state.actions--;
       return {ok:true,message:'정책 협약을 철회했다. 지지와 양당 신뢰가 하락했다.'};
     }

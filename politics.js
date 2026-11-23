@@ -84,7 +84,7 @@
     const totals=Object.fromEntries([...Object.keys(field),'player'].map(id=>[id,districts.reduce((sum,district)=>sum+district.voters*district.shares[id],0)/electorate]));
     const order=Object.entries(totals).sort((a,b)=>b[1]-a[1]);
     const winnerId=order[0][0];
-    return {won:winnerId==='player',winnerId,winner:winnerId==='player'?state.name:field[winnerId].name,votes:Math.round(totals.player),totals,districts,ran:state.candidate,playerName:state.name,day:state.day,round:state.politics.round,candidates:Object.fromEntries(Object.entries(field).map(([id,person])=>[id,{name:person.name,pledge:person.pledge,platform:person.platform,occupation:person.occupation||'지역 활동가',partyName:parties.ballotLabel(state,id,field)}]))};
+    return {actor:state.life?.activeId||'player',won:winnerId==='player',winnerId,winner:winnerId==='player'?state.name:field[winnerId].name,votes:Math.round(totals.player),totals,districts,ran:state.candidate,playerName:state.name,day:state.day,round:state.politics.round,candidates:Object.fromEntries(Object.entries(field).map(([id,person])=>[id,{name:person.name,pledge:person.pledge,platform:person.platform,occupation:person.occupation||'지역 활동가',partyName:parties.ballotLabel(state,id,field)}]))};
   }
   function tick(state){
     ensureField(state);

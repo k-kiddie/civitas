@@ -3,6 +3,7 @@
   const starts = typeof module !== 'undefined' ? require('./starts') : root.Starts;
   const skills = { craft:'기술', administration:'문서', care:'돌봄', commerce:'상업', investigation:'조사' };
   const jobs = {
+    unemployed:{name:'구직 중',group:'생활',wage:0,energy:0,skill:null},
     ...Object.fromEntries(Object.entries(starts.occupations).map(([id,job])=>[id,{...job,group:'생활·현장',skill:null}])),
     artisan:{name:'정비공',group:'기술',skill:'craft',wage:20,energy:16,duty:'공공 설비를 정비한다',cost:0,support:2},
     trader:{name:'시장 상인',group:'상업',skill:'commerce',wage:18,energy:12,duty:'구호 물자 운송을 지원한다',cost:4,support:5},
