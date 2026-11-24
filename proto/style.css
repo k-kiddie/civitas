@@ -1175,3 +1175,11 @@ button.secondary {
   height: 100%;
   background: var(--teal);
 }
+
+.hmax {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.trait {
+  font-style: normal;
+}

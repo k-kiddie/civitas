@@ -11,13 +11,13 @@
     { name: "벨라르의 주인", fame: 110 },
   ];
   const locations = [
-    { id: "home", name: "하숙집", icon: "🏠", purpose: "회복·가족", x: 16, y: 55, title: 0 },
-    { id: "dock", name: "부두", icon: "⚓", purpose: "돈벌이", x: 26, y: 82, title: 0 },
-    { id: "fishing", name: "어촌", icon: "🎣", purpose: "명성·인심", x: 82, y: 70, title: 0 },
-    { id: "alley", name: "뒷골목", icon: "🌙", purpose: "큰돈·약점·위험", x: 50, y: 60, title: 0 },
-    { id: "market", name: "시장", icon: "🏮", purpose: "거래·사람", x: 52, y: 36, title: 0 },
-    { id: "hall", name: "시청", icon: "🏛", purpose: "선거·법", x: 80, y: 30, title: 0 },
-    { id: "union", aim: "조합 간부를 매수하려", name: "조합", icon: "⚒", purpose: "노동자·명성", x: 22, y: 24, title: 1 },
+    { id: "home", name: "하숙집", names: ["하숙집", "동장 관사", "시장 관저"], purposes: ["회복·가족", "가족·접견", "가족·접견"], icon: "🏠", purpose: "회복·가족", x: 16, y: 55, title: 0 },
+    { id: "dock", name: "부두", names: ["부두", "부두 감독소", "항만청"], purposes: ["돈벌이", "중재·세금", "교역·단속"], icon: "⚓", purpose: "돈벌이", x: 26, y: 82, title: 0 },
+    { id: "fishing", name: "어촌", names: ["어촌", "어촌", "어촌"], purposes: ["명성·인심", "민원·공사", "개발·인심"], icon: "🎣", purpose: "명성·인심", x: 82, y: 70, title: 0 },
+    { id: "alley", name: "뒷골목", names: ["뒷골목", "뒷골목", "뒷골목"], purposes: ["큰돈·약점·위험", "약점·거래", "그림자 거래"], icon: "🌙", purpose: "큰돈·약점·위험", x: 50, y: 60, title: 0 },
+    { id: "market", name: "시장", names: ["시장", "상인 조합", "상공회의소"], purposes: ["거래·사람", "상인·세금", "투자·정치"], icon: "🏮", purpose: "거래·사람", x: 52, y: 36, title: 0 },
+    { id: "hall", name: "시청", names: ["시청", "시청", "시장 집무실"], purposes: ["선거·법", "선거·칙령", "칙령·예산"], icon: "🏛", purpose: "선거·법", x: 80, y: 30, title: 0 },
+    { id: "union", name: "조합", icon: "⚒", purpose: "노동자·명성", x: 22, y: 24, title: 1 },
     { id: "manor", name: "강씨 저택", icon: "🏯", purpose: "라이벌과 결판", x: 52, y: 10, title: 2 },
   ];
   const companions = {
@@ -48,11 +48,16 @@
   const rivalMoves = [
     { id: "rice", aim: "어촌에 쌀을 돌리려", loc: "fishing", text: "어촌에 쌀을 돌린다", fail: { rivalFame: 4 } },
     { id: "smear", aim: "장터에 당신 험담을 퍼뜨리려", loc: "market", text: "장터에 당신 험담을 퍼뜨린다", fail: { fame: -4 } },
-    { id: "monopoly", aim: "부두 일감을 독차지하려", loc: "dock", text: "부두 일감을 독점한다", fail: { money: -8 } },
-    { id: "thugs", aim: "당신 가족을 위협하려", loc: "alley", text: "패거리로 당신 가족을 위협한다", fail: { health: -10 } },
+    { id: "monopoly", titleMax: 0, aim: "부두 일감을 독차지하려", loc: "dock", text: "부두 일감을 독점한다", fail: { money: -8 } },
+    { id: "thugs", titleMax: 0, aim: "당신 가족을 위협하려", loc: "alley", text: "패거리로 당신 가족을 위협한다", fail: { health: -10 } },
     { id: "lobby", aim: "시청 서기들을 구워삶으려", loc: "hall", text: "시청 서기들을 구워삶는다", fail: { rivalFame: 5 } },
-    { id: "rent", aim: "하숙집 주인을 매수해 집세를 올리려", loc: "home", text: "하숙집 주인을 매수해 집세를 올린다", fail: { money: -6 } },
-    { id: "union", loc: "union", title: 1, text: "조합 간부를 매수한다", fail: { fame: -4, rivalFame: 3 } },
+    { id: "rent", titleMax: 0, aim: "하숙집 주인을 매수해 집세를 올리려", loc: "home", text: "하숙집 주인을 매수해 집세를 올린다", fail: { money: -6 } },
+    { id: "union", aim: "조합 간부를 매수하려", loc: "union", title: 1, text: "조합 간부를 매수한다", fail: { fame: -4, rivalFame: 3 } },
+    { id: "spy", aim: "관사 하인을 매수해 당신 비밀을 캐려", loc: "home", title: 1, text: "관사 하인을 매수해 비밀을 캔다", fail: { fame: -3, dirt: -1 } },
+    { id: "dockers", aim: "부두 노동자들을 선동하려", loc: "dock", title: 1, text: "부두 노동자들을 선동해 세금을 막는다", fail: { money: -10 } },
+    { id: "taxstrike", aim: "상인들에게 세금 거부를 부추기려", loc: "market", title: 1, text: "상인들에게 세금 거부를 부추긴다", fail: { money: -8, fame: -2 } },
+    { id: "protest", aim: "어촌에서 당신 반대 시위를 열려", loc: "fishing", title: 1, text: "어촌에서 반대 시위를 연다", fail: { fame: -4 } },
+    { id: "alleygang", aim: "자객을 풀어 당신을 노리려", loc: "alley", title: 1, text: "자객을 풀어 당신을 노린다", fail: { health: -10 } },
   ];
   // 선거는 정해진 계절 끝에 열린다. 놓치면 다음 선거까지 기다린다.
   const elections = { 1: [7, 15, 23, 31], 2: [11, 19, 27] };
@@ -81,7 +86,7 @@
     E("h_fever", "home", "🤒", "열이 오른다", "식은땀이 멈추지 않는다.", [
       ch("의원을 부른다 (₭15)", { money: -15, health: 30 }, "쓴 탕약을 삼켰다. 열이 내린다.", { need: { money: 15 } }),
       bet("버틴다", 0.5, { fx: { health: 10 }, text: "아침이 되자 열이 내렸다." }, { fx: { health: -15 }, text: "밤새 앓았다. 몸이 더 상했다." }),
-    ], { cond: { healthMax: 45 } }),
+    ], { cond: { healthMax: 25 } }),
     E("h_letter", "home", "📜", "지워진 이름의 편지", "옛 왕실 기록보관소의 서기가 몰래 편지를 보냈다.", [
       ch("만나서 돕는다", { recruit: "seoyun" }, "서윤이 동료가 되었다. 기록 속 비밀을 함께 캔다."),
       ch("엮이지 않는다", { fame: 1 }, "편지는 아궁이에 들어갔다."),
@@ -90,16 +95,16 @@
     E("d_work", "dock", "📦", "하역 일감", "배 세 척이 들어왔다. 일손이 모자란다.", [
       ch("하루 하역 (₭+14)", { money: 14, health: -5 }, "허리가 끊어질 듯하지만 품삯은 챙겼다."),
       bet("위험한 야간 하역", 0.6, { fx: { money: 30, health: -5 }, text: "어둠 속에서 두 배의 품삯을 받았다." }, { fx: { health: -20 }, text: "미끄러져 화물에 깔렸다." }),
-    ], { repeat: true }),
+    ], { repeat: true, cond: { titleMax: 0 } }),
     E("d_fight", "dock", "👊", "부두 패싸움", "강씨 패거리와 조합원들이 멱살을 잡았다.", [
       bet("뛰어들어 말린다", 0.5, { fx: { fame: 6, hostility: 5 }, text: "당신이 판을 갈랐다. 사람들이 이름을 묻는다." }, { fx: { health: -20, fame: 1 }, text: "주먹이 날아왔다. 그래도 사람들은 봤다." }, { bonus: [["eunho", 0.2]] }),
       check("말로 뜯어말린다", ["talk", 13], { fx: { fame: 5 }, text: "당신 말 한마디에 양쪽이 주먹을 내렸다." }, { fx: { fame: -2, health: -8 }, text: "아무도 듣지 않았다. 날아온 의자에 맞았다." }),
       check("뒤에서 판을 짠다", ["scheme", 14], { fx: { fame: 3, rivalFame: -3 }, text: "강씨 패거리가 경찰에게 끌려가게 만들었다." }, { fx: { hostility: 8 }, text: "강씨 쪽이 당신이 꾸민 걸 눈치챘다." }),
-    ], { cooldown: 3 }),
+    ], { cooldown: 3, cond: { titleMax: 0 } }),
     E("d_smuggle", "dock", "🍾", "선원의 제안", "“상자 몇 개만 옮겨 주면 돼. 세관은 모르게.”", [
       ch("옮긴다 (₭+35)", { money: 35, flag: "smuggler", threat: { id: "customs", left: 3 } }, "주머니가 두둑해졌다. 세관이 냄새를 맡기 시작했다."),
       ch("거절한다", { fame: 1 }, "선원이 침을 뱉고 돌아선다."),
-    ], { cond: { notFlag: "smuggler" }, cooldown: 4 }),
+    ], { cond: { notFlag: "smuggler", titleMax: 0 }, cooldown: 4 }),
     E("d_eunho", "dock", "👷", "밀린 품삯", "은호가 반장 앞에서 출근부를 흔든다. “사흘째 안 줬어!”", [
       bet("함께 반장에게 따진다", 0.55, { fx: { fame: 6, recruit: "eunho" }, text: "반장이 품삯을 내놨다. 은호가 동료가 되었다." }, { fx: { health: -10, fame: 2, recruit: "eunho" }, text: "얻어맞았지만, 은호는 당신 편이 되었다." }),
       ch("은호에게 돈을 빌려준다 (₭10)", { money: -10, recruit: "eunho" }, "은호가 고개를 숙인다. 동료가 되었다.", { need: { money: 10 } }),
@@ -113,7 +118,7 @@
     E("f_help", "fishing", "🐟", "어촌의 일손", "그물이 찢기고 배가 샌다. 사람이 모자란다.", [
       ch("그물 손질을 돕는다", { fame: 3, health: -5 }, "아이들이 당신 이름을 부르며 따라다닌다."),
       ch("쌀을 나눈다 (₭10)", { money: -10, fame: 6 }, "공터에 밥 짓는 연기가 오른다.", { need: { money: 10 } }),
-    ], { repeat: true }),
+    ], { repeat: true, cond: { titleMax: 0 } }),
     E("f_sora", "fishing", "🧕", "소라의 부탁", "“장마가 오면 어촌부터 잠겨요. 우리 편이 되어 줄래요?”", [
       ch("어촌을 지키겠다고 약속한다", { recruit: "sora", flag: "promise", fame: 3 }, "소라가 동료가 되었다. 약속은 장마 때 판가름 난다."),
       ch("확답은 못 하겠다", { fame: 1 }, "소라는 실망한 얼굴로 돌아선다."),
@@ -162,7 +167,7 @@
       bet("비단을 산다 (₭30)", 0.6, { fx: { money: 30 }, text: "되팔아 두 배를 남겼다!" }, { fx: { money: -30 }, text: "비단값이 폭락했다." }, { need: { money: 30 } }),
       check("시세를 읽고 산다 (₭20)", ["lore", 12], { fx: { money: 25 }, text: "장부를 꼼꼼히 보고 오를 물건만 골랐다." }, { fx: { money: -20 }, text: "시세를 잘못 읽었다." }, { need: { money: 20 } }),
       ch("좌판 일을 돕는다 (₭+8)", { money: 8 }, "소소하게 벌었다."),
-    ], { repeat: true }),
+    ], { repeat: true, cond: { titleMax: 0 } }),
     E("m_patron", "market", "💰", "상단의 후원", "큰 상단이 선거 자금을 대겠다고 한다. 물론 대가가 있다.", [
       ch("받는다 (₭+50)", { money: 50, fame: -3, flag: "patron", item: "letter" }, "돈이 들어왔다. 상단은 언젠가 청구서를 내밀 것이다."),
       ch("거절한다", { fame: 3 }, "깨끗한 이름이 조금 더 깨끗해졌다."),
@@ -347,6 +352,59 @@
       ],
     };
   }
+  // ── 지위에 맞는 일 (동장·시장이 되면 장소의 사건이 바뀐다) ──
+  events.push(
+    E("d_overseer", "dock", "⚖", "부두 분쟁", "선원과 하역꾼들이 품삯 문제로 부두를 막았다. 동장의 판결을 기다린다.", [
+      check("양쪽을 앉혀 중재한다", ["talk", 13], { fx: { fame: 6 }, text: "양쪽이 악수했다. 부두가 다시 돈다." }, { fx: { fame: -3 }, text: "중재가 깨졌다. 양쪽 모두 당신을 탓한다." }),
+      ch("부두세를 거둬 금고를 채운다 (₭+20)", { money: 20, fame: -3, virtue: -1 }, "세금은 걷혔다. 하역꾼들은 투덜댄다."),
+      check("뒤에 강씨가 있는지 캔다", ["scheme", 14], { fx: { dirt: 1, rivalFame: -2 }, text: "분쟁을 부추긴 건 강씨 사람이었다. (약점 +1)" }, { fx: { hostility: 6 }, text: "캐다가 들켰다." }),
+    ], { repeat: true, cond: { titleMin: 1, titleMax: 1 } }),
+    E("d_port", "dock", "🚢", "항만청 결재", "외국 상단이 항만 사용 협정을 제안했다. 강씨 배가 밀수한다는 첩보도 올라왔다.", [
+      check("협정 조건을 따져 체결한다", ["lore", 14], { fx: { money: 45, fame: 4 }, text: "유리한 조건으로 도장을 찍었다. 금고가 불어난다." }, { fx: { money: -15 }, text: "조항 하나를 놓쳤다. 손해 보는 협정이었다." }),
+      check("강씨 밀수선을 급습한다", ["force", 15], { fx: { rivalFame: -8, fame: 5, hostility: 12 }, text: "밀수품이 부두에 쏟아졌다. 강씨의 체면이 땅에 떨어졌다." }, { fx: { health: -15, hostility: 10 }, text: "선원들이 칼을 뽑았다. 급습은 실패했다." }),
+      ch("현상 유지", {}, "서류는 내일로 미뤘다."),
+    ], { repeat: true, cond: { titleMin: 2 } }),
+    E("f_ward", "fishing", "🛠", "어촌 민원", "어촌 사람들이 무너진 선착장 공사를 요구한다.", [
+      ch("예산으로 고친다 (₭25)", { money: -25, fame: 8, virtue: 1 }, "새 선착장에 배들이 줄지어 섰다.", { need: { money: 25 } }),
+      check("다음 예산을 약속하며 달랜다", ["talk", 13], { fx: { fame: 3 }, text: "사람들이 일단 믿어 주기로 했다." }, { fx: { fame: -5 }, text: "“또 말뿐이냐!” 야유가 쏟아졌다." }),
+    ], { repeat: true, cond: { titleMin: 1 } }),
+    E("m_guild", "market", "🏮", "상인 조합 회의", "상인들이 세금을 낮춰 달라며 동장을 불렀다.", [
+      ch("세금을 깎아 준다 (계절 수입 대신 명성)", { fame: 6, money: -10 }, "상인들이 당신 이름으로 축배를 든다.", { need: { money: 10 } }),
+      check("세금 대신 후원금을 받아 낸다", ["talk", 14], { fx: { money: 30 }, text: "상인들이 후원금 봉투를 내밀었다." }, { fx: { fame: -4 }, text: "상인들이 등을 돌렸다." }),
+      ch("강씨 상단만 세금을 올린다", { rivalFame: -4, hostility: 10 }, "강씨 쪽 장부에만 세율이 올랐다."),
+    ], { repeat: true, cond: { titleMin: 1, titleMax: 1 } }),
+    E("m_chamber", "market", "🏛", "상공회의소", "도시의 큰손들이 시장의 투자 계획을 듣고 싶어 한다.", [
+      ch("철도역 공동 투자 (₭50 · 계절마다 ₭+10)", { money: -50, flag: "railway", fame: 5 }, "철도역 부지에 말뚝이 박혔다.", { need: { money: 50 } }),
+      check("큰손들을 내 편으로 만든다", ["talk", 15], { fx: { fame: 8, rivalFame: -5 }, text: "강씨를 빼고 자리가 정리됐다." }, { fx: { rivalFame: 4 }, text: "큰손들이 강씨 쪽으로 기울었다." }),
+      ch("자리만 지킨다", {}, "회의는 지루하게 끝났다."),
+    ], { repeat: true, cond: { titleMin: 2, notFlag: "railway" } }),
+    E("m_chamber2", "market", "🏛", "상공회의소", "도시의 큰손들이 시장의 다음 수를 기다린다.", [
+      check("큰손들을 내 편으로 만든다", ["talk", 15], { fx: { fame: 8, rivalFame: -5 }, text: "강씨를 빼고 자리가 정리됐다." }, { fx: { rivalFame: 4 }, text: "큰손들이 강씨 쪽으로 기울었다." }),
+      check("강씨 상단의 장부를 압수한다", ["scheme", 15], { fx: { dirt: 2, hostility: 10 }, text: "세무 조사 명목으로 장부를 손에 넣었다. (약점 +2)" }, { fx: { hostility: 12, fame: -3 }, text: "압수 영장이 기각됐다." }),
+    ], { repeat: true, cond: { titleMin: 2, flag: "railway" } }),
+    E("h_manor", "home", "🏡", "관사의 밤", "관사에 손님과 가족이 기다린다.", [
+      ch("가족과 쉰다", { health: 18 }, "오랜만에 아이들 웃음소리를 들었다."),
+      check("손님을 접견한다", ["talk", 13], { fx: { fame: 5, money: 10 }, text: "후원자가 하나 늘었다." }, { fx: { health: 5 }, text: "손님은 실망해 돌아갔다." }),
+    ], { repeat: true, cond: { titleMin: 1 } }),
+    E("a_boss", "alley", "🦹", "뒷골목 두목", "뒷골목 두목이 동장님께 거래를 제안한다. “눈감아 주면 강씨 정보를 드리지.”", [
+      ch("거래한다", { dirt: 2, virtue: -3, fame: -2 }, "두목이 강씨의 밀거래 장소를 털어놨다. (약점 +2)"),
+      check("일망타진한다", ["force", 15], { fx: { fame: 10, virtue: 2 }, text: "뒷골목이 조용해졌다. 시민들이 박수를 친다." }, { fx: { health: -18, hostility: 5 }, text: "매복에 걸렸다." }),
+    ], { repeat: true, cond: { titleMin: 1 } }),
+  );
+  // ── 매 판 바뀌는 라이벌 가문 (글 속 '도윤·강씨·강무열·강씨 저택'이 이 이름으로 바뀐다) ──
+  const rivals = {
+    kang: { head: "도윤", house: "강씨", son: "강무열", manor: "강씨 저택", desc: "선주 도윤 — 돈으로 부두와 시청을 산다", favor: ["monopoly", "rent", "lobby"] },
+    baek: { head: "백현우", house: "백씨", son: "백도진", manor: "백씨 공장 저택", desc: "공장주 백현우 — 패거리와 조합 장악", favor: ["thugs", "union", "monopoly"] },
+    yoon: { head: "윤세라", house: "윤씨", son: "윤해준", manor: "윤씨 고택", desc: "몰락 귀족 윤세라 — 소문과 연줄의 달인", favor: ["smear", "lobby", "rice"] },
+  };
+  // ── 매 판 하나씩 붙는 도시 특성 ──
+  const cityTraits = {
+    trade: { name: "상업 도시", icon: "💰", desc: "건물 수입 +2씩 · 라이벌 명성이 더 빨리 오른다" },
+    rainy: { name: "장마의 도시", icon: "🌧", desc: "큰 장마가 2계절 일찍, 더 세게 온다" },
+    corrupt: { name: "부패한 시청", icon: "🕳", desc: "표 매수·무마 비용 40% 할인 · 매수 없이 선거 확률 −10%" },
+    plague: { name: "역병의 해", icon: "☠", desc: "열병이 반드시, 일찍(2년 여름) 돈다" },
+    poor: { name: "가난한 항구", icon: "🪙", desc: "시작 돈 −10 · 대신 인심이 후해 계절마다 명성 +1" },
+  };
   // ── TRPG ──
   const stats = {
     talk: { name: "말솜씨", icon: "🗣" },
@@ -398,7 +456,7 @@
     extinct: { title: "가문 단절", icon: "🕯", text: "대를 이을 사람이 없었다. 이름은 다시 지워졌다.", win: false },
     time: { title: "평범한 이름", icon: "📖", text: "8년이 흘렀다. 도시를 쥐지는 못했지만, 가문의 이름은 남았다.", win: false },
   };
-  const api = { titles, locations, companions, buildings, LOTS, threats, origins, events, headlines, endings, rivalMoves, elections, virtueTags, duel, stats, items, perks, checkStat };
+  const api = { titles, locations, companions, buildings, LOTS, threats, origins, events, headlines, endings, rivalMoves, elections, virtueTags, duel, stats, items, perks, checkStat, rivals, cityTraits };
   if (typeof module !== "undefined") module.exports = api;
   root.ProtoData = api;
 })(globalThis);
