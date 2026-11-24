@@ -208,7 +208,7 @@
   function die(s, p, cause, notes) {
     p.alive = false;
     p.hp = 4;
-    s.memorial.push({ name: p.name, face: p.face, day: s.day, cause });
+    s.memorial.push({ id: p.id, name: p.name, face: p.face, day: s.day, cause });
     s.hope = clamp(s.hope - (p.child ? 15 : 8), 0, 100);
     for (const q of alive(s)) q.stress = clamp(q.stress + (q.traits.includes("냉혈한") ? 0 : p.child ? 25 : 15), 0, 100);
     notes.push(`🕯 ${p.name}이(가) 죽었다.`);
@@ -498,7 +498,7 @@
     if (fx.exile && cast) {
       cast.alive = false;
       cast.exiled = true;
-      s.memorial.push({ name: cast.name, face: cast.face, day: s.day, cause: "거처에서 쫓겨남" });
+      s.memorial.push({ id: cast.id, name: cast.name, face: cast.face, day: s.day, cause: "거처에서 쫓겨남" });
       s.log.push({ day: s.day, text: `${cast.name}을(를) 쫓아냈다.` });
     }
     if (fx.lend) {

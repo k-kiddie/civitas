@@ -147,3 +147,18 @@ h3 { font-size: 0.95rem; margin: 14px 0 6px; }
   .grid, .places, .goers { grid-template-columns: 1fr; }
   .r b { font-size: 1.05rem; }
 }
+
+.portrait { display: block; border-radius: 50%; }
+.card .face { display: flex; align-items: center; }
+.party span { display: inline-flex; align-items: center; gap: 4px; }
+.living span, .wall li { display: inline-flex; align-items: center; gap: 6px; }
+.wall li { display: flex; }
+.art { display: block; width: 100%; object-fit: cover; }
+.art.banner { height: 150px; margin: -18px -16px 10px; width: calc(100% + 32px); border-radius: 18px 18px 0 0; mask-image: linear-gradient(#000 70%, transparent); -webkit-mask-image: linear-gradient(#000 70%, transparent); }
+.art.thumb { height: 54px; border-radius: 8px; margin-bottom: 6px; }
+.art.hero { height: 210px; border-radius: 14px; margin-bottom: 18px; mask-image: linear-gradient(#000 75%, transparent); -webkit-mask-image: linear-gradient(#000 75%, transparent); }
+.scene-art { position: relative; }
+.cast { position: absolute; left: 50%; bottom: -26px; transform: translateX(-50%); display: flex; gap: 6px; }
+.cast .portrait { border: 3px solid var(--panel); box-shadow: 0 4px 10px #0008; }
+.event .story { margin-top: 34px; }
+.place { overflow: hidden; }
