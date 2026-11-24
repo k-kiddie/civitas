@@ -31,6 +31,9 @@ const path = require("node:path"),
       );
       await page.locator("[name=name]").fill("해솔");
       await page.getByRole("button", { name: "항구에서 시작하기" }).click();
+      assert.match(await page.locator(".newspaper").textContent(), /이번 장의 목표/);
+      if (size.width === 390) await page.screenshot({ path: path.join(__dirname, "../artifacts/mobile-intro.png") });
+      await page.locator("[data-action=close-report]").click();
       async function settle() {
         for (let i = 0; i < 10; i++) {
           if (await page.locator("[data-action=result]").count())
@@ -46,6 +49,7 @@ const path = require("node:path"),
       }
       await settle();
       // Drag is an alternative to tap-select, and resolves to the same single placement.
+      await page.locator("[data-place=dock]").evaluate((el) => el.scrollIntoView({ block: "center" }));
       const token = await page.locator("[data-person=head]").boundingBox(),
         dock = await page.locator("[data-place=dock]").boundingBox();
       await page.mouse.move(
@@ -60,7 +64,7 @@ const path = require("node:path"),
       assert.equal(await page.locator("[data-place=dock] .player").count(), 1);
       await page.locator("[data-action=undo]").click();
       assert.equal(await page.locator(".piece.player").count(), 0);
-      for (let turn = 0; turn < 12; turn++) {
+      for (let turn = 0; turn < 8; turn++) {
         for (const [id, place] of [
           ["head", "dock"],
           ["kin", turn < 5 ? "gate" : "union"],
@@ -69,7 +73,10 @@ const path = require("node:path"),
           await page.locator(`[data-person=${id}]`).click();
           await page.locator(`[data-place=${place}]`).click();
         }
+        if (turn === 1 && size.width === 390) await page.screenshot({ path: path.join(__dirname, "../artifacts/mobile-map.png") });
         await page.locator("[data-action=advance]").click();
+        assert.match(await page.locator(".newspaper").textContent(), /예상 득표 \d+% → \d+%/);
+        if (turn === 2 && size.width === 390) await page.screenshot({ path: path.join(__dirname, "../artifacts/mobile-report.png") });
         await page.locator("[data-action=close-report]").click();
         await settle();
         const overflow = await page.evaluate(
@@ -95,10 +102,10 @@ const path = require("node:path"),
       assert.equal(await page.locator(".ending").count(), 1);
       assert.match(
         await page.locator(".ending").textContent(),
-        /12계절|가문의 첫 장/,
+        /당선|낙선/,
       );
       await page.locator("[data-action=archive]").first().click();
-      assert.equal(await page.locator(".newspaper article").count(), 13);
+      assert.equal(await page.locator(".newspaper article").count(), 9);
       await page.locator("[data-action=close-report]").click();
       if (size.width === 390)
         await page.screenshot({
@@ -107,7 +114,7 @@ const path = require("node:path"),
         });
       assert.deepEqual(errors, []);
       console.log(
-        "UI 12 turns, drag, undo, save/reload, memories, archive:",
+        "UI 8 turns, scoreboard, drag, undo, save/reload, memories, ending:",
         size.width + "x" + size.height,
       );
       await context.close();
@@ -134,7 +141,7 @@ const path = require("node:path"),
       if (failure === "corrupt") {
         await page.evaluate(async () => {
           await SeasonSave.save(SeasonEngine.fresh({ name: "복원된 가장" }));
-          localStorage.setItem("civitas-season-v1", "null");
+          localStorage.setItem("civitas-season-v2", "null");
           localStorage.setItem("civitas-river-v3", '{"legacy":"preserved"}');
         });
         await page.reload();

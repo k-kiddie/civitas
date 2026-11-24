@@ -150,7 +150,7 @@ header {
   gap: 10px;
   font-size: 12px;
   color: var(--muted);
-  padding: 16px 0;
+  padding: 4px 0 10px;
 }
 .resources b {
   font-size: 18px;
@@ -1037,5 +1037,164 @@ form button {
   .turn-actions button {
     padding: 9px 6px;
     font-size: 13px;
+  }
+}
+
+/* ── 1장 목표·점수판 (v2) ── */
+.scoreboard {
+  margin: 10px 0 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #13252c;
+}
+.scoreboard .goal {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.scoreboard .goal b {
+  color: var(--gold);
+}
+.vote-bar {
+  position: relative;
+  height: 30px;
+  border-radius: 8px;
+  background: #5a2f2a;
+  overflow: hidden;
+}
+.vote-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, #2f7f74, var(--teal));
+  transition: width 0.5s ease;
+}
+.vote-bar .half {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--gold);
+  opacity: 0.85;
+}
+.vote-bar span {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-weight: 700;
+  font-size: 0.9rem;
+  text-shadow: 0 1px 2px #0008;
+}
+.vote-bar .me {
+  left: 10px;
+}
+.vote-bar .them {
+  right: 10px;
+  color: #f3d2c8;
+}
+.vote-bar.leading .me::after {
+  content: " ▲ 우세";
+  color: var(--gold);
+}
+.districts {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.districts span {
+  flex: 1;
+  text-align: center;
+  padding: 4px 2px;
+  border-radius: 6px;
+  background: #1b3138;
+}
+.districts span.win {
+  color: var(--text);
+  background: #24463f;
+}
+.districts b {
+  color: var(--text);
+}
+.districts small {
+  margin-left: 3px;
+  opacity: 0.7;
+}
+.place-tag {
+  display: block;
+  font-size: 0.68rem;
+  color: var(--gold);
+  line-height: 1.1;
+}
+.token em {
+  font-style: normal;
+  font-size: 0.72rem;
+  color: var(--gold);
+}
+.warn {
+  color: var(--red);
+}
+.newspaper p.lead {
+  font-weight: 700;
+  color: var(--gold);
+}
+.newspaper p.rival-line {
+  color: var(--red);
+}
+.ending.won h2 {
+  color: var(--gold);
+}
+.ending.lost h2 {
+  color: var(--red);
+}
+.big-share b {
+  font-size: 1.6rem;
+}
+.reasons {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 10px;
+}
+.reasons li {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  border-bottom: 1px dashed var(--line);
+  font-size: 0.9rem;
+}
+.reasons b {
+  color: var(--teal);
+}
+.reasons.minus b {
+  color: var(--red);
+}
+.rival-card {
+  border-color: #6b3b33;
+}
+
+@media (max-width: 400px) {
+  .scoreboard {
+    margin: 6px 0 4px;
+    padding: 8px 10px;
+  }
+  .scoreboard .goal {
+    font-size: 0.78rem;
+    margin-bottom: 6px;
+  }
+  .vote-bar {
+    height: 26px;
+  }
+  .districts {
+    margin-top: 6px;
+    font-size: 0.72rem;
+  }
+  .districts small {
+    display: none;
+  }
+  .resources b {
+    font-size: 16px;
   }
 }

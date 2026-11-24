@@ -1,6 +1,6 @@
 "use strict";
 (function (root) {
-  const KEY = "civitas-season-v1";
+  const KEY = "civitas-season-v2";
   let database;
   function db() {
     return (
