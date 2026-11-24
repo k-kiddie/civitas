@@ -17,9 +17,14 @@ const URL = process.env.CIVITAS_TEST_URL || "http://127.0.0.1:8080/civitas/proto
       await page.locator(".map").waitFor();
       await shot("map");
       const order = ["dock", "fishing", "market", "alley", "hall", "union", "home", "manor"];
-      let visits = 0, shotEvent = false, shotResult = false, shotPaper = false;
+      let visits = 0, shotEvent = false, shotResult = false, shotPaper = false, shotRoll = false, shotDuel = false;
       for (let step = 0; step < 600; step++) {
         if (await page.locator(".ending").count()) break;
+        if (await page.locator(".roll").count()) {
+          if (!shotRoll) { await shot("roll"); shotRoll = true; }
+          await page.waitForTimeout(1500); continue;
+        }
+        if (!shotDuel && await page.locator(".card.duel").count()) { await shot("duel"); shotDuel = true; }
         const choose = page.locator("[data-action=choose]:not(:disabled)");
         if (await choose.count()) {
           if (!shotEvent) { await shot("event"); shotEvent = true; }

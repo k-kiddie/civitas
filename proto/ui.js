@@ -26,7 +26,9 @@
   let state = null,
     sheet = null, // build | family | log | help
     toast = "",
-    prev = null; // 직전 수치(숫자 튀는 효과)
+    prev = null, // 직전 수치(숫자 튀는 효과)
+    lastDismiss = 0,
+    rolling = null; // 주사위 굴리는 중 {odds, label, i}
   let legacy = store.get(LEGACY) || { endings: {}, runs: 0, bestTitle: 0 };
   try {
     const saved = store.get(SAVE);
@@ -83,14 +85,20 @@
     return `<div class="goal ${at !== null && at - s.season <= 1 ? "ready" : ""}"><div class="goal-text">다음 목표 · <b>${next.name} 선거</b> <span class="when">${when}</span></div><div class="track"><i style="width:${pct}%"></i></div><div class="goal-sub">출마 조건 ★${next.fame} · 지금 ★${s.fame} · 도윤 ★${s.rivalFame} · ${P.canElect(s) ? `<b class="go">당선 확률 ${chance}%</b>` : `<b class="no">★${next.fame - s.fame} 부족</b>`}</div></div>`;
   }
   function plans() {
-    if (!state.plans.length) return "";
-    return `<div class="plans"><span class="plans-head">도윤의 다음 수</span>${state.plans
+    if (!state.plans.length && !state.opps.length) return "";
+    return `<div class="plans"><span class="plans-head">이번 계절 · ⚔ 도윤의 수 / ✨ 기회</span>${state.plans
       .map((p) => {
         const m = D.rivalMoves.find((x) => x.id === p.id);
         const loc = D.locations.find((l) => l.id === p.loc);
         return p.blocked
           ? `<span class="plan done">🛡 ${loc.name} · 막았다</span>`
-          : `<span class="plan">⚔ ${loc.icon} ${loc.name}: ${m.text}<small>막지 않으면 ${P.describe(state, m.fail)}</small></span>`;
+          : `<span class="plan">⚔ ${loc.icon} ${loc.name}: ${m.text}<small>가면 맞대결 · 막지 않으면 ${P.describe(state, m.fail)}</small></span>`;
+      })
+      .join("")}${state.opps
+      .map((o) => {
+        const e = P.getEvent(state, o.id);
+        const loc = D.locations.find((l) => l.id === o.loc);
+        return `<span class="plan opp">✨ ${loc.icon} ${loc.name}: ${esc(e.title)}<small>이번 계절만</small></span>`;
       })
       .join("")}</div>`;
   }
@@ -107,7 +115,7 @@
   }
   function tip() {
     const s = state;
-    if (s.season === 0 && s.ap === P.AP) return "장소를 누르면 사건이 터지고 결과가 바로 나온다. 계절마다 3번. ⚔ 표시는 도윤이 이번 계절 노리는 곳 — 가면 막는다.";
+    if (s.season === 0 && s.ap === P.AP) return "장소를 누르면 사건이 터진다. 계절마다 3번. ⚔ 도윤이 노리는 곳(가면 맞대결) · ✨ 이번 계절만 열리는 기회 · 📖 이어지는 이야기.";
     const flood = s.threats.find((t) => t.id === "flood");
     if (flood && !s.buildings.some((b) => b.id === "dike")) {
       const cost = P.buildCost(s, "dike");
@@ -116,7 +124,7 @@
     const at = P.nextElection(s);
     if (at !== null && at - s.season <= 1 && P.canElect(s) && !s.flags.bought) return `🗳 ${D.titles[s.title + 1].name} 선거가 ${at === s.season ? "이번" : "다음"} 계절 끝에 열린다! 시청에서 선거 운동을 하면 당선 확률이 오른다.`;
     if (at !== null && at - s.season <= 2 && !P.canElect(s)) return `🗳 선거까지 ${at - s.season}계절인데 명성이 ★${D.titles[s.title + 1].fame - s.fame} 모자란다. 어촌·조합에서 명성을 올리세요.`;
-    if (s.plans.some((p) => !p.blocked) && s.season < 2) return "⚔ 도윤의 다음 수가 위에 보인다. 그 장소에 가면 막을 수 있다. 행동은 3번뿐 — 막을지, 벌지, 대비할지 고르세요.";
+    if (s.plans.some((p) => !p.blocked) && s.season < 2) return "⚔ 도윤이 노리는 곳에 가면 맞대결이 벌어진다. ✨는 이번 계절만 열리는 기회. 행동은 3번뿐 — 무엇을 포기할지 고르세요.";
     if (s.health < 40) return "❤ 건강이 위험합니다. 하숙집에서 쉬세요. 0이 되면 가장이 죽습니다.";
     if (s.dirt >= 3 && s.title >= 1) return "🗝 강씨의 약점이 다 모였다! 시청에서 폭로할 수 있습니다.";
     if (s.ap === 0) return "행동을 다 썼습니다. [계절 넘기기]를 누르세요.";
@@ -146,7 +154,9 @@
             (l.id === "market" && s.threats.some((t) => t.id === "plague")) ||
             (l.id === "home" && s.health < 40));
         const plan = s.plans.find((p) => p.loc === l.id);
-        const badge = plan ? `<span class="badge ${plan.blocked ? "ok" : ""}">${plan.blocked ? "🛡" : "⚔"}</span>` : "";
+        const opp = s.opps.find((o) => o.loc === l.id);
+        const story = open && D.events.some((e) => e.loc === l.id && e.chain && P.eligible(s, e));
+        const badge = plan && !plan.blocked ? `<span class="badge">⚔</span>` : opp ? `<span class="badge opp">✨</span>` : story ? `<span class="badge story">📖</span>` : plan ? `<span class="badge ok">🛡</span>` : "";
         return `<button class="node ${open ? "" : "locked"} ${hot ? "hot" : ""}" data-loc="${l.id}" style="left:${l.x}%;top:${l.y}%" ${!open ? `aria-disabled="true"` : ""}><span class="node-icon">${open ? l.icon : "🔒"}${badge}</span><span class="node-name">${l.name}</span><span class="node-purpose">${open ? l.purpose : D.titles[l.title].name + " 이상"}</span></button>`;
       })
       .join("");
@@ -167,9 +177,12 @@
         : c.preview
           ? `<small>${esc(c.preview)}</small>`
           : "";
-    return `<div class="veil"><section class="card event" role="dialog" aria-modal="true" aria-labelledby="t"><div class="loc-band">${v.loc.icon} ${v.loc.name} · ${v.loc.purpose}</div><div class="big-icon">${v.icon}</div><h2 id="t">${esc(v.title)}</h2><p class="story">${esc(v.text)}</p><div class="choices">${v.choices
+    return `<div class="veil"><section class="card event ${v.duel ? "duel" : v.opp ? "opp" : v.chain ? "chain" : ""}" role="dialog" aria-modal="true" aria-labelledby="t"><div class="loc-band">${v.duel ? "⚔ 맞대결 · " : v.opp ? "✨ 이번 계절 기회 · " : v.chain ? "📖 이어지는 이야기 · " : ""}${v.loc.icon} ${v.loc.name}</div><div class="big-icon">${v.icon}</div><h2 id="t">${esc(v.title)}</h2><p class="story">${esc(v.text)}</p><div class="choices">${v.choices
       .map((c) => btn(`<span>${esc(c.label)}</span>${outcome(c)}${c.reason ? `<em>${esc(c.reason)}</em>` : ""}`, "choose", `data-i="${c.i}" ${c.reason ? "disabled" : ""}`))
       .join("")}</div></section></div>`;
+  }
+  function rollModal() {
+    return `<div class="veil"><section class="card roll" role="dialog" aria-modal="true" aria-label="결과를 굴리는 중"><p class="picked">“${esc(rolling.label)}”</p><div class="dice">🎲</div><div class="odds-bar"><i style="width:${Math.round(rolling.odds * 100)}%"></i><b class="needle"></b></div><p class="roll-odds">성공 확률 ${Math.round(rolling.odds * 100)}%</p></section></div>`;
   }
   function deltaChips(deltas) {
     return deltas
@@ -178,22 +191,25 @@
           const good = d.k === "hostility" || d.k === "rivalFame" ? d.v < 0 : d.v > 0;
           return `<span class="chip ${good ? "good" : "bad"}">${STAT[d.k][0]} ${d.v > 0 ? "+" : ""}${d.v}</span>`;
         }
-        const label = { recruit: "🤝 동료: ", resolve: "✅ 해결: ", threat: "⚠ 위협: ", family: "💍 가족: ", title: "👑 지위: " }[d.k] || "";
-        return `<span class="chip ${d.k === "threat" ? "bad" : "good"}">${label}${esc(d.v)}</span>`;
+        const label = { recruit: "🤝 동료: ", resolve: "✅ 해결: ", threat: "⚠ 위협: ", family: "💍 가족: ", title: "👑 지위: ", loyalty: "💛 충성 ", lost: "🕯 잃음: " }[d.k] || "";
+        const bad = d.k === "threat" || d.k === "lost" || (d.k === "loyalty" && /-/.test(d.v));
+        return `<span class="chip ${bad ? "bad" : "good"}">${label}${esc(d.v)}</span>`;
       })
       .join("");
   }
   function resultModal() {
     const r = state.result;
     const head = r.success === null ? "" : r.success ? `<div class="verdict win">성공! <small>(${Math.round(r.odds * 100)}%)</small></div>` : `<div class="verdict lose">실패… <small>(${Math.round(r.odds * 100)}%)</small></div>`;
-    return `<div class="veil"><section class="card result" role="dialog" aria-modal="true" aria-labelledby="t"><div class="big-icon">${r.icon}</div><h2 id="t">${esc(r.title)}</h2>${r.choice ? `<p class="picked">“${esc(r.choice)}”</p>` : ""}${head}<p class="story">${esc(r.text)}</p><div class="chips">${deltaChips(r.deltas)}</div>${r.notes.map((n) => `<p class="note">${esc(n)}</p>`).join("")}${btn(state.ending ? "결말 보기" : "계속", "dismiss", 'class="primary" autofocus')}</section></div>`;
+    return `<div class="veil"><section class="card result ${r.success === true ? "burst" : r.success === false ? "shake" : ""}" role="dialog" aria-modal="true" aria-labelledby="t"><div class="big-icon">${r.icon}</div><h2 id="t">${esc(r.title)}</h2>${r.choice ? `<p class="picked">“${esc(r.choice)}”</p>` : ""}${head}<p class="story">${esc(r.text)}</p><div class="chips">${deltaChips(r.deltas)}</div>${r.notes.map((n) => `<p class="note">${esc(n)}</p>`).join("")}${btn(state.ending ? "결말 보기" : "계속", "dismiss", 'class="primary" autofocus')}</section></div>`;
   }
   function summaryModal() {
     const m = state.summary;
-    return `<div class="veil"><section class="card paper" role="dialog" aria-modal="true" aria-labelledby="t"><div class="brand">벨 라 르 신 보</div><div class="paper-date">${m.date} 결산</div>${m.election ? `<div class="elect ${m.election.eligible ? (m.election.won ? "win" : "lose") : "lose"}">🗳 ${m.election.office} 선거 · ${!m.election.eligible ? "출마 자격 미달" : m.election.won ? "당선!" : "낙선"}${m.election.eligible ? ` <small>(확률 ${Math.round(m.election.p * 100)}%)</small>` : ""}</div>` : ""}<h2 id="t">${esc(m.headline)}</h2>${m.lines.map((l) => `<p>${esc(l)}</p>`).join("")}<p class="money-line">가문 금고 <b>₭${state.money}</b> (${m.net >= 0 ? "+" : ""}${m.net})</p>${btn(state.ending ? "결말 보기" : `${P.date(state.season)} 시작 →`, "dismiss", 'class="primary" autofocus')}</section></div>`;
+    return `<div class="veil"><section class="card paper" role="dialog" aria-modal="true" aria-labelledby="t"><div class="brand">벨 라 르 신 보</div><div class="paper-date">${m.date} 결산</div>${m.election ? `<div class="elect ${m.election.eligible ? (m.election.won ? "win" : "lose") : "lose"}">🗳 ${m.election.office} 선거 · ${!m.election.eligible ? "출마 자격 미달" : m.election.won ? "당선!" : "낙선"}${m.election.eligible ? ` <small>(확률 ${Math.round(m.election.p * 100)}%)</small>` : ""}</div>` : ""}<h2 id="t">${esc(m.headline)}</h2>${m.lines.map((l) => `<p>${esc(l)}</p>`).join("")}<p class="money-line">가문 금고 <b>₭${state.money}</b> (${m.net >= 0 ? "+" : ""}${m.net})</p>${(m.hooks || []).map((h) => `<p class="hook">📖 다음 계절 계속… ${esc(h)}</p>`).join("")}${btn(state.ending ? "결말 보기" : `${P.date(state.season)} 시작 →`, "dismiss", 'class="primary" autofocus')}</section></div>`;
   }
   function endingModal() {
-    const e = D.endings[state.ending];
+    const base = D.endings[state.ending];
+    const v = state.virtue;
+    const e = base.win && v >= 30 ? { ...base, title: "자애로운 " + base.title, text: base.text + " 사람들은 당신 가문을 존경으로 기억한다." } : base.win && v <= -30 ? { ...base, title: "공포의 " + base.title, text: base.text + " 사람들은 당신 가문의 이름을 낮게 속삭인다." } : base;
     return `<div class="veil"><section class="card ending ${e.win ? "win" : "lose"}" role="dialog" aria-modal="true" aria-labelledby="t"><div class="big-icon">${e.icon}</div><div class="eyebrow">${P.date(state.season)} · ${esc(P.headName(state))} 가문</div><h2 id="t">${e.title}</h2><p class="story">${e.text}</p><div class="end-stats"><span>지위<b>${D.titles[state.title].name}</b></span><span>명성<b>★${state.fame}</b></span><span>건물<b>${state.buildings.length}</b></span><span>점수<b>${P.score(state)}</b></span></div><p class="unlock">${unlockText()}</p>${btn("새 가문으로 다시", "restart", 'class="primary"')}${btn("연대기 보기", "sheet", 'data-sheet="log" class="secondary"')}</section></div>`;
   }
   function unlockText() {
@@ -215,9 +231,12 @@
     const s = state;
     const fam = s.family.map((p, i) => `<li class="${p.alive ? "" : "dead"}">${i === s.head ? "👑" : p.alive ? "🙂" : "🕯"} <b>${esc(p.name)}</b> <small>${p.role} · ${p.age}세${p.alive ? "" : " · 사망"}</small></li>`).join("");
     const comp = s.companions.length
-      ? s.companions.map((c) => { const d = D.companions[c.id]; return `<li>${d.icon} <b>${d.name}</b> <small>${d.role}</small><br><span class="perk">${d.perk}</span></li>`; }).join("")
+      ? s.companions.map((c) => { const d = D.companions[c.id]; const l = c.loyalty ?? 6; return `<li>${d.icon} <b>${d.name}</b> <small>${d.role}</small> <span class="loyal ${l <= 3 ? "low" : ""}">충성 ${"♥".repeat(Math.ceil(l / 2))}${"♡".repeat(5 - Math.ceil(l / 2))}${l <= 3 ? " 배신 위험!" : ""}</span><br><span class="perk">${d.perk}</span></li>`; }).join("")
       : "<li class='muted'>아직 동료가 없습니다. 장소를 돌며 사람을 만나세요.</li>";
-    return `<div class="veil bottom"><section class="card sheet" role="dialog" aria-modal="true" aria-labelledby="t"><h2 id="t">👪 ${esc(P.headName(s))} 가문 <small>${D.titles[s.title].name}</small></h2><h3>가족 <small>가장이 쓰러지면 다음 사람이 잇는다</small></h3><ul class="list">${fam}</ul><h3>동료 <small>계절마다 ₭2</small></h3><ul class="list">${comp}</ul><h3>강씨 가문</h3><p>도윤 명성 ★${s.rivalFame} · 적의 ${s.hostility}/100 <small>(70 이상이면 자객)</small><br>모은 약점 🗝 ${s.dirt}/3 <small>(3개면 시청에서 폭로)</small></p>${btn("닫기", "close", 'class="secondary"')}</section></div>`;
+    return `<div class="veil bottom"><section class="card sheet" role="dialog" aria-modal="true" aria-labelledby="t"><h2 id="t">👪 ${esc(P.headName(s))} 가문 <small>${D.titles[s.title].name}</small></h2><h3>가족 <small>가장이 쓰러지면 다음 사람이 잇는다</small></h3><ul class="list">${fam}</ul><h3>동료 <small>계절마다 ₭2 · 충성이 바닥나면 도윤에게 넘어간다</small></h3><ul class="list">${comp}</ul><h3>가문의 평판 <small>${s.virtue >= 30 ? "존경받는 가문 · 선거 +5%" : s.virtue <= -30 ? "두려운 가문 · 곧은 동료들의 충성이 줄어든다" : "아직 색이 없다"}</small></h3><div class="virtue"><span>👁 공포</span><span class="vbar"><i style="left:${50 + s.virtue / 2}%"></i></span><span>존경 🕊</span></div><h3>강씨 가문</h3><p>도윤 명성 ★${s.rivalFame} · 적의 ${s.hostility}/100 <small>(70 이상이면 자객)</small><br>모은 약점 🗝 ${s.dirt}/3 <small>(3개면 시청에서 폭로)</small></p>${btn("닫기", "close", 'class="secondary"')}</section></div>`;
+  }
+  function confirmNew() {
+    return `<div class="veil"><section class="card" role="dialog" aria-modal="true" aria-labelledby="t"><div class="big-icon">🕯</div><h2 id="t">새 가문으로 시작할까요?</h2><p class="story">지금 가문의 진행은 사라집니다.</p>${btn("새로 시작", "new-yes", 'class="primary"')}${btn("취소", "close", 'class="secondary"')}</section></div>`;
   }
   function logSheet() {
     return `<div class="veil bottom"><section class="card sheet" role="dialog" aria-modal="true" aria-labelledby="t"><h2 id="t">📜 가문의 연대기</h2><ul class="list log">${state.log.slice().reverse().map((l) => `<li><small>${P.date(l.season)}</small> ${esc(l.text)}</li>`).join("")}</ul>${btn("닫기", "close", 'class="secondary"')}</section></div>`;
@@ -234,17 +253,35 @@
       return;
     }
     const s = state;
-    const modal = s.event ? eventModal() : s.result ? resultModal() : s.summary ? summaryModal() : sheet === "build" ? buildSheet() : sheet === "family" ? familySheet() : sheet === "log" ? logSheet() : s.ending ? endingModal() : "";
+    const modal = rolling ? rollModal() : s.event ? eventModal() : s.result ? resultModal() : s.summary ? summaryModal() : sheet === "build" ? buildSheet() : sheet === "family" ? familySheet() : sheet === "log" ? logSheet() : sheet === "confirm-new" ? confirmNew() : s.ending ? endingModal() : "";
     const t = tip();
-    app.innerHTML = `<div class="shell"><header><div class="top"><span class="house">${esc(P.headName(s))} 가문 · <b>${D.titles[s.title].name}</b></span><span class="season">${P.date(s.season)} <small>${s.season + 1}/${P.LAST_SEASON}</small> ${btn("새 가문", "new", 'class="mini"')}</span></div><div class="stats">${stat("money", "₭", s.money)}${stat("health", "❤", s.health, `<span class="hbar"><i style="width:${s.health}%"></i></span>`)}${stat("fame", "★", s.fame)}</div>${goal()}${plans()}${threats()}</header>${t ? `<div class="tip">${t}</div>` : ""}${map()}${bottom()}</div>${modal}${toastHtml()}`;
+    app.innerHTML = `<div class="shell"><header><div class="top"><span class="house">${esc(P.headName(s))} 가문 · <b>${D.titles[s.title].name}</b> ${s.virtue >= 30 ? '<i class="vchip good">🕊 존경</i>' : s.virtue <= -30 ? '<i class="vchip bad">👁 공포</i>' : ""}</span><span class="season">${P.date(s.season)} <small>${s.season + 1}/${P.LAST_SEASON}</small> ${btn("새 가문", "new", 'class="mini"')}</span></div><div class="stats">${stat("money", "₭", s.money)}${stat("health", "❤", s.health, `<span class="hbar"><i style="width:${s.health}%"></i></span>`)}${stat("fame", "★", s.fame)}</div>${goal()}${plans()}${threats()}</header>${t ? `<div class="tip">${t}</div>` : ""}${map()}${bottom()}</div>${modal}${toastHtml()}`;
     prev = null;
     document.body.classList.toggle("modal-open", !!modal);
-    const focus = document.querySelector("[role=dialog] [autofocus], [role=dialog] button:not(:disabled)");
-    focus?.focus({ preventScroll: true });
+    if (!matchMedia("(pointer: coarse)").matches) {
+      const focus = document.querySelector("[role=dialog] [autofocus], [role=dialog] button:not(:disabled)");
+      focus?.focus({ preventScroll: true });
+    }
   }
   function toastHtml() {
     return toast ? `<div class="toast" role="status">${esc(toast)} ${btn("×", "toast-close")}</div>` : "";
   }
+  function doDismiss() {
+    if (Date.now() - lastDismiss < 400) return;
+    lastDismiss = Date.now();
+    commit(P.dismiss(state));
+    if (state.ending) recordEnding(), render();
+  }
+  // "계속"은 손가락을 떼는 순간 바로 처리하고, 카드 바깥(어두운 배경)을 눌러도 넘어간다.
+  app.addEventListener("pointerup", (e) => {
+    if (!state || state.restart || !(state.result || state.summary)) return;
+    const onButton = e.target.closest("[data-action=dismiss]");
+    const onVeil = e.target.classList?.contains("veil");
+    if (onButton || onVeil) {
+      e.preventDefault();
+      doDismiss();
+    }
+  });
   app.addEventListener("submit", (e) => {
     if (e.target.id !== "new") return;
     e.preventDefault();
@@ -256,6 +293,7 @@
     render();
   });
   app.addEventListener("click", (e) => {
+    if (rolling) return;
     const loc = e.target.closest("[data-loc]");
     if (loc && !e.target.closest("[role=dialog]")) {
       commit(P.visit(state, loc.dataset.loc));
@@ -264,12 +302,21 @@
     const a = e.target.closest("[data-action]");
     if (!a) return;
     const act = a.dataset.action;
-    if (act === "choose") commit(P.choose(state, Number(a.dataset.i)));
-    else if (act === "dismiss") {
-      commit(P.dismiss(state));
-      if (state.ending) recordEnding(), render();
-    } else if (act === "end") {
-      if (state.ap > 0 && !confirm(`행동이 ${state.ap}회 남았습니다. 그래도 계절을 넘길까요?`)) return;
+    if (act === "choose") {
+      if (rolling) return;
+      const i = Number(a.dataset.i);
+      const c = P.view(state).choices[i];
+      if (c && c.odds !== null && !c.reason) {
+        rolling = { odds: c.odds, label: c.label, i };
+        render();
+        setTimeout(() => {
+          rolling = null;
+          commit(P.choose(state, i));
+        }, 1300);
+      } else commit(P.choose(state, i));
+    }
+    else if (act === "dismiss") doDismiss();
+    else if (act === "end") {
       commit(P.endSeason(state));
     } else if (act === "build") {
       sheet = null;
@@ -285,7 +332,9 @@
       toast = `${d.icon} ${d.name}: ${d.hint}`;
       render();
     } else if (act === "new") {
-      if (!confirm("지금 가문을 버리고 새 가문으로 시작할까요?")) return;
+      sheet = "confirm-new";
+      render();
+    } else if (act === "new-yes") {
       state = { restart: true };
       sheet = null;
       store.set(SAVE, null);

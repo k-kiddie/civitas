@@ -26,6 +26,7 @@ body.modal-open {
   overflow: hidden;
 }
 button {
+  touch-action: manipulation;
   font: inherit;
   color: inherit;
   cursor: pointer;
@@ -926,4 +927,150 @@ button.secondary {
 .elect small {
   font-weight: 400;
   font-size: 0.8rem;
+}
+
+.mini.armed {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.plan.opp {
+  background: #2e2a18;
+  border-color: #8a7a3a;
+}
+.plan.opp small {
+  color: var(--gold);
+}
+.badge.opp {
+  background: #6b5a1c;
+  border-color: var(--gold);
+}
+.badge.story {
+  background: #2b3d6b;
+  border-color: #9ab3f0;
+  animation: none;
+}
+.card.duel {
+  border-color: #a5463a;
+  box-shadow: 0 0 0 2px #a5463a55;
+}
+.card.duel .loc-band {
+  color: var(--red);
+  font-weight: 700;
+}
+.card.opp .loc-band {
+  color: var(--gold);
+  font-weight: 700;
+}
+.card.chain .loc-band {
+  color: #9ab3f0;
+  font-weight: 700;
+}
+.roll {
+  text-align: center;
+}
+.dice {
+  font-size: 4.5rem;
+  margin: 10px 0;
+  animation: spin 0.35s linear infinite;
+}
+@keyframes spin {
+  0% { transform: rotate(0) scale(1); }
+  50% { transform: rotate(180deg) scale(1.15); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+.odds-bar {
+  position: relative;
+  height: 16px;
+  border-radius: 8px;
+  background: #5a2f2a;
+  overflow: hidden;
+  margin: 8px 0;
+}
+.odds-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: #2f7f74;
+}
+.odds-bar .needle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: #fff;
+  box-shadow: 0 0 6px #fff;
+  animation: needle 0.42s ease-in-out infinite alternate;
+}
+@keyframes needle {
+  from { left: 2%; }
+  to { left: 96%; }
+}
+.roll-odds {
+  color: var(--muted);
+}
+.result.burst .verdict {
+  animation: burst 0.5s ease-out;
+}
+@keyframes burst {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.25); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.result.shake {
+  animation: rise 0.25s ease-out, shake 0.45s 0.1s;
+}
+@keyframes shake {
+  20%, 60% { transform: translateX(-8px); }
+  40%, 80% { transform: translateX(8px); }
+}
+.hook {
+  font-style: italic;
+  color: #3a3f6b !important;
+  font-weight: 600;
+}
+.loyal {
+  font-size: 0.78rem;
+  color: #e2a0b0;
+  margin-left: 4px;
+}
+.loyal.low {
+  color: var(--red);
+  font-weight: 700;
+}
+.virtue {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.vbar {
+  position: relative;
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #6b2a24, #3a3f45 50%, #2f6b52);
+}
+.vbar i {
+  position: absolute;
+  top: -4px;
+  width: 4px;
+  height: 16px;
+  margin-left: -2px;
+  background: var(--gold);
+  border-radius: 2px;
+}
+.vchip {
+  font-style: normal;
+  font-size: 0.72rem;
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+.vchip.good {
+  background: #1f4a37;
+  color: var(--green);
+}
+.vchip.bad {
+  background: #4a2622;
+  color: var(--red);
 }

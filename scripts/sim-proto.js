@@ -5,12 +5,12 @@ function bot(strategy, seed) {
   let s = P.newGame({ name: "봇", seed }), draw = seed >>> 0, guard = 0;
   const r = (m) => ((draw = (Math.imul(draw, 1664525) + 1013904223) >>> 0), Math.floor((draw / 2 ** 32) * m));
   const reach = { t1: null, t2: null };
-  const val = (fx) => !fx ? 0 : (typeof fx.money === "number" ? fx.money : fx.money ? -60 : 0) / 3 + (fx.fame || 0) * 1.6 + (fx.health || 0) / (s.health < 50 ? 1.5 : 5) + (fx.title ? 60 : 0) + (fx.ending ? 200 : 0) + (fx.recruit ? 8 : 0) + (fx.dirt || 0) * 4 + (fx.resolve ? 25 : 0) - (fx.threat ? 15 : 0) - (fx.hostility || 0) / 4 - (fx.rivalFame || 0) * 1.2;
+  const val = (fx) => !fx ? 0 : (typeof fx.money === "number" ? fx.money : fx.money ? -60 : 0) / 3 + (fx.fame || 0) * 1.6 + (fx.health || 0) / (s.health < 50 ? 1.5 : 5) + (fx.title ? 60 : 0) + (fx.ending ? 200 : 0) + (fx.recruit ? 8 : 0) + (fx.dirt || 0) * 4 + (fx.resolve ? 25 : 0) + (fx.block ? 14 : 0) - (fx.duelLoss ? 18 : 0) + (fx.loyalty ? fx.loyalty[1] * 2 : 0) - (fx.loseSibling ? 30 : 0) - (fx.threat ? 15 : 0) - (fx.hostility || 0) / 4 - (fx.rivalFame || 0) * 1.2;
   while (!s.ending) {
     if (++guard > 400) throw Error("stuck");
     if (s.result || s.summary) { s = P.dismiss(s).state; continue; }
     if (s.event) {
-      const v = P.view(s), e = D.events.find((x) => x.id === s.event.id);
+      const v = P.view(s), e = P.getEvent(s, s.event.id);
       const ok = v.choices.filter((c) => !c.reason);
       let c;
       if (strategy === "random") c = ok[r(ok.length)];
@@ -29,15 +29,23 @@ function bot(strategy, seed) {
     if (strategy === "random") loc = open[r(open.length)].id;
     else {
       const at = P.nextElection(s);
-      const block = s.plans.find((p) => !p.blocked && open.some((l) => l.id === p.loc));
+      const bribe = 10 + s.title * 10;
+      const block = s.plans.find((p) => {
+        if (p.blocked || !open.some((l) => l.id === p.loc)) return false;
+        const m = D.rivalMoves.find((x) => x.id === p.id);
+        const big = (m.fail.health || 0) <= -10 || (m.fail.fame || 0) <= -4 || (m.fail.rivalFame || 0) >= 5;
+        const winP = Math.max(0.35, 0.6 + (s.fame - s.rivalFame) / 80);
+        return big && (s.dirt >= 1 || s.money >= bribe + 10 || winP >= 0.5);
+      });
       if (s.health < 40) loc = "home";
       else if ((at !== null && at - s.season <= 1 && P.canElect(s) && !s.flags.bought && !s._camp) || (s.dirt >= 3 && s.title >= 1)) { loc = "hall"; s._camp = true; }
-      else if (block && s.ap >= 2) loc = block.loc;
-      else if (s.title >= 2 && s.fame >= 85) loc = "manor";
+      else if (s.title >= 2 && s.fame >= 110) loc = "manor";
       else if (s.threats.some((t) => ["assassin", "customs"].includes(t.id)) && s.money >= 40) loc = "alley";
       else if (s.threats.some((t) => t.id === "plague") && s.money >= 25) loc = "market";
-      else if (s.money < 25) loc = r(2) ? "dock" : "market";
-      else loc = s.title >= 1 ? ["union", "fishing", "alley", "union"][r(4)] : ["fishing", "fishing", "alley", "dock"][r(4)];
+      else if (s.money < 8 || (s.threats.some((t) => t.id === "debt"))) loc = "dock";
+      else if (block) loc = block.loc;
+      else if (s.opps.length && s.money >= 35) loc = s.opps[0].loc;
+      else loc = s.title >= 1 ? ["union", "fishing", "union", "alley"][r(4)] : ["fishing", "fishing", "fishing", "alley", "dock"][r(5)];
     }
     const res = P.visit(s, loc); if (res.error) throw Error(res.error + " " + loc); s = res.state;
   }
