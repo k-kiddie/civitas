@@ -18,11 +18,8 @@
   const jobStories = typeof module !== 'undefined' ? require('./job-stories') : root.JobStories;
   const careers = typeof module !== 'undefined' ? require('./careers') : root.Careers;
   const starts = typeof module !== 'undefined' ? require('./starts') : root.Starts;
-  const plans = {
-    short: { name: '항구 제방', cost: 24, homes: 68, description: '항구를 보호한다. 어촌 18가구가 침수된다.' },
-    long: { name: '어촌까지 잇는 제방', cost: 60, homes: 86, description: '모든 86가구를 보호한다. 선주 계약 또는 주민 공동 출자가 필요하다.' },
-    none: { name: '공사를 보류한다', cost: 0, homes: 0, description: '돈을 쓰지 않는다. 장마 때 34가구가 침수된다.' }
-  };
+  const harbor = typeof module !== 'undefined' ? require('./src/shared/harbor') : root.HarborRules;
+  const plans = harbor.plans;
   function fresh() {
     return { version: 3, age:null, ageChosen:false, underworld:underworld.fresh(), day: 1, actions: 2, cash: 32, energy: 80, name: '시민', gender: 'unspecified', profileSet: false, place: 'harbor', startConfigured: false, background: 'worker', startingOccupation: 'worker',
       surveyed: false, testimony: false, funding: null, built: null, flooded: null,
@@ -771,7 +768,7 @@
           }
           if (next.day === 12) {
             const plan = next.built || 'none';
-            next.flooded = plan === 'long' ? 0 : plan === 'short' ? 18 : 34;
+            next.flooded = harbor.floodLoss(plan);
             next.residents.village -= Math.min(18, next.flooded);
             next.residents.harbor -= Math.max(0, next.flooded - 18);
             next.support = Math.max(0, Math.min(100, next.support + (plan === 'long' ? 22 : plan === 'short' ? -8 : -18)));
