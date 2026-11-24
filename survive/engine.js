@@ -18,7 +18,7 @@
   function newGame({ name = "대표", seed = 1 } = {}) {
     const s = {
       v: 1, rng: seed >>> 0, day: 1, rescueDay: 15, phase: "dawn",
-      food: 14, wood: 6, meds: 1, hope: 55, dike: 0, ration: "normal",
+      food: 10, wood: 4, meds: 1, hope: 55, dike: 0, ration: "normal", policy: "balanced",
       people: [], storms: [], flags: {}, rivalAlert: 0, exp: null, event: null, report: null,
       log: [], memorial: [], ending: null, seen: {}, total: 0, dayLines: [],
     };
@@ -81,6 +81,57 @@
     return { ...out, eat: n.food, burn: n.wood };
   }
   // ── 낮 ──
+  // ── 자동 배치: 방침 하나로 모두가 각자 맞는 일을 맡는다. 직접 바꾼 사람(pin)은 그날만 그대로 둔다 ──
+  const SKILL = { dike: "craft", fish: "wits", wood: "force" };
+  function autoAssign(s) {
+    const free = s.people.filter((p) => canWork(s, p) && !p.pin);
+    for (const p of free) p.job = null;
+    const take = (job, n, score) => {
+      const pool = free.filter((p) => !p.job).sort((a, b) => score(b) - score(a));
+      for (const p of pool.slice(0, n)) p.job = job;
+    };
+    const pol = s.policy;
+    // 지친 사람·다친 사람은 쉰다(휴식 방침이면 절반이 쉰다)
+    for (const p of free) if (p.stress >= (pol === "rest" ? 55 : 80) || (p.hp === 1 && pol !== "food")) p.job = "rest";
+    // 아픈 사람이 있으면 돌볼 사람
+    const sick = alive(s).filter((p) => p.hp >= 1).length;
+    if (sick) take("care", pol === "care" ? Math.min(2, sick) : 1, (p) => (D.people.find((x) => x.id === p.id)?.care ? 10 : 0) + p.stats.talk);
+    const st = nextStorm(s), n = need(s);
+    const urgent = { dike: st && s.dike < st.need && st.day - s.day <= 3, fish: s.food < n.food * 2, wood: s.wood < n.wood * 2 };
+    const order = pol === "dike" || pol === "fish" || pol === "wood" ? [pol] : [];
+    for (const j of ["dike", "fish", "wood"]) if (urgent[j] && !order.includes(j)) order.push(j);
+    for (const j of ["fish", "dike", "wood"]) if (!order.includes(j)) order.push(j);
+    const left = () => free.filter((p) => !p.job).length;
+    if (["dike", "fish", "wood"].includes(pol)) take(pol, Math.ceil(left() * 0.6), (p) => p.stats[SKILL[pol]]);
+    // 나머지는 급한 순서대로 번갈아
+    let i = 0;
+    while (left()) {
+      const j = order[i % order.length];
+      take(j, 1, (p) => p.stats[SKILL[j]]);
+      i++;
+    }
+  }
+  function setPolicy(state, policy) {
+    if (!["balanced", "dike", "fish", "wood", "care", "rest"].includes(policy)) return { state, error: "알 수 없는 방침입니다." };
+    const s = clone(state);
+    s.policy = policy;
+    for (const p of s.people) p.pin = false;
+    if (s.phase === "day") autoAssign(s);
+    return { state: s };
+  }
+  // 밤 추천: 지금 가장 모자란 것을 구하러, 그 장소에 맞는 두 사람
+  function recommend(s) {
+    const n = need(s);
+    const hurt = alive(s).some((p) => p.hp >= 2);
+    const loc = hurt && s.meds < 2 ? "pharmacy" : s.food < n.food * 2 ? "store" : s.wood < n.wood * 2 ? "mill" : s.food < n.food * 4 ? "store" : "wreck";
+    const main = { store: ["force", "wits"], pharmacy: ["wits", "talk"], mill: ["force", "craft"], wreck: ["craft", "force"], granary: ["craft", "force"] }[loc];
+    const score = (p) => p.stats[main[0]] + p.stats[main[1]];
+    let pool = s.people.filter((p) => canGo(s, p) && p.hp === 0 && p.stress < 75 && !p.leader);
+    if (pool.length < 2) pool = s.people.filter((p) => canGo(s, p));
+    const party = pool.sort((a, b) => score(b) - score(a)).slice(0, 2);
+    const why = loc === "pharmacy" ? "중상자가 있는데 약이 모자라다" : loc === "store" ? "식량이 곧 바닥난다" : loc === "mill" ? "땔감이 모자라다" : "여유가 있으니 무엇이든 찾아본다";
+    return { loc, party: party.map((p) => p.id), why };
+  }
   function setJob(state, id, job) {
     if (state.phase !== "day") return { state, error: "낮에만 일을 맡길 수 있습니다." };
     const p = byId(state, id);
@@ -88,6 +139,7 @@
     if (!D.jobs[job]) return { state, error: "알 수 없는 일입니다." };
     const s = clone(state);
     byId(s, id).job = job;
+    byId(s, id).pin = true;
     return { state: s };
   }
   function setRation(state, level) {
@@ -324,18 +376,23 @@
         if (victim) hurt(s, victim, 1, "추위와 병", notes);
       }
     }
+    // 물에 갇힌 하루하루가 사람을 갉아먹는다
+    s.hope = clamp(s.hope - 1, 0, 100);
     // 중상은 악화될 수 있고, 위독은 하루를 넘기지 못한다
     for (const p of alive(s)) {
       if (p.hp === 3) die(s, p, "치료받지 못한 상처", notes);
       else if (p.hp === 2 && rnd(s) < 0.5) hurt(s, p, 1, "상처 악화", notes);
+      else if (p.hp === 1 && p.job !== "rest" && !p.child && rnd(s) < 0.3) hurt(s, p, 1, "무리해서 덧난 상처", notes);
+      else if (p.hp === 1 && p.child && rnd(s) < 0.3) hurt(s, p, 1, "아이의 열병", notes);
     }
     // 물에 갇힌 거처에는 병이 돈다(배급이 적거나 춥거나 약이 없을수록)
-    const sick = 0.2 + (s.ration === "half" || s.ration === "none" ? 0.15 : 0) + (s.wood <= 1 ? 0.1 : 0);
+    const sick = 0.3 + (s.ration === "half" || s.ration === "none" ? 0.15 : 0) + (s.wood <= 1 ? 0.1 : 0);
     if (rnd(s) < sick) {
       const v = pick(s, alive(s));
       if (v) {
-        notes.push(`🤒 ${v.name}이(가) 열병에 걸렸다.`);
-        hurt(s, v, 1, "열병", notes);
+        const bad = rnd(s) < 0.35;
+        notes.push(`🤒 ${v.name}이(가) ${bad ? "심한 " : ""}열병에 걸렸다.`);
+        hurt(s, v, bad ? 2 : 1, "열병", notes);
       }
     }
     // 폭우
@@ -529,12 +586,17 @@
   }
   function dismiss(state) {
     const s = clone(state);
+    const wasDay = s.phase === "day";
     if (s.eventResult) s.eventResult = null;
     else if (s.report) {
       s.report = null;
       if (s.phase === "dawn" && !s.event) s.phase = "day";
     }
     if (!s.report && !s.event && !s.eventResult && s.phase === "dawn") s.phase = "day";
+    if (!wasDay && s.phase === "day") {
+      for (const p of s.people) p.pin = false;
+      autoAssign(s);
+    }
     return { state: s };
   }
   function validate(s) {
@@ -545,7 +607,7 @@
     return clone(s);
   }
   const api = {
-    newGame, setJob, setRation, endDay, startExp, choose, proceed, skipNight, resolveEvent, dismiss, validate,
+    newGame, setJob, setRation, setPolicy, recommend, autoAssign, endDay, startExp, choose, proceed, skipNight, resolveEvent, dismiss, validate,
     sceneView, eventView, forecast, need, nextStorm, canWork, canGo, alive, adults, byId, describe,
   };
   if (typeof module !== "undefined") module.exports = api;

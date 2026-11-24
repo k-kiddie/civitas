@@ -30,7 +30,7 @@
   };
   const rations = {
     full: { name: "넉넉히", per: 1, hope: 4, stress: -5 },
-    normal: { name: "보통", per: 0.75, hope: 0, stress: 0 },
+    normal: { name: "보통", per: 0.85, hope: 0, stress: 0 },
     half: { name: "반만", per: 0.5, hope: -3, stress: 8 },
     none: { name: "굶긴다", per: 0, hope: -12, stress: 15 },
   };

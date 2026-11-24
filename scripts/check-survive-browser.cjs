@@ -27,21 +27,15 @@ const URL = process.env.CIVITAS_TEST_URL || "http://127.0.0.1:8080/civitas/survi
         if (await has("[data-action=home]")) { await shot("result"); await page.click("[data-action=home]"); continue; }
         if (await has(".night")) {
           await shot("night");
-          const goers = page.locator("[data-action=goer]");
-          if (await goers.count()) {
-            await page.click("[data-action=place][data-k=store]");
-            await goers.first().click();
-            await page.click("[data-action=go]");
-          } else await page.click("[data-action=skip]");
+          if (await has("[data-action=recgo]")) await page.click("[data-action=recgo]");
+          else await page.click("[data-action=skip]");
           continue;
         }
         if (await has("[data-action=endday]")) {
           await shot("day");
-          // 첫 사람에게 일 맡기기
-          const card = page.locator(".card:not(.dead)").first();
-          await card.click();
-          if (await has("[data-action=job]")) { await shot("sheet"); await page.locator("[data-action=job][data-k=fish]").click(); }
-          else if (await has("[data-action=close]")) await page.click("[data-action=close]");
+          // 방침 하나만 고른다(사람마다 누르지 않는다)
+          await page.click("[data-action=policy][data-k=balanced]");
+          assert((await page.locator(".card .job").first().innerText()).trim().length > 0, "자동 배치");
           const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
           assert(!overflow, "가로 넘침 " + size.width);
           await page.click("[data-action=endday]");

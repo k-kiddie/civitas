@@ -7,6 +7,7 @@
     get() { try { return JSON.parse(localStorage.getItem(SAVE)); } catch { return null; } },
     set(v) { try { localStorage.setItem(SAVE, JSON.stringify(v)); } catch {} },
   };
+  let manual = false;
   let state = null, sheet = null, pickPlace = null, pickParty = [], rolling = null, toast = "", lastTap = 0;
   try { const v = store.get(); if (v) state = E.validate(v); } catch { toast = "저장이 손상되어 새로 시작합니다."; }
   const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -32,13 +33,15 @@
     const s = state;
     const status = !p.alive ? "" : p.child ? "아이" : p.away > 0 ? "밖에 나감" : p.broken ? "무너짐" : p.hp >= 2 ? "일 못 함" : "";
     const job = E.canWork(s, p) ? D.jobs[p.job] : null;
-    return `<button class="card hp${p.hp} ${!p.alive ? "dead" : ""}" data-action="person" data-id="${p.id}"><span class="face">${A.portrait(p, 52)}</span><span class="who"><b>${esc(p.name)}</b>${p.leader ? " 👑" : ""}<small>${esc(p.role)}</small></span><span class="hpb">${HP[p.hp]}</span><span class="stress"><i style="width:${p.stress}%"></i></span>${p.traits.length ? `<span class="traits">${p.traits.map(esc).join(" ")}</span>` : ""}<span class="job">${job ? `${job.icon} ${job.name}` : status}</span></button>`;
+    return `<button class="card hp${p.hp} ${!p.alive ? "dead" : ""}" data-action="person" data-id="${p.id}"><span class="face">${A.portrait(p, 52)}</span><span class="who"><b>${esc(p.name)}</b>${p.leader ? " 👑" : ""}<small>${esc(p.role)}</small></span><span class="hpb">${HP[p.hp]}</span><span class="stress"><i style="width:${p.stress}%"></i></span>${p.traits.length ? `<span class="traits">${p.traits.map(esc).join(" ")}</span>` : ""}<span class="job ${p.pin ? "pin" : ""}">${job ? `${job.icon} ${job.name}${p.pin ? " ✋" : ""}` : status}</span></button>`;
   }
   function dayView() {
     const s = state, f = E.forecast(s);
     const people = E.alive(s).map(card).join("");
     const rations = Object.entries(D.rations).map(([k, r]) => btn(r.name, "ration", `data-k="${k}" class="seg ${s.ration === k ? "on" : ""}"`)).join("");
-    return `<main><p class="hint">사람을 눌러 오늘 할 일을 맡기세요. 다친 사람은 쉬게 하거나 누군가 돌봐야 합니다.</p><div class="grid">${people}</div></main>
+    const POL = [["balanced", "⚖ 균형"], ["dike", "🧱 둑"], ["fish", "🎣 식량"], ["wood", "🪵 땔감"], ["care", "🩹 치료"], ["rest", "💤 휴식"]];
+    const policies = POL.map(([k, n]) => btn(n, "policy", `data-k="${k}" class="pol ${s.policy === k ? "on" : ""}"`)).join("");
+    return `<main><div class="policy"><div class="ptitle">오늘의 방침 <small>사람들이 알아서 맞는 일을 맡는다</small></div><div class="pols">${policies}</div></div><p class="hint">특정 사람의 일을 바꾸고 싶을 때만 눌러 주세요.</p><div class="grid">${people}</div></main>
     <section class="bar"><div class="seg-row"><span>배급</span>${rations}</div><div class="fc">오늘: 🍚+${f.food} 🪵+${f.wood} 🧱+${f.dike} · 밤에 🍚−${f.eat} 🪵−${f.burn}</div>${btn("해가 진다 →", "endday", 'class="primary"')}</section>`;
   }
   function personSheet(id) {
@@ -55,7 +58,13 @@
     const s = state;
     const places = Object.entries(D.places).map(([k, pl]) => btn(`${A.img(k, "art thumb")}<span>${pl.name}</span><small>${pl.loot} · 위험 ${["", "낮음", "보통", "높음"][pl.danger]}<br>${pl.desc}</small>`, "place", `data-k="${k}" class="place ${pickPlace === k ? "on" : ""}"`)).join("");
     const goers = s.people.filter((p) => E.canGo(s, p)).map((p) => btn(`<span class="face">${A.portrait(p, 40)}</span><span><b>${esc(p.name)}</b><small>💪${p.stats.force} 🗣${p.stats.talk} 🔧${p.stats.craft} 👁${p.stats.wits}${p.hp ? " · 부상" : ""}${p.stress >= 70 ? " · 지침" : ""}</small></span>`, "goer", `data-id="${p.id}" class="goer ${pickParty.includes(p.id) ? "on" : ""}"`)).join("");
-    return `<div class="veil"><section class="modal night" role="dialog" aria-modal="true">${A.img("night", "art banner")}<div class="eyebrow">🌙 ${s.day}일째 밤</div>${s.dayLines.map((l) => `<p class="line">${esc(l)}</p>`).join("")}<h2>누구를, 어디로 보낼까?</h2><div class="places">${places}</div><h3>갈 사람 <small>최대 2명 · 둘이 가면 서로 돕는다(+1)</small></h3><div class="goers">${goers || "<p class='muted'>나갈 수 있는 사람이 없다.</p>"}</div>${btn("떠난다", "go", `class="primary" ${pickPlace && pickParty.length ? "" : "disabled"}`)}${btn("오늘 밤은 아무도 보내지 않는다", "skip", 'class="secondary"')}</section></div>`;
+    return `<div class="veil"><section class="modal night" role="dialog" aria-modal="true">${A.img("night", "art banner")}<div class="eyebrow">🌙 ${s.day}일째 밤</div>${s.dayLines.map((l) => `<p class="line">${esc(l)}</p>`).join("")}${recBox()}<details class="manual" ${manual ? "open" : ""}><summary>직접 고르기</summary><div class="places">${places}</div><h3>갈 사람 <small>최대 2명 · 둘이 가면 서로 돕는다(+1)</small></h3><div class="goers">${goers || "<p class='muted'>나갈 수 있는 사람이 없다.</p>"}</div>${btn("이대로 떠난다", "go", `class="secondary" ${pickPlace && pickParty.length ? "" : "disabled"}`)}</details>${btn("오늘 밤은 아무도 보내지 않는다", "skip", 'class="secondary"')}</section></div>`;
+  }
+  function recBox() {
+    const r = E.recommend(state);
+    if (!r.party.length) return `<p class="muted">나갈 수 있는 사람이 없다.</p>`;
+    const pl = D.places[r.loc], who = r.party.map((id) => E.byId(state, id));
+    return `<div class="rec">${A.img(r.loc, "art thumb")}<div class="rec-body"><div class="rec-why">추천 · ${esc(r.why)}</div><b>${pl.name}</b> <small>위험 ${["", "낮음", "보통", "높음"][pl.danger]}</small><div class="rec-who">${who.map((p) => `${A.portrait(p, 30)}<span>${esc(p.name)}</span>`).join("")}</div></div></div>${btn("추천대로 보낸다 →", "recgo", 'class="primary"')}`;
   }
   function expModal() {
     const s = state, e = s.exp, pl = D.places[e.loc];
@@ -139,12 +148,15 @@
     else if (k === "job") { commit(E.setJob(state, a.dataset.id, a.dataset.k)); sheet = null; render(); }
     else if (k === "ration") commit(E.setRation(state, a.dataset.k));
     else if (k === "endday") { sheet = null; pickPlace = null; pickParty = []; commit(E.endDay(state)); }
-    else if (k === "place") { pickPlace = a.dataset.k; render(); }
+    else if (k === "place") { pickPlace = a.dataset.k; manual = true; render(); }
     else if (k === "goer") {
       const id = a.dataset.id;
       pickParty = pickParty.includes(id) ? pickParty.filter((x) => x !== id) : [...pickParty, id].slice(-2);
+      manual = true;
       render();
-    } else if (k === "go") commit(E.startExp(state, pickPlace, pickParty));
+    } else if (k === "go") { manual = false; commit(E.startExp(state, pickPlace, pickParty)); }
+    else if (k === "recgo") { const r = E.recommend(state); manual = false; commit(E.startExp(state, r.loc, r.party)); }
+    else if (k === "policy") commit(E.setPolicy(state, a.dataset.k));
     else if (k === "skip") commit(E.skipNight(state));
     else if (k === "approach") {
       const i = Number(a.dataset.i), v = E.sceneView(state).approaches[i];
@@ -170,6 +182,7 @@
     lastTap = Date.now();
     act(a);
   });
+  app.addEventListener("toggle", (e) => { if (e.target.classList?.contains("manual")) manual = e.target.open; }, true);
   app.addEventListener("click", (e) => {
     const a = e.target.closest("button[data-action]");
     if (!a || a.disabled || Date.now() - lastTap < 500) return;
