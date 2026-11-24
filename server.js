@@ -83,6 +83,8 @@ registerPublic("next");
 routes.set("/next/", ["next/index.html", "text/html; charset=utf-8"]);
 registerPublic("proto");
 routes.set("/proto/", ["proto/index.html", "text/html; charset=utf-8"]);
+registerPublic("survive");
+routes.set("/survive/", ["survive/index.html", "text/html; charset=utf-8"]);
 http
   .createServer((req, res) => {
     const url = new URL(req.url, "http://localhost");
@@ -94,7 +96,7 @@ http
     }
     const basePath = url.pathname.startsWith(`${BASE}/`) ? BASE : "";
     if (basePath) url.pathname = url.pathname.slice(BASE.length);
-    if (url.pathname === "/next" || url.pathname === "/proto") {
+    if (url.pathname === "/next" || url.pathname === "/proto" || url.pathname === "/survive") {
       res.writeHead(302, { location: `${basePath}${url.pathname}/${url.search}` });
       res.end();
       return;
