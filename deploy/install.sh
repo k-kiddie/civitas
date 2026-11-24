@@ -57,6 +57,11 @@ install -d -m 755 "$release"
 for file in index.html style.css game.js agenda.js campaign.js starts.js job-stories.js careers.js institutions.js agencies.js random-events.js underworld.js politics.js parties.js council.js pacts.js family.js succession.js society.js career-echoes.js work-projects.js work-agreements.js work-incidents.js work-careers.js chronicles.js life.js server.js; do
   install -m 644 "$source_dir/$file" "$release/$file"
 done
+# The seasonal game is served from /next/; legacy entry and saves remain intact.
+cp -R "$source_dir/src" "$release/src"
+cp -R "$source_dir/next" "$release/next"
+find "$release/src" "$release/next" -type d -exec chmod 755 {} +
+find "$release/src" "$release/next" -type f -exec chmod 644 {} +
 install -d -m 755 "$release/assets/events"
 for asset in "$source_dir"/assets/events/*.webp; do
   install -m 644 "$asset" "$release/assets/events/"
