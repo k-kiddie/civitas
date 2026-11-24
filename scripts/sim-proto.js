@@ -38,7 +38,7 @@ function bot(strategy, seed) {
         const winP = Math.max(0.35, 0.6 + (s.fame - s.rivalFame) / 80);
         return big && (s.dirt >= 1 || s.money >= bribe + 10 || winP >= 0.5);
       });
-      if (s.health < 40) loc = "home";
+      if (s.health < 25) loc = "home";
       else if ((at !== null && at - s.season <= 1 && P.canElect(s) && !s.flags.bought && !s._camp) || (s.dirt >= 3 && s.title >= 1)) { loc = "hall"; s._camp = true; }
       else if (s.title >= 2 && s.fame >= 110) loc = "manor";
       else if (s.threats.some((t) => ["assassin", "customs"].includes(t.id)) && s.money >= 40) loc = "alley";

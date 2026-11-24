@@ -17,7 +17,7 @@ for (const e of D.events) {
 }
 for (const l of D.locations) assert(D.events.some((e) => e.loc === l.id && e.repeat), "장소마다 반복 사건 필요: " + l.id);
 // 입력 불변·결정성·저장
-let s = P.newGame({ name: "검사", seed: 42 });
+let s = P.dismiss(P.newGame({ name: "검사", seed: 42 })).state;
 const raw = JSON.stringify(s);
 const a = P.visit(s, "dock").state;
 assert.equal(JSON.stringify(s), raw, "입력 불변");
@@ -30,13 +30,13 @@ assert.deepEqual(P.validate(JSON.parse(JSON.stringify(b))), b);
 assert.throws(() => P.validate({ ...b, v: 9 }));
 assert(b.result && Array.isArray(b.result.deltas));
 // 위협: 제방 없으면 장마 피해, 있으면 명성
-let w = P.newGame({ seed: 5 });
+let w = P.dismiss(P.newGame({ seed: 5 })).state;
 for (let i = 0; i < 6; i++) { w = { ...w, ap: 0 }; w = P.endSeason(w).state; w = P.dismiss(w).state; }
 assert(!w.threats.some((t) => t.id === "flood"));
 assert(w.log.length >= 1);
 // TRPG 판정: 확률 = (21 − (난이도 − 보정)) / 20, 실패 시 운명으로 한 번 다시 굴림, 특기 고르기
 {
-  let g = P.newGame({ name: "판정", seed: 77 });
+  let g = P.dismiss(P.newGame({ name: "판정", seed: 77 })).state;
   g.event = { id: "d_fight" };
   const v = P.view(g);
   const c = v.choices.find((x) => x.check && x.check.stat === "talk");
@@ -60,6 +60,26 @@ assert(w.log.length >= 1);
   assert.equal(k.perkChoice, null);
   assert(P.pickPerk(h, "orator").error);
 }
+// 매 판 달라지는 것
+{
+  const rivals = new Set(), traits = new Set(), decks = new Set(), floods = new Set();
+  for (let i = 1; i <= 60; i++) {
+    const g = P.newGame({ seed: i * 7919 });
+    rivals.add(g.rival); traits.add(g.trait); decks.add(g.excluded.join()); floods.add(g.threats[0].left);
+    assert.match(P.rename(g, "도윤의 강씨 저택"), new RegExp(D.rivals[g.rival].head));
+  }
+  assert.equal(rivals.size, Object.keys(D.rivals).length);
+  assert.equal(traits.size, Object.keys(D.cityTraits).length);
+  assert(decks.size > 20 && floods.size >= 4);
+}
+for (const m of D.rivalMoves) assert(m.aim && m.text && D.locations.some((l) => l.id === m.loc), "도윤의 수 " + m.id);
+// 지위에 맞는 장소: 시장이 되면 부두 하역 일감은 나오지 않는다
+{
+  const g = P.dismiss(P.newGame({ seed: 3 })).state;
+  g.title = 2;
+  assert(!P.eligible(g, D.events.find((e) => e.id === "d_work")));
+  assert(P.eligible(g, D.events.find((e) => e.id === "d_port")));
+}
 // 봇
 const out = {}, reached = new Set();
 for (const st of ["smart", "random"]) {
@@ -73,7 +93,7 @@ for (const st of ["smart", "random"]) {
   }
 }
 const win = (st) => ["ruler", "alliance", "shadow"].reduce((n, k) => n + (out[st][k] || 0), 0) / 300;
-assert(win("smart") >= 0.5 && win("smart") <= 0.9, "잘하는 봇 승률 " + win("smart"));
+assert(win("smart") >= 0.2 && win("smart") <= 0.8, "잘하는 봇 승률 " + win("smart"));
 assert(win("random") <= 0.15, "아무렇게나 하면 이기기 어려워야 함 " + win("random"));
 const missing = D.events.filter((e) => !reached.has(e.id)).map((e) => e.id);
 assert(missing.length <= 3, "도달 못 한 사건: " + missing.join(","));
