@@ -76,10 +76,23 @@
       return `<div class="goal"><div class="goal-text">최종 목표 · <b>강씨 저택에서 결판</b> (명성 ★${need})</div><div class="track"><i style="width:${pct}%"></i><em style="left:${Math.min(100, (s.rivalFame / need) * 100)}%" title="도윤"></em></div><div class="goal-sub">나 ★${s.fame} · 도윤 ★${s.rivalFame}${s.fame >= need ? " · <b class='go'>강씨 저택으로!</b>" : ""}</div></div>`;
     }
     const next = D.titles[s.title + 1];
-    const need = Math.max(next.fame, s.rivalFame);
-    const pct = Math.min(100, (s.fame / need) * 100);
-    const ready = P.canElect(s);
-    return `<div class="goal ${ready ? "ready" : ""}"><div class="goal-text">다음 목표 · <b>${next.name} 선거</b> — 명성 ★${next.fame} 이상 &amp; 도윤보다 높게</div><div class="track"><i style="width:${pct}%"></i><em style="left:${Math.min(100, (s.rivalFame / need) * 100)}%"></em></div><div class="goal-sub">나 ★${s.fame} · 도윤 ★${s.rivalFame}${ready ? " · <b class='go'>시청에 가면 출마할 수 있다!</b>" : ` · ★${need - s.fame} 더 필요`}</div></div>`;
+    const at = P.nextElection(s);
+    const pct = Math.min(100, (s.fame / next.fame) * 100);
+    const chance = Math.round(P.electionChance(s) * 100);
+    const when = at === null ? "남은 선거 없음" : at === s.season ? "이번 계절 끝!" : `${P.date(at)} 끝 · ${at - s.season}계절 뒤`;
+    return `<div class="goal ${at !== null && at - s.season <= 1 ? "ready" : ""}"><div class="goal-text">다음 목표 · <b>${next.name} 선거</b> <span class="when">${when}</span></div><div class="track"><i style="width:${pct}%"></i></div><div class="goal-sub">출마 조건 ★${next.fame} · 지금 ★${s.fame} · 도윤 ★${s.rivalFame} · ${P.canElect(s) ? `<b class="go">당선 확률 ${chance}%</b>` : `<b class="no">★${next.fame - s.fame} 부족</b>`}</div></div>`;
+  }
+  function plans() {
+    if (!state.plans.length) return "";
+    return `<div class="plans"><span class="plans-head">도윤의 다음 수</span>${state.plans
+      .map((p) => {
+        const m = D.rivalMoves.find((x) => x.id === p.id);
+        const loc = D.locations.find((l) => l.id === p.loc);
+        return p.blocked
+          ? `<span class="plan done">🛡 ${loc.name} · 막았다</span>`
+          : `<span class="plan">⚔ ${loc.icon} ${loc.name}: ${m.text}<small>막지 않으면 ${P.describe(state, m.fail)}</small></span>`;
+      })
+      .join("")}</div>`;
   }
   function threats() {
     if (!state.threats.length) return "";
@@ -94,18 +107,21 @@
   }
   function tip() {
     const s = state;
-    if (s.season === 0 && s.ap === P.AP) return "장소를 눌러 가 보세요. 가면 사건이 일어나고, 결과가 바로 나옵니다. 계절마다 3번 갈 수 있어요.";
+    if (s.season === 0 && s.ap === P.AP) return "장소를 누르면 사건이 터지고 결과가 바로 나온다. 계절마다 3번. ⚔ 표시는 도윤이 이번 계절 노리는 곳 — 가면 막는다.";
     const flood = s.threats.find((t) => t.id === "flood");
     if (flood && !s.buildings.some((b) => b.id === "dike")) {
       const cost = P.buildCost(s, "dike");
       return s.money >= cost ? `🧱 제방을 지을 돈이 모였다! 아래 [건설]에서 제방(₭${cost})을 지으세요.` : `🌊 큰 장마까지 ${flood.left}계절. 제방 ₭${cost}이 필요합니다 (지금 ₭${s.money}). 부두·시장에서 돈을 버세요.`;
     }
-    if (P.canElect(s)) return "🗳 출마 조건을 채웠다! 시청에 가면 선거가 열립니다.";
+    const at = P.nextElection(s);
+    if (at !== null && at - s.season <= 1 && P.canElect(s) && !s.flags.bought) return `🗳 ${D.titles[s.title + 1].name} 선거가 ${at === s.season ? "이번" : "다음"} 계절 끝에 열린다! 시청에서 선거 운동을 하면 당선 확률이 오른다.`;
+    if (at !== null && at - s.season <= 2 && !P.canElect(s)) return `🗳 선거까지 ${at - s.season}계절인데 명성이 ★${D.titles[s.title + 1].fame - s.fame} 모자란다. 어촌·조합에서 명성을 올리세요.`;
+    if (s.plans.some((p) => !p.blocked) && s.season < 2) return "⚔ 도윤의 다음 수가 위에 보인다. 그 장소에 가면 막을 수 있다. 행동은 3번뿐 — 막을지, 벌지, 대비할지 고르세요.";
     if (s.health < 40) return "❤ 건강이 위험합니다. 하숙집에서 쉬세요. 0이 되면 가장이 죽습니다.";
     if (s.dirt >= 3 && s.title >= 1) return "🗝 강씨의 약점이 다 모였다! 시청에서 폭로할 수 있습니다.";
     if (s.ap === 0) return "행동을 다 썼습니다. [계절 넘기기]를 누르세요.";
     if (s.money >= 30 && s.buildings.length < 2) return "🏗 돈이 남으면 [건설]로 노점을 지어 계절마다 수입을 늘리세요.";
-    if (s.fame < s.rivalFame) return "도윤의 명성이 앞서 있습니다. 어촌·조합에서 명성을 올리거나 시장·뒷골목에서 도윤을 깎으세요.";
+    if (s.fame < s.rivalFame) return "도윤의 명성이 앞서 있다. 선거 당선 확률이 낮아진다. 도윤의 계획을 막거나 약점을 모아 깎으세요.";
     return "";
   }
   // ── 지도 ──
@@ -124,12 +140,14 @@
         const open = P.unlocked(s, l);
         const hot =
           open &&
-          ((l.id === "hall" && (P.canElect(s) || (s.dirt >= 3 && s.title >= 1))) ||
+          ((l.id === "hall" && ((P.canElect(s) && P.nextElection(s) !== null && P.nextElection(s) - s.season <= 1 && !s.flags.bought) || (s.dirt >= 3 && s.title >= 1))) ||
             (l.id === "manor" && s.fame >= D.titles[3].fame) ||
             (l.id === "alley" && s.threats.some((t) => t.id === "assassin" || t.id === "customs")) ||
             (l.id === "market" && s.threats.some((t) => t.id === "plague")) ||
             (l.id === "home" && s.health < 40));
-        return `<button class="node ${open ? "" : "locked"} ${hot ? "hot" : ""}" data-loc="${l.id}" style="left:${l.x}%;top:${l.y}%" ${!open ? `aria-disabled="true"` : ""}><span class="node-icon">${open ? l.icon : "🔒"}</span><span class="node-name">${l.name}</span><span class="node-purpose">${open ? l.purpose : D.titles[l.title].name + " 이상"}</span></button>`;
+        const plan = s.plans.find((p) => p.loc === l.id);
+        const badge = plan ? `<span class="badge ${plan.blocked ? "ok" : ""}">${plan.blocked ? "🛡" : "⚔"}</span>` : "";
+        return `<button class="node ${open ? "" : "locked"} ${hot ? "hot" : ""}" data-loc="${l.id}" style="left:${l.x}%;top:${l.y}%" ${!open ? `aria-disabled="true"` : ""}><span class="node-icon">${open ? l.icon : "🔒"}${badge}</span><span class="node-name">${l.name}</span><span class="node-purpose">${open ? l.purpose : D.titles[l.title].name + " 이상"}</span></button>`;
       })
       .join("");
     const lots = s.buildings.map((b) => `<span class="lot" style="left:${LOT_POS[b.lot][0]}%;top:${LOT_POS[b.lot][1]}%" title="${D.buildings[b.id].name}">${D.buildings[b.id].icon}</span>`).join("");
@@ -172,7 +190,7 @@
   }
   function summaryModal() {
     const m = state.summary;
-    return `<div class="veil"><section class="card paper" role="dialog" aria-modal="true" aria-labelledby="t"><div class="brand">벨 라 르 신 보</div><div class="paper-date">${m.date} 결산</div><h2 id="t">${esc(m.headline)}</h2>${m.lines.map((l) => `<p>${esc(l)}</p>`).join("")}<p class="money-line">가문 금고 <b>₭${state.money}</b> (${m.net >= 0 ? "+" : ""}${m.net})</p>${btn(state.ending ? "결말 보기" : `${P.date(state.season)} 시작 →`, "dismiss", 'class="primary" autofocus')}</section></div>`;
+    return `<div class="veil"><section class="card paper" role="dialog" aria-modal="true" aria-labelledby="t"><div class="brand">벨 라 르 신 보</div><div class="paper-date">${m.date} 결산</div>${m.election ? `<div class="elect ${m.election.eligible ? (m.election.won ? "win" : "lose") : "lose"}">🗳 ${m.election.office} 선거 · ${!m.election.eligible ? "출마 자격 미달" : m.election.won ? "당선!" : "낙선"}${m.election.eligible ? ` <small>(확률 ${Math.round(m.election.p * 100)}%)</small>` : ""}</div>` : ""}<h2 id="t">${esc(m.headline)}</h2>${m.lines.map((l) => `<p>${esc(l)}</p>`).join("")}<p class="money-line">가문 금고 <b>₭${state.money}</b> (${m.net >= 0 ? "+" : ""}${m.net})</p>${btn(state.ending ? "결말 보기" : `${P.date(state.season)} 시작 →`, "dismiss", 'class="primary" autofocus')}</section></div>`;
   }
   function endingModal() {
     const e = D.endings[state.ending];
@@ -218,7 +236,7 @@
     const s = state;
     const modal = s.event ? eventModal() : s.result ? resultModal() : s.summary ? summaryModal() : sheet === "build" ? buildSheet() : sheet === "family" ? familySheet() : sheet === "log" ? logSheet() : s.ending ? endingModal() : "";
     const t = tip();
-    app.innerHTML = `<div class="shell"><header><div class="top"><span class="house">${esc(P.headName(s))} 가문 · <b>${D.titles[s.title].name}</b></span><span class="season">${P.date(s.season)} <small>${s.season + 1}/${P.LAST_SEASON}</small></span></div><div class="stats">${stat("money", "₭", s.money)}${stat("health", "❤", s.health, `<span class="hbar"><i style="width:${s.health}%"></i></span>`)}${stat("fame", "★", s.fame)}</div>${goal()}${threats()}</header>${t ? `<div class="tip">${t}</div>` : ""}${map()}${bottom()}</div>${modal}${toastHtml()}`;
+    app.innerHTML = `<div class="shell"><header><div class="top"><span class="house">${esc(P.headName(s))} 가문 · <b>${D.titles[s.title].name}</b></span><span class="season">${P.date(s.season)} <small>${s.season + 1}/${P.LAST_SEASON}</small> ${btn("새 가문", "new", 'class="mini"')}</span></div><div class="stats">${stat("money", "₭", s.money)}${stat("health", "❤", s.health, `<span class="hbar"><i style="width:${s.health}%"></i></span>`)}${stat("fame", "★", s.fame)}</div>${goal()}${plans()}${threats()}</header>${t ? `<div class="tip">${t}</div>` : ""}${map()}${bottom()}</div>${modal}${toastHtml()}`;
     prev = null;
     document.body.classList.toggle("modal-open", !!modal);
     const focus = document.querySelector("[role=dialog] [autofocus], [role=dialog] button:not(:disabled)");
@@ -265,6 +283,12 @@
     } else if (act === "threat") {
       const d = D.threats[a.dataset.id];
       toast = `${d.icon} ${d.name}: ${d.hint}`;
+      render();
+    } else if (act === "new") {
+      if (!confirm("지금 가문을 버리고 새 가문으로 시작할까요?")) return;
+      state = { restart: true };
+      sheet = null;
+      store.set(SAVE, null);
       render();
     } else if (act === "restart") {
       state = { restart: true };

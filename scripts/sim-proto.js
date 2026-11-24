@@ -23,13 +23,16 @@ function bot(strategy, seed) {
       for (const b of wants) if (!P.buildReason(s, b) && (b === "dike" || s.money - P.buildCost(s, b) > 25)) { s = P.build(s, b).state; break; }
       if (s.result) continue;
     }
-    if (s.ap <= 0) { s = P.endSeason(s).state; if (s.title >= 1 && reach.t1 === null) reach.t1 = s.season; if (s.title >= 2 && reach.t2 === null) reach.t2 = s.season; continue; }
+    if (s.ap <= 0) { s = P.endSeason(s).state; delete s._camp; if (s.title >= 1 && reach.t1 === null) reach.t1 = s.season; if (s.title >= 2 && reach.t2 === null) reach.t2 = s.season; continue; }
     let loc;
     const open = D.locations.filter((l) => P.unlocked(s, l));
     if (strategy === "random") loc = open[r(open.length)].id;
     else {
+      const at = P.nextElection(s);
+      const block = s.plans.find((p) => !p.blocked && open.some((l) => l.id === p.loc));
       if (s.health < 40) loc = "home";
-      else if (P.canElect(s) || (s.dirt >= 3 && s.title >= 1)) loc = "hall";
+      else if ((at !== null && at - s.season <= 1 && P.canElect(s) && !s.flags.bought && !s._camp) || (s.dirt >= 3 && s.title >= 1)) { loc = "hall"; s._camp = true; }
+      else if (block && s.ap >= 2) loc = block.loc;
       else if (s.title >= 2 && s.fame >= 85) loc = "manor";
       else if (s.threats.some((t) => ["assassin", "customs"].includes(t.id)) && s.money >= 40) loc = "alley";
       else if (s.threats.some((t) => t.id === "plague") && s.money >= 25) loc = "market";

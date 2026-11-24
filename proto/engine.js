@@ -6,8 +6,8 @@
   const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
   const AP = 3,
     LAST_SEASON = 32,
-    UPKEEP_FAMILY = 3,
-    UPKEEP_COMPANION = 2;
+    UPKEEP_FAMILY = 4,
+    UPKEEP_COMPANION = 3;
   const SIBLINGS = ["여울", "하린", "도현", "가람", "소율", "한결", "다온", "새봄"];
   const STAT_NAME = { money: "₭", fame: "명성", health: "건강", hostility: "강씨 적의", rivalFame: "도윤 명성", dirt: "약점" };
 
@@ -45,11 +45,13 @@
       log: [],
       ending: null,
       lastAssassin: -99,
+      plans: [],
     };
     s.family.push({ name: String(name).slice(0, 12) || "이름 없는 가장", role: "가장", age: 25, alive: true });
     s.family.push({ name: pick(s, SIBLINGS), role: "동생", age: 19, alive: true });
     if (o.companion) s.companions.push({ id: o.companion });
     s.log.push({ season: 0, text: `${s.family[0].name}의 가문이 벨라르 항구에 자리를 잡았다.` });
+    makePlans(s);
     return s;
   }
   const date = (season) => `${1 + Math.floor(season / 4)}년 ${["봄", "여름", "가을", "겨울"][season % 4]}`;
@@ -58,10 +60,32 @@
   const built = (s, id) => s.buildings.some((b) => b.id === id);
   const hasThreat = (s, id) => s.threats.some((t) => t.id === id);
   const nextTitle = (s) => D.titles[s.title + 1];
-  function canElect(s) {
-    return s.title < 2 && s.fame >= nextTitle(s).fame && s.fame >= s.rivalFame;
+  // 다음 선거 계절(없으면 null)과 당선 확률
+  function nextElection(s) {
+    if (s.title >= 2) return null;
+    const at = D.elections[s.title + 1].find((x) => x >= s.season);
+    return at === undefined ? null : at;
   }
-  const bribeCost = (s) => (s.title === 0 ? 40 : 80);
+  function canElect(s) {
+    return s.title < 2 && s.fame >= nextTitle(s).fame;
+  }
+  function electionChance(s) {
+    if (!canElect(s)) return 0;
+    const p = 0.5 + (s.fame - s.rivalFame) / 30 + (s.flags.bought ? 0.2 : 0) + (has(s, "sora") ? 0.05 : 0) + (has(s, "eunho") ? 0.05 : 0);
+    return clamp(Math.round(p * 100) / 100, 0.05, 0.95);
+  }
+  const bribeCost = (s) => (s.title === 0 ? 35 : 70);
+  // 도윤의 다음 수: 계절마다 미리 공개
+  function makePlans(s) {
+    const n = 1 + (s.title >= 1 ? 1 : 0);
+    const pool = D.rivalMoves.filter((m) => s.title >= (m.title || 0));
+    const out = [];
+    while (out.length < n && pool.length) {
+      const m = pool.splice(Math.floor(rnd(s) * pool.length), 1)[0];
+      out.push({ id: m.id, loc: m.loc, blocked: false });
+    }
+    s.plans = out;
+  }
   function unlocked(s, loc) {
     return s.title >= loc.title;
   }
@@ -83,6 +107,10 @@
     if (c.threat && !hasThreat(s, c.threat)) return false;
     if (c.building && !built(s, c.building)) return false;
     if (c.canElect && !canElect(s)) return false;
+    if (c.campaign) {
+      const at = nextElection(s);
+      if (at === null || at - s.season > 1 || !canElect(s) || s.flags.bought) return false;
+    }
     return true;
   }
   function odds(s, choice) {
@@ -114,10 +142,12 @@
     return String(text)
       .replace("{office}", s.title < 2 && text.includes("선거") ? nextTitle(s).name : D.titles[s.title].name)
       .replace("{bribe}", bribeCost(s))
+      .replace("{left}", nextElection(s) === s.season ? "이번 계절 끝에 열린다" : "다음 계절 끝에 열린다")
+      .replace("{chance}", Math.round(electionChance(s) * 100))
       .replace(
         "{requirement}",
         need
-          ? `${need.name} 선거에 나가려면 명성 ★${need.fame} 이상, 그리고 도윤(★${s.rivalFame})보다 높아야 합니다. 지금 ★${s.fame}.`
+          ? `${need.name} 선거는 ${nextElection(s) === null ? "더 이상 없다" : date(nextElection(s)) + " 끝에 열린다"}. 출마하려면 명성 ★${need.fame} (지금 ★${s.fame}). 당선 확률은 도윤(★${s.rivalFame})과의 명성 차이로 정해진다.`
           : "당신은 시장이다. 이제 강씨 저택에서 결판을 낼 때다 (명성 ★120 필요).",
       );
   }
@@ -254,7 +284,11 @@
     }
     s.ap -= 1;
     s.seen[e.id] = s.season;
-    s.event = { id: e.id };
+    s.event = { id: e.id, blocked: [] };
+    for (const p of s.plans) if (p.loc === locId && !p.blocked) {
+      p.blocked = true;
+      s.event.blocked.push(p.id);
+    }
     return { state: s };
   }
   function choose(state, index) {
@@ -277,6 +311,11 @@
     } else {
       apply(s, c.fx, deltas);
       text = c.text;
+    }
+    for (const id of state.event.blocked || []) {
+      const m = D.rivalMoves.find((x) => x.id === id);
+      apply(s, { fame: 2, hostility: 3 }, deltas);
+      notes.unshift(`🛡 도윤의 계획 ‘${m.text}’을(를) 막았다!`);
     }
     checkDeath(s, notes);
     s.event = null;
@@ -331,7 +370,7 @@
     if (s.flags.edict_tax) income += 8;
     if (s.flags.edict_relief) fame += 2;
     if (has(s, "sora")) fame += 1;
-    const upkeep = UPKEEP_FAMILY * s.family.filter((p) => p.alive).length + UPKEEP_COMPANION * s.companions.length + 5 * s.title;
+    const upkeep = UPKEEP_FAMILY * s.family.filter((p) => p.alive).length + UPKEEP_COMPANION * s.companions.length + 6 * s.title;
     return { income, upkeep, fame, net: income - upkeep };
   }
   function endSeason(state) {
@@ -352,6 +391,38 @@
     s.rivalFame += rivalGain;
     lines.push(`도윤의 명성 +${rivalGain} (★${s.rivalFame})`);
     if (s.title >= 1) s.hostility = clamp(s.hostility + 2 * s.title, 0, 100);
+    // 막지 못한 도윤의 계획
+    for (const p of s.plans) {
+      if (p.blocked) continue;
+      const m = D.rivalMoves.find((x) => x.id === p.id);
+      const d = [];
+      apply(s, m.fail, d);
+      lines.push(`⚔ 도윤이 ${m.text}: ${describe(s, m.fail)}`);
+    }
+    // 정해진 선거
+    let election = null;
+    if (nextElection(s) === s.season) {
+      const office = nextTitle(s).name;
+      if (!canElect(s)) {
+        election = { office, eligible: false, need: nextTitle(s).fame };
+        lines.unshift(`🗳 ${office} 선거 — 명성 ★${nextTitle(s).fame}이 안 돼 출마하지 못했다. 도윤 측이 자리를 지켰다.`);
+      } else {
+        const p = electionChance(s);
+        const won = rnd(s) < p;
+        election = { office, eligible: true, won, p };
+        if (won) {
+          s.title += 1;
+          s.fame += 5;
+          log(s, `${headName(s)}이(가) ${office} 선거에서 이겼다.`);
+          lines.unshift(`🗳 ${office} 선거 당선! (확률 ${Math.round(p * 100)}%) 명성 +5`);
+        } else {
+          s.fame = Math.max(0, s.fame - 3);
+          log(s, `${headName(s)}이(가) ${office} 선거에서 졌다.`);
+          lines.unshift(`🗳 ${office} 선거 낙선… (확률 ${Math.round(p * 100)}%) 명성 −3`);
+        }
+      }
+      delete s.flags.bought;
+    }
     // 위협 진행
     for (const t of s.threats) t.left -= 1;
     const due = s.threats.filter((t) => t.left <= 0);
@@ -374,10 +445,11 @@
     }
     s.season += 1;
     s.ap = AP;
+    makePlans(s);
     if (s.season % 4 === 0) s.family.forEach((p) => p.alive && p.age++);
     checkDeath(s, notes);
     if (!s.ending && s.season >= LAST_SEASON) s.ending = "time";
-    s.summary = { date: date(s.season - 1), headline: pick(s, D.headlines), lines: [...lines, ...notes], net: f.net };
+    s.summary = { date: date(s.season - 1), headline: pick(s, D.headlines), lines: [...lines, ...notes], net: f.net, election };
     return { state: s };
   }
   function expire(s, id) {
@@ -439,7 +511,7 @@
       s && s.v === 1 && Number.isInteger(s.season) && s.season >= 0 && s.season <= LAST_SEASON &&
       Number.isInteger(s.rng) && [s.money, s.fame, s.health, s.hostility, s.rivalFame, s.dirt].every(Number.isFinite) &&
       Array.isArray(s.family) && s.family.length >= 1 && s.family[s.head] && Array.isArray(s.companions) &&
-      Array.isArray(s.buildings) && Array.isArray(s.threats) && s.flags && s.seen && Array.isArray(s.log) &&
+      Array.isArray(s.buildings) && Array.isArray(s.threats) && Array.isArray(s.plans) && s.flags && s.seen && Array.isArray(s.log) &&
       (!s.event || D.events.some((e) => e.id === s.event.id)) &&
       s.buildings.every((b) => D.buildings[b.id]) && s.threats.every((t) => D.threats[t.id]) &&
       s.companions.every((c) => D.companions[c.id]);
@@ -448,7 +520,7 @@
   }
   const api = {
     newGame, visit, visitReason, choose, dismiss, build, buildReason, buildCost, endSeason, forecast,
-    view, describe, canElect, date, headName, score, validate, unlocked, odds,
+    view, describe, canElect, nextElection, electionChance, date, headName, score, validate, unlocked, odds,
     AP, LAST_SEASON,
   };
   if (typeof module !== "undefined") module.exports = api;

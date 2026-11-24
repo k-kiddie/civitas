@@ -44,9 +44,21 @@
     plague: { name: "열병", icon: "🤒", hint: "시장에서 약재를 비축하면 막는다" },
     sibling: { name: "동생의 노름빚", icon: "🎲", hint: "기한에 ₭25가 빠져나간다" },
   };
+  // 도윤의 다음 수: 매 계절 미리 공개된다. 그 장소에 가면 막는다. 막지 못하면 계절 끝에 fail이 적용된다.
+  const rivalMoves = [
+    { id: "rice", loc: "fishing", text: "어촌에 쌀을 돌린다", fail: { rivalFame: 6 } },
+    { id: "smear", loc: "market", text: "장터에 당신 험담을 퍼뜨린다", fail: { fame: -6 } },
+    { id: "monopoly", loc: "dock", text: "부두 일감을 독점한다", fail: { money: -12 } },
+    { id: "thugs", loc: "alley", text: "패거리로 당신 가족을 위협한다", fail: { health: -15 } },
+    { id: "lobby", loc: "hall", text: "시청 서기들을 구워삶는다", fail: { rivalFame: 8 } },
+    { id: "rent", loc: "home", text: "하숙집 주인을 매수해 집세를 올린다", fail: { money: -10 } },
+    { id: "union", loc: "union", title: 1, text: "조합 간부를 매수한다", fail: { fame: -5, rivalFame: 4 } },
+  ];
+  // 선거는 정해진 계절 끝에 열린다. 놓치면 다음 선거까지 기다린다.
+  const elections = { 1: [7, 15, 23, 31], 2: [11, 19, 27] };
   const origins = {
-    worker: { name: "노동자 집안", desc: "₭20 · 명성 5 · 동생과 시작", money: 20, fame: 5, unlock: null },
-    merchant: { name: "상인 집안", desc: "₭60 · 명성 0 · 강씨가 처음부터 경계 (적의 15)", money: 60, fame: 0, hostility: 15, unlock: "엔딩 1회" },
+    worker: { name: "노동자 집안", desc: "₭12 · 명성 5 · 동생과 시작", money: 12, fame: 5, unlock: null },
+    merchant: { name: "상인 집안", desc: "₭50 · 명성 0 · 강씨가 처음부터 경계 (적의 15)", money: 50, fame: 0, hostility: 15, unlock: "엔딩 1회" },
     noble: { name: "몰락한 귀족", desc: "₭30 · 명성 15 · 서윤이 따른다", money: 30, fame: 15, companion: "seoyun", unlock: "시장 지위 달성" },
   };
   // 선택지 도우미
@@ -83,7 +95,7 @@
     ], { repeat: true }),
     E("d_fight", "dock", "👊", "부두 패싸움", "강씨 패거리와 조합원들이 멱살을 잡았다.", [
       bet("뛰어들어 말린다", 0.5, { fx: { fame: 6, hostility: 5 }, text: "당신이 판을 갈랐다. 사람들이 이름을 묻는다." }, { fx: { health: -20, fame: 1 }, text: "주먹이 날아왔다. 그래도 사람들은 봤다." }, { bonus: [["eunho", 0.2]] }),
-      ch("모른 척한다", {}, "싸움은 저절로 끝났다. 아무도 당신을 기억하지 않는다."),
+      ch("모른 척한다", { fame: -1 }, "싸움은 저절로 끝났다. 누군가 당신이 지나치는 걸 봤다."),
     ], { cooldown: 3 }),
     E("d_smuggle", "dock", "🍾", "선원의 제안", "“상자 몇 개만 옮겨 주면 돼. 세관은 모르게.”", [
       ch("옮긴다 (₭+35)", { money: 35, flag: "smuggler", threat: { id: "customs", left: 3 } }, "주머니가 두둑해졌다. 세관이 냄새를 맡기 시작했다."),
@@ -92,7 +104,7 @@
     E("d_eunho", "dock", "👷", "밀린 품삯", "은호가 반장 앞에서 출근부를 흔든다. “사흘째 안 줬어!”", [
       bet("함께 반장에게 따진다", 0.55, { fx: { fame: 6, recruit: "eunho" }, text: "반장이 품삯을 내놨다. 은호가 동료가 되었다." }, { fx: { health: -10, fame: 2, recruit: "eunho" }, text: "얻어맞았지만, 은호는 당신 편이 되었다." }),
       ch("은호에게 돈을 빌려준다 (₭10)", { money: -10, recruit: "eunho" }, "은호가 고개를 숙인다. 동료가 되었다.", { need: { money: 10 } }),
-      ch("내 일이 아니다", {}, "은호는 혼자 반장실로 들어간다."),
+      ch("내 일이 아니다", { fame: -1 }, "은호는 혼자 반장실로 들어간다."),
     ], { cond: { notCompanion: "eunho" }, once: true }),
     E("d_contract", "dock", "🤝", "도윤의 부두 계약", "선주 도윤이 웃는다. “내 배 일감은 당신만 쓰지. 대신 내 사람이 되는 거야.”", [
       ch("계약한다 (₭+40)", { money: 40, hostility: -20, fame: -5, flag: "kang_contract" }, "도윤과 손을 잡았다. 조합원들의 눈빛이 식는다."),
@@ -180,10 +192,11 @@
       ch("버틴다", { fame: -6, hostility: -5 }, "도윤이 만족스럽게 웃는다. 노동자들은 아니다."),
     ], { cond: { building: "factory" }, cooldown: 4 }),
     // ── 시청: 선거·법 ──
-    E("hall_election", "hall", "🗳", "선거", "{office} 선거가 열렸다. 상대는 도윤.", [
-      bet("연설로 정면 승부", "election", { fx: { title: 1, fame: 5 }, text: "개표가 끝났다. 당신이 이겼다!" }, { fx: { fame: -5 }, text: "근소한 차로 졌다. 다음을 노리자." }, { bonus: [["sora", 0.1], ["eunho", 0.1]] }),
-      ch("표를 산다 (₭{bribe})", { title: 1, fame: -5, hostility: 15, money: "bribe" }, "돈이 표가 되었다. 당선. 하지만 뒷말이 돈다.", { need: { money: "bribe" } }),
-    ], { cond: { canElect: true }, priority: true }),
+    E("hall_campaign", "hall", "🗳", "{office} 선거 운동", "선거가 {left}. 지금 판세는 당선 확률 {chance}%.", [
+      bet("광장 연설회를 연다", 0.6, { fx: { fame: 6, rivalFame: -2 }, text: "광장이 꽉 찼다. 판세가 움직인다." }, { fx: { fame: -4 }, text: "야유 속에 연단을 내려왔다." }, { bonus: [["sora", 0.1], ["eunho", 0.1]] }),
+      ch("표를 산다 (₭{bribe}, 당선 확률 +20%)", { money: "bribe", flag: "bought", hostility: 10 }, "돈이 골목마다 돌았다. 들키지만 않으면 된다.", { need: { money: "bribe" } }),
+      ch("평소대로 간다", {}, "서기가 후보 명부에 이름을 적는다."),
+    ], { cond: { campaign: true }, priority: true }),
     E("hall_petition", "hall", "📝", "시청 민원실", "{requirement}", [
       ch("청원서를 낸다", { fame: 2 }, "서기가 도장을 찍는다. 이름이 기록에 남았다."),
       ch("서기에게 뒷돈 (₭10)", { money: -10, fame: 4 }, "서기가 당신 서류를 맨 위에 올린다.", { need: { money: 10 } }),
@@ -226,7 +239,7 @@
     extinct: { title: "가문 단절", icon: "🕯", text: "대를 이을 사람이 없었다. 이름은 다시 지워졌다.", win: false },
     time: { title: "평범한 이름", icon: "📖", text: "8년이 흘렀다. 도시를 쥐지는 못했지만, 가문의 이름은 남았다.", win: false },
   };
-  const api = { titles, locations, companions, buildings, LOTS, threats, origins, events, headlines, endings };
+  const api = { titles, locations, companions, buildings, LOTS, threats, origins, events, headlines, endings, rivalMoves, elections };
   if (typeof module !== "undefined") module.exports = api;
   root.ProtoData = api;
 })(globalThis);
