@@ -9,6 +9,7 @@ function bot(strategy, seed) {
   while (!s.ending) {
     if (++guard > 400) throw Error("stuck");
     if (s.result || s.summary) { s = P.dismiss(s).state; continue; }
+    if (s.perkChoice) { s = P.pickPerk(s, s.perkChoice[0]).state; continue; }
     if (s.event) {
       const v = P.view(s), e = P.getEvent(s, s.event.id);
       const ok = v.choices.filter((c) => !c.reason);

@@ -8,6 +8,7 @@
     LAST_SEASON = 32,
     UPKEEP_FAMILY = 3,
     UPKEEP_COMPANION = 2;
+  const STATS = ["talk", "force", "scheme", "lore"];
   const SIBLINGS = ["여울", "하린", "도현", "가람", "소율", "한결", "다온", "새봄"];
   const STAT_NAME = { money: "₭", fame: "명성", health: "건강", hostility: "강씨 적의", rivalFame: "도윤 명성", dirt: "약점" };
 
@@ -50,15 +51,28 @@
       stages: {},
       hooks: [],
       virtue: 0,
+      fate: 2,
+      items: [],
+      perkChoice: null,
+      levelups: 0,
     };
-    s.family.push({ name: String(name).slice(0, 12) || "이름 없는 가장", role: "가장", age: 25, alive: true });
-    s.family.push({ name: pick(s, SIBLINGS), role: "동생", age: 19, alive: true });
+    s.family.push(person(s, String(name).slice(0, 12) || "이름 없는 가장", "가장", 25, o.stats));
+    s.family.push(person(s, pick(s, SIBLINGS), "동생", 19));
     if (o.companion) s.companions.push({ id: o.companion, loyalty: 6 });
     s.log.push({ season: 0, text: `${s.family[0].name}의 가문이 벨라르 항구에 자리를 잡았다.` });
     makePlans(s);
     makeOpps(s);
     return s;
   }
+  // 인물: 능력치(−1~6), 경험치, 특기. base가 없으면 무작위(합계 약 5)
+  function person(s, name, role, age, base) {
+    const st = base ? { ...base } : { talk: 0, force: 0, scheme: 0, lore: 0 };
+    if (!base) for (let i = 0; i < 5; i++) st[pick(s, STATS)] += 1;
+    st[pick(s, STATS)] += 1;
+    return { name, role, age, alive: true, stats: st, xp: {}, perks: [] };
+  }
+  const head = (s) => s.family[s.head];
+  const hasPerk = (s, id) => head(s).perks.includes(id);
   const date = (season) => `${1 + Math.floor(season / 4)}년 ${["봄", "여름", "가을", "겨울"][season % 4]}`;
   const headName = (s) => s.family[s.head].name;
   const has = (s, id) => s.companions.some((c) => c.id === id);
@@ -76,10 +90,10 @@
   }
   function electionChance(s) {
     if (!canElect(s)) return 0;
-    const p = 0.5 + (s.fame - s.rivalFame) / 30 + (s.flags.bought ? 0.2 : 0) + (has(s, "sora") ? 0.05 : 0) + (has(s, "eunho") ? 0.05 : 0) + (s.virtue >= 30 ? 0.05 : 0);
+    const p = 0.5 + (s.fame - s.rivalFame) / 30 + (s.flags.bought ? 0.2 : 0) + (has(s, "sora") ? 0.05 : 0) + (has(s, "eunho") ? 0.05 : 0) + (s.virtue >= 30 ? 0.05 : 0) + (hasPerk(s, "orator") ? 0.1 : 0);
     return clamp(Math.round(p * 100) / 100, 0.05, 0.95);
   }
-  const bribeCost = (s) => (s.title === 0 ? 35 : 70);
+  const bribeCost = (s) => Math.round((s.title === 0 ? 35 : 70) / (hasPerk(s, "negotiator") ? 2 : 1));
   // 도윤의 다음 수: 계절마다 미리 공개
   function makePlans(s) {
     const n = 1 + (s.title >= 1 ? 1 : 0);
@@ -95,7 +109,7 @@
     return s.title >= loc.title;
   }
 
-  const DUEL_BRIBE = (s) => 10 + s.title * 10;
+  const DUEL_BRIBE = (s) => Math.round((10 + s.title * 10) / (hasPerk(s, "negotiator") ? 2 : 1));
   function getEvent(s, id) {
     if (id.startsWith("duel:")) return D.duel(D.rivalMoves.find((m) => m.id === id.slice(5)), DUEL_BRIBE(s));
     return D.events.find((e) => e.id === id);
@@ -160,6 +174,34 @@
     }
     return clamp(Math.round(p * 100) / 100, 0.1, 0.95);
   }
+  // ── TRPG 판정 ──
+  // 선택지의 판정 정보: [능력치, 난이도]. 예전 확률 선택지는 능력치를 붙이고 난이도로 바꾼다.
+  function checkSpec(s, e, index, c) {
+    let stat, dc;
+    if (c.check) [stat, dc] = c.check;
+    else if (typeof c.odds === "number") {
+      stat = D.checkStat[`${e.id}:${index}`] || "force";
+      dc = clamp(Math.round(21 - c.odds * 20 + 4), 5, 20);
+    } else if (c.odds === "showdown") {
+      stat = D.checkStat[`${e.id}:${index}`] || "talk";
+      dc = "showdown";
+    } else return null;
+    if (dc === "duel") dc = clamp(13 + Math.round((s.rivalFame - s.fame) / 6), 8, 19);
+    if (dc === "showdown") dc = clamp(16 + Math.round((s.rivalFame - s.fame) / 5), 10, 20);
+    const parts = [[`${D.stats[stat].icon}${D.stats[stat].name}`, head(s).stats[stat]]];
+    for (const comp of s.companions) if (D.companions[comp.id].assist === stat) parts.push([D.companions[comp.id].name, 2]);
+    for (const id of s.items) if (D.items[id].stat === stat) parts.push([D.items[id].name, D.items[id].bonus]);
+    if (stat === "lore" && hasPerk(s, "scholar")) parts.push(["학자", 2]);
+    if (stat === "scheme" && built(s, "tavern")) parts.push(["주점", 1]);
+    const mod = parts.reduce((n, [, v]) => n + v, 0);
+    const p = clamp((21 - (dc - mod)) / 20, 0.05, 0.95);
+    return { stat, dc, mod, parts, p: Math.round(p * 100) / 100 };
+  }
+  const scale = (fx, k) => {
+    const out = { ...fx };
+    for (const key of ["money", "fame", "health", "rivalFame", "dirt"]) if (typeof out[key] === "number") out[key] = Math.round(out[key] * k);
+    return out;
+  };
   const resolveMoney = (s, v) => (v === "bribe" ? -bribeCost(s) : v);
   function needReason(s, choice) {
     const n = choice.need || {};
@@ -209,8 +251,9 @@
         i,
         label: fill(s, c.label),
         reason: needReason(s, c),
-        odds: c.odds !== undefined ? odds(s, c) : null,
-        preview: c.odds !== undefined ? null : describe(s, c.fx),
+        check: checkSpec(s, e, i, c),
+        odds: checkSpec(s, e, i, c)?.p ?? (c.odds !== undefined ? odds(s, c) : null),
+        preview: c.win ? null : describe(s, c.fx),
         win: c.win ? describe(s, c.win.fx) : null,
         lose: c.lose ? describe(s, c.lose.fx) : null,
       })),
@@ -225,6 +268,7 @@
     }
     if (fx.recruit) out.push(`${D.companions[fx.recruit].name} 동료`);
     if (fx.marry) out.push("혼인");
+    if (fx.item) out.push(`${D.items[fx.item].icon} ${D.items[fx.item].name}`);
     if (fx.loyalty) out.push(`${D.companions[fx.loyalty[0]].name} 충성 ${fx.loyalty[1] > 0 ? "+" : ""}${fx.loyalty[1]}`);
     if (fx.block) out.push("도윤의 계획 저지");
     if (fx.duelLoss) out.push("도윤의 계획 성공(1.2배)");
@@ -247,7 +291,14 @@
       if (s[k] !== before) deltas.push({ k, v: s[k] - before });
     };
     bump("money", resolveMoney(s, fx.money));
-    for (const k of ["fame", "health", "hostility", "rivalFame", "dirt"]) bump(k, fx[k]);
+    const hp = fx.health && fx.health < 0 && hasPerk(s, "ironside") ? Math.round(fx.health * 0.7) : fx.health;
+    for (const k of ["fame", "hostility", "rivalFame", "dirt"]) bump(k, fx[k]);
+    bump("health", hp);
+    if (fx.item && !s.items.includes(fx.item)) {
+      s.items.push(fx.item);
+      deltas.push({ k: "item", v: `${D.items[fx.item].icon} ${D.items[fx.item].name}` });
+      if (D.items[fx.item].fate) gainFate(s, D.items[fx.item].fate, deltas);
+    }
     if (fx.recruit && !has(s, fx.recruit)) {
       s.companions.push({ id: fx.recruit, loyalty: 6 });
       deltas.push({ k: "recruit", v: D.companions[fx.recruit].name });
@@ -283,18 +334,65 @@
       deltas.push({ k: "threat", v: D.threats[fx.threat.id].name });
     }
     if (fx.marry) {
-      s.family.push({ name: fx.marry === "소라" ? "소라" : pick(s, ["서진", "유나", "이든", "보람"]), role: "배우자", age: 24, alive: true });
+      s.family.push(person(s, fx.marry === "소라" ? "소라" : pick(s, ["서진", "유나", "이든", "보람"]), "배우자", 24, fx.marry === "소라" ? { talk: 3, force: 1, scheme: 0, lore: 1 } : null));
       s.flags.married = true;
       if (fx.marry === "소라") s.flags.married_sora = true;
       deltas.push({ k: "family", v: "배우자" });
       log(s, `${headName(s)}이(가) 혼인했다.`);
     }
     if (fx.title) {
+      gainFate(s, 1, deltas);
       s.title = Math.min(3, s.title + fx.title);
       deltas.push({ k: "title", v: D.titles[s.title].name });
       log(s, `${headName(s)}이(가) ${D.titles[s.title].name}이(가) 되었다.`);
     }
     if (fx.ending) s.ending = fx.ending;
+  }
+  const fateMax = (s) => 3 + (hasPerk(s, "lucky") ? 1 : 0);
+  function gainFate(s, n, deltas) {
+    const before = s.fate;
+    s.fate = Math.min(fateMax(s), s.fate + n);
+    if (deltas && s.fate > before) deltas.push({ k: "fate", v: s.fate - before });
+  }
+  // 판정할 때마다 경험치. 6이 차면 능력치 +1, 두 번 오를 때마다 특기 고르기.
+  function gainXp(s, stat, success, deltas) {
+    const h = head(s);
+    h.xp[stat] = (h.xp[stat] || 0) + (success ? 2 : 1);
+    if (h.xp[stat] < 6) return;
+    h.xp[stat] -= 6;
+    if (h.stats[stat] < 6) {
+      h.stats[stat] += 1;
+      deltas.push({ k: "level", v: `${D.stats[stat].icon}${D.stats[stat].name} +1` });
+      log(s, `${h.name}의 ${D.stats[stat].name}이(가) ${h.stats[stat]}이(가) 되었다.`);
+    }
+    s.levelups += 1;
+    if (s.levelups % 2 === 0) {
+      const pool = Object.keys(D.perks).filter((id) => !h.perks.includes(id));
+      const out = [];
+      while (out.length < 3 && pool.length) out.push(pool.splice(Math.floor(rnd(s) * pool.length), 1)[0]);
+      if (out.length) s.perkChoice = out;
+    }
+  }
+  function pickPerk(state, id) {
+    if (!state.perkChoice || !state.perkChoice.includes(id)) return { state, error: "고를 수 없는 특기입니다." };
+    const s = clone(state);
+    const h = head(s);
+    h.perks.push(id);
+    const pk = D.perks[id];
+    if (pk.stat) h.stats[pk.stat[0]] += pk.stat[1];
+    if (id === "lucky") gainFate(s, 1);
+    s.perkChoice = null;
+    log(s, `${h.name}이(가) 특기 ‘${pk.name}’을(를) 얻었다.`);
+    return { state: s };
+  }
+  // 실패한 판정을 운명 1점으로 다시 굴린다(판정당 한 번)
+  function reroll(state) {
+    const r = state.result;
+    if (!r || !r.pre || state.fate <= 0) return { state, error: "다시 굴릴 수 없습니다." };
+    const pre = clone(r.pre);
+    pre.rng = state.rng;
+    pre.fate = state.fate - 1;
+    return choose(pre, r.index);
   }
   function log(s, text) {
     s.log.push({ season: s.season, text });
@@ -325,6 +423,7 @@
     if (s.event) return "사건부터 결정하세요.";
     if (s.result) return "결과를 확인하세요.";
     if (s.summary) return "계절 결산을 확인하세요.";
+    if (s.perkChoice) return "새 특기를 고르세요.";
     return "";
   }
   function visitReason(s, locId) {
@@ -370,8 +469,21 @@
     const s = clone(state);
     const deltas = [],
       notes = [];
-    let text, success = null, p = null, fx;
-    if (c.odds !== undefined) {
+    let text, success = null, p = null, fx, chk = null;
+    const spec = checkSpec(s, e, index, c);
+    if (spec) {
+      const roll = 1 + Math.floor(rnd(s) * 20);
+      const total = roll + spec.mod;
+      const crit = roll === 20;
+      const fumble = roll === 1 && !(spec.stat === "force" && hasPerk(s, "brawler"));
+      success = crit || (!fumble && total >= spec.dc);
+      p = spec.p;
+      const out = success ? c.win : c.lose;
+      fx = crit ? scale(out.fx, 1.5) : fumble ? scale(out.fx, 1.5) : out.fx;
+      text = (crit ? "대성공! " : fumble ? "대실패! " : "") + out.text;
+      chk = { ...spec, roll, total, crit, fumble };
+      gainXp(s, spec.stat, success, deltas);
+    } else if (c.odds !== undefined) {
       p = odds(s, c);
       success = rnd(s) < p;
       const out = success ? c.win : c.lose;
@@ -399,8 +511,12 @@
       }
     }
     checkDeath(s, notes);
+    const canReroll = chk && !success && !state.event.rerolled && !s.ending;
     s.event = null;
-    s.result = { icon: e.icon, title: fill(s, e.title), choice: fill(s, c.label), text, success, odds: p, deltas, notes };
+    s.result = {
+      index,
+      check: chk,
+      pre: canReroll ? { ...clone(state), event: { ...state.event, rerolled: true } } : null, icon: e.icon, title: fill(s, e.title), choice: fill(s, c.label), text, success, odds: p, deltas, notes };
     return { state: s };
   }
   function dismiss(state) {
@@ -451,6 +567,7 @@
     if (s.flags.edict_tax) income += 8;
     if (s.flags.partner) income += 6;
     income += [0, 15, 30, 30][s.title]; // 직책 봉급
+    if (hasPerk(s, "trader")) income += 5;
     if (s.flags.edict_relief) fame += 2;
     if (has(s, "sora")) fame += 1;
     const upkeep = UPKEEP_FAMILY * s.family.filter((p) => p.alive).length + UPKEEP_COMPANION * s.companions.length + 5 * s.title;
@@ -496,6 +613,7 @@
         if (won) {
           s.title += 1;
           s.fame += 5;
+          gainFate(s, 1);
           log(s, `${headName(s)}이(가) ${office} 선거에서 이겼다.`);
           lines.unshift(`🗳 ${office} 선거 당선! (확률 ${Math.round(p * 100)}%) 명성 +5`);
         } else {
@@ -560,6 +678,7 @@
       if (built(s, "dike")) {
         const bonus = s.flags.promise ? 15 : 10;
         s.fame += bonus;
+        gainFate(s, 1);
         return `🌊 큰 장마! 제방이 버텼다. 명성 +${bonus}${s.flags.promise ? " (소라와의 약속을 지켰다)" : ""}.`;
       }
       s.money -= 30;
@@ -607,7 +726,7 @@
       s && s.v === 1 && Number.isInteger(s.season) && s.season >= 0 && s.season <= LAST_SEASON &&
       Number.isInteger(s.rng) && [s.money, s.fame, s.health, s.hostility, s.rivalFame, s.dirt].every(Number.isFinite) &&
       Array.isArray(s.family) && s.family.length >= 1 && s.family[s.head] && Array.isArray(s.companions) &&
-      Array.isArray(s.buildings) && Array.isArray(s.threats) && Array.isArray(s.plans) && Array.isArray(s.opps) && s.stages && Array.isArray(s.hooks) && Number.isFinite(s.virtue) && s.flags && s.seen && Array.isArray(s.log) &&
+      Array.isArray(s.buildings) && Array.isArray(s.threats) && Array.isArray(s.plans) && Array.isArray(s.opps) && s.stages && Array.isArray(s.hooks) && Number.isFinite(s.virtue) && Number.isFinite(s.fate) && Array.isArray(s.items) && s.family.every((p) => p.stats && p.xp && Array.isArray(p.perks)) && s.flags && s.seen && Array.isArray(s.log) &&
       (!s.event || !!getEvent(s, s.event.id)) &&
       s.buildings.every((b) => D.buildings[b.id]) && s.threats.every((t) => D.threats[t.id]) &&
       s.companions.every((c) => D.companions[c.id]);
@@ -616,7 +735,7 @@
   }
   const api = {
     newGame, visit, visitReason, choose, dismiss, build, buildReason, buildCost, endSeason, forecast,
-    view, describe, canElect, nextElection, electionChance, date, getEvent, eligible, headName, score, validate, unlocked, odds,
+    view, describe, canElect, nextElection, electionChance, date, getEvent, eligible, pickPerk, reroll, checkSpec, fateMax, headName, score, validate, unlocked, odds,
     AP, LAST_SEASON,
   };
   if (typeof module !== "undefined") module.exports = api;

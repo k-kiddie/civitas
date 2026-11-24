@@ -7,11 +7,11 @@ const ids = new Set();
 for (const e of D.events) {
   assert(!ids.has(e.id), "중복 id " + e.id); ids.add(e.id);
   assert(D.locations.some((l) => l.id === e.loc), e.id);
-  assert(e.choices.length >= 2 && e.choices.length <= 3, e.id);
+  assert(e.choices.length >= 2 && e.choices.length <= 4, e.id);
   assert(e.choices.some((c) => !c.need), "조건 없는 선택지가 하나는 있어야 함: " + e.id);
   assert(e.text.length < 120, e.id);
   for (const c of e.choices) {
-    if (c.odds !== undefined) assert(c.win && c.lose, e.id);
+    if (c.odds !== undefined || c.check) assert(c.win && c.lose, e.id);
     else assert(c.fx && c.text, e.id);
   }
 }
@@ -34,6 +34,32 @@ let w = P.newGame({ seed: 5 });
 for (let i = 0; i < 6; i++) { w = { ...w, ap: 0 }; w = P.endSeason(w).state; w = P.dismiss(w).state; }
 assert(!w.threats.some((t) => t.id === "flood"));
 assert(w.log.length >= 1);
+// TRPG 판정: 확률 = (21 − (난이도 − 보정)) / 20, 실패 시 운명으로 한 번 다시 굴림, 특기 고르기
+{
+  let g = P.newGame({ name: "판정", seed: 77 });
+  g.event = { id: "d_fight" };
+  const v = P.view(g);
+  const c = v.choices.find((x) => x.check && x.check.stat === "talk");
+  assert.equal(c.check.dc, 13);
+  assert.equal(c.check.p, Math.min(0.95, Math.max(0.05, (21 - (13 - c.check.mod)) / 20)));
+  let tries = 0, failed = null;
+  for (let seed = 1; seed < 200 && !failed; seed++) {
+    const t = { ...JSON.parse(JSON.stringify(g)), rng: seed };
+    const r = P.choose(t, c.i).state;
+    tries++;
+    if (r.result.success === false) failed = r;
+    else assert(r.result.check.total >= 13 || r.result.check.crit);
+  }
+  assert(failed && failed.result.pre, "실패하면 다시 굴릴 수 있다");
+  const rr = P.reroll(failed).state;
+  assert.equal(rr.fate, failed.fate - 1);
+  assert.equal(rr.result.pre, null, "판정당 한 번만");
+  const h = { ...JSON.parse(JSON.stringify(g)), perkChoice: ["brawler", "lucky", "trader"], event: null };
+  const k = P.pickPerk(h, "brawler").state;
+  assert.equal(k.family[0].stats.force, h.family[0].stats.force + 1);
+  assert.equal(k.perkChoice, null);
+  assert(P.pickPerk(h, "orator").error);
+}
 // 봇
 const out = {}, reached = new Set();
 for (const st of ["smart", "random"]) {

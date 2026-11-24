@@ -21,11 +21,11 @@
     { id: "manor", name: "강씨 저택", icon: "🏯", purpose: "라이벌과 결판", x: 52, y: 10, title: 2 },
   ];
   const companions = {
-    eunho: { name: "은호", icon: "👷", role: "공장 노동자", perk: "부두·조합 승부 +20%" },
-    sora: { name: "소라", icon: "🧕", role: "어촌 대표", perk: "계절마다 명성 +1, 어촌 연설 +25%" },
-    yun: { name: "윤", icon: "👴", role: "수문공", perk: "제방 비용 −20" },
-    minseok: { name: "민석", icon: "👮", role: "경찰 보조", perk: "자객·단속을 한 번 막는다" },
-    seoyun: { name: "서윤", icon: "📜", role: "기록관 서기", perk: "연회·조사 승부 +25%" },
+    eunho: { name: "은호", icon: "👷", role: "공장 노동자", assist: "force", perk: "완력 판정 +2" },
+    sora: { name: "소라", icon: "🧕", role: "어촌 대표", assist: "talk", perk: "말솜씨 판정 +2 · 계절마다 명성 +1" },
+    yun: { name: "윤", icon: "👴", role: "수문공", assist: "lore", perk: "학식 판정 +2 · 제방 비용 −20" },
+    minseok: { name: "민석", icon: "👮", role: "경찰 보조", assist: "scheme", perk: "계략 판정 +2 · 자객·단속을 막는다" },
+    seoyun: { name: "서윤", icon: "📜", role: "기록관 서기", assist: "lore", perk: "학식 판정 +2" },
   };
   const buildings = {
     stall: { name: "노점", icon: "🧺", cost: 15, income: 5, fame: 0, title: 0, desc: "계절마다 ₭+5" },
@@ -57,13 +57,15 @@
   // 선거는 정해진 계절 끝에 열린다. 놓치면 다음 선거까지 기다린다.
   const elections = { 1: [7, 15, 23, 31], 2: [11, 19, 27] };
   const origins = {
-    worker: { name: "노동자 집안", desc: "₭20 · 명성 5 · 동생과 시작", money: 20, fame: 5, unlock: null },
-    merchant: { name: "상인 집안", desc: "₭50 · 명성 0 · 강씨가 처음부터 경계 (적의 15)", money: 50, fame: 0, hostility: 15, unlock: "엔딩 1회" },
-    noble: { name: "몰락한 귀족", desc: "₭30 · 명성 15 · 서윤이 따른다", money: 30, fame: 15, companion: "seoyun", unlock: "시장 지위 달성" },
+    worker: { name: "노동자 집안", desc: "₭20 · 명성 5 · 💪완력이 강하다", money: 20, fame: 5, stats: { talk: 1, force: 3, scheme: 1, lore: 0 }, unlock: null },
+    merchant: { name: "상인 집안", desc: "₭50 · 명성 0 · 🗣말솜씨·🦊계략 · 강씨가 경계(적의 15)", money: 50, fame: 0, hostility: 15, stats: { talk: 3, force: 0, scheme: 2, lore: 1 }, unlock: "엔딩 1회" },
+    noble: { name: "몰락한 귀족", desc: "₭30 · 명성 15 · 📚학식이 높다 · 서윤이 따른다", money: 30, fame: 15, companion: "seoyun", stats: { talk: 2, force: 0, scheme: 1, lore: 3 }, unlock: "시장 지위 달성" },
   };
   // 선택지 도우미
   const ch = (label, fx, text, extra = {}) => ({ label, fx, text, ...extra });
   const bet = (label, odds, win, lose, extra = {}) => ({ label, odds, win, lose, ...extra });
+  // TRPG 판정: d20 + 능력치 + 도움 ≥ 난이도
+  const check = (label, chk, win, lose, extra = {}) => ({ label, check: chk, win, lose, ...extra });
   const E = (id, loc, icon, title, text, choices, extra = {}) => ({ id, loc, icon, title, text, choices, ...extra });
   const events = [
     // ── 하숙집: 회복·가족 ──
@@ -91,7 +93,8 @@
     ], { repeat: true }),
     E("d_fight", "dock", "👊", "부두 패싸움", "강씨 패거리와 조합원들이 멱살을 잡았다.", [
       bet("뛰어들어 말린다", 0.5, { fx: { fame: 6, hostility: 5 }, text: "당신이 판을 갈랐다. 사람들이 이름을 묻는다." }, { fx: { health: -20, fame: 1 }, text: "주먹이 날아왔다. 그래도 사람들은 봤다." }, { bonus: [["eunho", 0.2]] }),
-      ch("모른 척한다", { fame: -1 }, "싸움은 저절로 끝났다. 누군가 당신이 지나치는 걸 봤다."),
+      check("말로 뜯어말린다", ["talk", 13], { fx: { fame: 5 }, text: "당신 말 한마디에 양쪽이 주먹을 내렸다." }, { fx: { fame: -2, health: -8 }, text: "아무도 듣지 않았다. 날아온 의자에 맞았다." }),
+      check("뒤에서 판을 짠다", ["scheme", 14], { fx: { fame: 3, rivalFame: -3 }, text: "강씨 패거리가 경찰에게 끌려가게 만들었다." }, { fx: { hostility: 8 }, text: "강씨 쪽이 당신이 꾸민 걸 눈치챘다." }),
     ], { cooldown: 3 }),
     E("d_smuggle", "dock", "🍾", "선원의 제안", "“상자 몇 개만 옮겨 주면 돼. 세관은 모르게.”", [
       ch("옮긴다 (₭+35)", { money: 35, flag: "smuggler", threat: { id: "customs", left: 3 } }, "주머니가 두둑해졌다. 세관이 냄새를 맡기 시작했다."),
@@ -143,7 +146,8 @@
     ], { cond: { seasonMin: 4, notFlag: "guild" }, once: true }),
     E("a_hitman", "alley", "🗡", "청부업자", "“당신 목에 강씨 돈이 걸렸더군. 돈이면 마음을 바꾸지.”", [
       ch("자객을 돌려세운다 (₭40)", { money: -40, resolve: "assassin" }, "자객은 도윤에게 돌아갔다. 당분간은 안전하다.", { need: { money: 40 } }),
-      bet("직접 매복한다", 0.5, { fx: { resolve: "assassin", fame: 5 }, text: "자객을 붙잡아 거리에 세웠다." }, { fx: { health: -30 }, text: "칼끝이 옆구리를 스쳤다." }, { bonus: [["minseok", 0.3]] }),
+      bet("직접 매복한다", 0.5, { fx: { resolve: "assassin", fame: 5, item: "dagger" }, text: "자객을 붙잡아 거리에 세웠다. 자객의 단검을 챙겼다." }, { fx: { health: -30 }, text: "칼끝이 옆구리를 스쳤다." }),
+      check("가짜 소문으로 함정을 판다", ["scheme", 13], { fx: { resolve: "assassin", rivalFame: -4 }, text: "자객이 엉뚱한 집을 덮쳤다가 붙잡혔다. 배후에 강씨가 있다는 소문이 돌았다." }, { fx: { health: -15 }, text: "함정이 어설펐다. 자객이 눈치채고 당신을 노렸다." }),
     ], { cond: { threat: "assassin" }, priority: true }),
     E("a_minseok", "alley", "👮", "경찰 보조 민석", "민석이 위조된 체포 기록을 들고 있다. “같이 파 볼 사람이 필요합니다.”", [
       bet("같이 조사한다", 0.6, { fx: { recruit: "minseok", dirt: 1 }, text: "민석이 동료가 되었다. 강씨와 경찰의 거래가 드러난다. (약점 +1)" }, { fx: { health: -10, recruit: "minseok" }, text: "골목에서 습격당했지만, 민석은 당신을 믿게 됐다." }, { bonus: [["seoyun", 0.25]] }),
@@ -156,10 +160,11 @@
     // ── 시장: 거래·사람 ──
     E("m_trade", "market", "🧵", "장사 기회", "남쪽에서 비단이 들어왔다. 값이 오를 거란 소문이다.", [
       bet("비단을 산다 (₭30)", 0.6, { fx: { money: 30 }, text: "되팔아 두 배를 남겼다!" }, { fx: { money: -30 }, text: "비단값이 폭락했다." }, { need: { money: 30 } }),
+      check("시세를 읽고 산다 (₭20)", ["lore", 12], { fx: { money: 25 }, text: "장부를 꼼꼼히 보고 오를 물건만 골랐다." }, { fx: { money: -20 }, text: "시세를 잘못 읽었다." }, { need: { money: 20 } }),
       ch("좌판 일을 돕는다 (₭+8)", { money: 8 }, "소소하게 벌었다."),
     ], { repeat: true }),
     E("m_patron", "market", "💰", "상단의 후원", "큰 상단이 선거 자금을 대겠다고 한다. 물론 대가가 있다.", [
-      ch("받는다 (₭+50)", { money: 50, fame: -3, flag: "patron" }, "돈이 들어왔다. 상단은 언젠가 청구서를 내밀 것이다."),
+      ch("받는다 (₭+50)", { money: 50, fame: -3, flag: "patron", item: "letter" }, "돈이 들어왔다. 상단은 언젠가 청구서를 내밀 것이다."),
       ch("거절한다", { fame: 3 }, "깨끗한 이름이 조금 더 깨끗해졌다."),
     ], { cond: { titleMin: 1 }, once: true }),
     E("m_medicine", "market", "🌿", "약재 상인", "“열병 약재요. 지금 사 두면 목숨을 삽니다.”", [
@@ -249,7 +254,7 @@
       ch("돌려보낸다", { stage: ["led", "no"] }, "선원은 어둠 속으로 사라졌다. 다음 날 강에서 신발 한 짝이 떠올랐다."),
     ], { ...C, cond: { dirtMin: 1, stage: ["led", undefined], seasonMin: 3 } }),
     E("led2", "home", "🔥", "다락의 손님", "강씨 패거리가 하숙집 골목에 나타났다. 선원이 떨고 있다.", [
-      bet("밤에 몰래 빼돌린다", 0.6, { fx: { dirt: 2, stage: ["led", "done"] }, text: "선원은 무사히 배에 올랐고, 장부 사본이 당신 손에 남았다. (약점 +2)" }, { fx: { health: -20, stage: ["led", "lost"], hostility: 10 }, text: "들켰다. 선원은 끌려갔고 당신은 칼에 베였다." }, { bonus: [["minseok", 0.3]] }),
+      bet("밤에 몰래 빼돌린다", 0.6, { fx: { dirt: 2, stage: ["led", "done"], item: "ledger" }, text: "선원은 무사히 배에 올랐고, 장부 사본이 당신 손에 남았다. (약점 +2)" }, { fx: { health: -20, stage: ["led", "lost"], hostility: 10 }, text: "들켰다. 선원은 끌려갔고 당신은 칼에 베였다." }, { bonus: [["minseok", 0.3]] }),
       ch("선원을 넘기고 돈을 받는다 (₭+40)", { money: 40, stage: ["led", "sold"], virtue: -6, hostility: -15 }, "도윤이 웃으며 돈을 건넨다. 선원의 비명은 듣지 않았다."),
     ], { ...C, cond: { stage: ["led", 1], wait: 1 } }),
     // 도윤의 아들
@@ -283,7 +288,7 @@
       ch("엮이기 싫다", { loyalty: ["minseok", -4] }, "민석이 말없이 돌아선다."),
     ], { cond: { companion: "minseok", seasonMin: 4 }, once: true, priority: true, q: true }),
     E("q_seoyun", "market", "📚", "서윤의 부탁", "“기록보관소 원본이 불태워질 거예요. 옮길 돈이 필요해요.”", [
-      ch("옮겨 준다 (₭12)", { money: -12, loyalty: ["seoyun", 3], dirt: 1, virtue: 1 }, "원본 속에서 강씨 가문의 오래된 땅 문서가 나왔다. (약점 +1)", { need: { money: 12 } }),
+      ch("옮겨 준다 (₭12)", { money: -12, loyalty: ["seoyun", 3], dirt: 1, virtue: 1, item: "map" }, "원본 속에서 강씨 가문의 오래된 땅 문서와 옛 지도가 나왔다. (약점 +1)", { need: { money: 12 } }),
       ch("그냥 둔다", { loyalty: ["seoyun", -4] }, "그날 밤 기록보관소에서 연기가 올랐다."),
     ], { cond: { companion: "seoyun", seasonMin: 4 }, once: true, priority: true, q: true }),
     // ── 이번 계절 한정 기회 (opp) ──
@@ -297,7 +302,7 @@
     ], { opp: true }),
     E("o_feast", "fishing", "🎏", "오늘 하루 풍어제", "배가 만선으로 들어왔다. 어촌이 잔치 분위기다.", [
       ch("술과 고기를 낸다 (₭12)", { money: -12, fame: 8, virtue: 1 }, "노래가 밤새 이어졌다.", { need: { money: 12 } }),
-      bet("노래 자랑에 나선다", 0.5, { fx: { fame: 6 }, text: "어촌 사람들이 배꼽을 잡았다. 인기 만점." }, { fx: { fame: 1 }, text: "음이 다 틀렸다. 그래도 사람들은 웃었다." }, { bonus: [["sora", 0.25]] }),
+      bet("노래 자랑에 나선다", 0.5, { fx: { fame: 6, item: "charm" }, text: "어촌 사람들이 배꼽을 잡았다. 할머니가 행운의 부적을 쥐여 줬다." }, { fx: { fame: 1 }, text: "음이 다 틀렸다. 그래도 사람들은 웃었다." }, { bonus: [["sora", 0.25]] }),
     ], { opp: true }),
     E("o_papers", "alley", "📄", "도윤 부하의 노름빚 문서", "도박장 주인이 문서를 흔든다. “강씨 집사 빚이야. 사겠나?”", [
       ch("산다 (₭20)", { money: -20, dirt: 2 }, "강씨 집사의 약점을 쥐었다. (약점 +2)", { need: { money: 20 } }),
@@ -335,12 +340,46 @@
       title: "도윤의 사람들과 맞대결",
       text: `강씨 패거리가 ${move.aim} 한다. 지금 막지 않으면: {fail}`,
       choices: [
-        bet("정면으로 맞선다", "duel", { fx: { block: true, fame: 5, rivalFame: -3, virtue: 2 }, text: "패거리가 꽁무니를 뺐다. 구경꾼들이 환호한다." }, { fx: { duelLoss: true, fame: -2 }, text: "밀렸다. 도윤의 계획은 그대로 진행됐고, 망신까지 당했다." }, { bonus: [["eunho", 0.15], ["minseok", 0.15]] }),
+        check("주먹으로 맞선다", ["force", "duel"], { fx: { block: true, fame: 5, rivalFame: -3, virtue: 2 }, text: "패거리가 꽁무니를 뺐다. 구경꾼들이 환호한다." }, { fx: { duelLoss: true, fame: -2 }, text: "밀렸다. 도윤의 계획은 그대로 진행됐고, 망신까지 당했다." }),
+        check("말로 구슬린다", ["talk", "duel"], { fx: { block: true, fame: 3, virtue: 1 }, text: "패거리 우두머리가 머리를 긁적이며 돌아갔다." }, { fx: { duelLoss: true }, text: "비웃음만 샀다. 도윤의 계획이 그대로 진행됐다." }),
         ch(`돈으로 무마한다 (₭${bribe})`, { money: -bribe, block: true }, "패거리 우두머리가 돈을 세고는 물러갔다.", { need: { money: bribe } }),
         ch("약점으로 역공한다 (약점 1개)", { dirt: -1, block: true, rivalFame: -6, virtue: -3 }, "도윤 측의 비밀을 들먹이자 패거리가 얼어붙었다.", { need: { dirt: 1 } }),
       ],
     };
   }
+  // ── TRPG ──
+  const stats = {
+    talk: { name: "말솜씨", icon: "🗣" },
+    force: { name: "완력", icon: "💪" },
+    scheme: { name: "계략", icon: "🦊" },
+    lore: { name: "학식", icon: "📚" },
+  };
+  const items = {
+    dagger: { name: "자객의 단검", icon: "🗡", stat: "force", bonus: 2 },
+    letter: { name: "상단 추천장", icon: "✉", stat: "talk", bonus: 2 },
+    ledger: { name: "밀수 장부 사본", icon: "📒", stat: "scheme", bonus: 2 },
+    map: { name: "옛 지도", icon: "🗺", stat: "lore", bonus: 2 },
+    charm: { name: "행운의 부적", icon: "🧿", fate: 1 },
+  };
+  // 능력치가 오를 때마다(2번에 1번) 셋 중 하나를 고른다
+  const perks = {
+    negotiator: { name: "협상가", icon: "🤝", desc: "돈으로 무마·표 매수 비용이 절반" },
+    brawler: { name: "싸움꾼", icon: "🥊", desc: "완력 +1 · 완력 판정에서 대실패 없음", stat: ["force", 1] },
+    schemer: { name: "책사", icon: "🦊", desc: "계략 +1 · 약점 역공 때 도윤 명성 −4 더", stat: ["scheme", 1] },
+    scholar: { name: "학자", icon: "📚", desc: "학식 판정 +2" },
+    orator: { name: "웅변가", icon: "📣", desc: "선거 당선 확률 +10%" },
+    ironside: { name: "강골", icon: "🛡", desc: "건강 피해 30% 감소" },
+    trader: { name: "장사꾼", icon: "💰", desc: "계절마다 ₭+5" },
+    lucky: { name: "행운아", icon: "🍀", desc: "운명 +1 · 운명 최대치 +1" },
+  };
+  // 예전 확률 선택지가 어떤 능력치 판정인지 (사건id:선택번호)
+  const checkStat = {
+    "d_work:1": "force", "d_fight:0": "force", "d_eunho:0": "talk", "h_fever:1": "force", "f_festival:1": "talk",
+    "a_gamble:0": "scheme", "a_hitman:1": "force", "a_minseok:0": "scheme", "m_trade:0": "lore", "m_party:0": "talk",
+    "u_rally:0": "talk", "hall_campaign:0": "talk", "k_showdown:0": "talk", "k_showdown:2": "scheme",
+    "sib2:1": "force", "led2:0": "scheme", "son_enemy:0": "force", "q_minseok:0": "lore", "o_ship:0": "scheme",
+    "o_feast:1": "talk", "o_strike:0": "talk",
+  };
   // 계절 신문 머리기사(분위기용)
   const headlines = [
     "부두 물동량 사상 최대, 일손 모자라",
@@ -359,7 +398,7 @@
     extinct: { title: "가문 단절", icon: "🕯", text: "대를 이을 사람이 없었다. 이름은 다시 지워졌다.", win: false },
     time: { title: "평범한 이름", icon: "📖", text: "8년이 흘렀다. 도시를 쥐지는 못했지만, 가문의 이름은 남았다.", win: false },
   };
-  const api = { titles, locations, companions, buildings, LOTS, threats, origins, events, headlines, endings, rivalMoves, elections, virtueTags, duel };
+  const api = { titles, locations, companions, buildings, LOTS, threats, origins, events, headlines, endings, rivalMoves, elections, virtueTags, duel, stats, items, perks, checkStat };
   if (typeof module !== "undefined") module.exports = api;
   root.ProtoData = api;
 })(globalThis);
