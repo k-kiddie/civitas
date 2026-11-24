@@ -6,8 +6,8 @@
   const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
   const AP = 3,
     LAST_SEASON = 32,
-    UPKEEP_FAMILY = 4,
-    UPKEEP_COMPANION = 3;
+    UPKEEP_FAMILY = 3,
+    UPKEEP_COMPANION = 2;
   const SIBLINGS = ["여울", "하린", "도현", "가람", "소율", "한결", "다온", "새봄"];
   const STAT_NAME = { money: "₭", fame: "명성", health: "건강", hostility: "강씨 적의", rivalFame: "도윤 명성", dirt: "약점" };
 
@@ -46,12 +46,17 @@
       ending: null,
       lastAssassin: -99,
       plans: [],
+      opps: [],
+      stages: {},
+      hooks: [],
+      virtue: 0,
     };
     s.family.push({ name: String(name).slice(0, 12) || "이름 없는 가장", role: "가장", age: 25, alive: true });
     s.family.push({ name: pick(s, SIBLINGS), role: "동생", age: 19, alive: true });
-    if (o.companion) s.companions.push({ id: o.companion });
+    if (o.companion) s.companions.push({ id: o.companion, loyalty: 6 });
     s.log.push({ season: 0, text: `${s.family[0].name}의 가문이 벨라르 항구에 자리를 잡았다.` });
     makePlans(s);
+    makeOpps(s);
     return s;
   }
   const date = (season) => `${1 + Math.floor(season / 4)}년 ${["봄", "여름", "가을", "겨울"][season % 4]}`;
@@ -71,7 +76,7 @@
   }
   function electionChance(s) {
     if (!canElect(s)) return 0;
-    const p = 0.5 + (s.fame - s.rivalFame) / 30 + (s.flags.bought ? 0.2 : 0) + (has(s, "sora") ? 0.05 : 0) + (has(s, "eunho") ? 0.05 : 0);
+    const p = 0.5 + (s.fame - s.rivalFame) / 30 + (s.flags.bought ? 0.2 : 0) + (has(s, "sora") ? 0.05 : 0) + (has(s, "eunho") ? 0.05 : 0) + (s.virtue >= 30 ? 0.05 : 0);
     return clamp(Math.round(p * 100) / 100, 0.05, 0.95);
   }
   const bribeCost = (s) => (s.title === 0 ? 35 : 70);
@@ -90,9 +95,37 @@
     return s.title >= loc.title;
   }
 
+  const DUEL_BRIBE = (s) => 10 + s.title * 10;
+  function getEvent(s, id) {
+    if (id.startsWith("duel:")) return D.duel(D.rivalMoves.find((m) => m.id === id.slice(5)), DUEL_BRIBE(s));
+    return D.events.find((e) => e.id === id);
+  }
+  // 이번 계절 한정 기회: 도윤이 노리는 곳과 겹치지 않게 1~2개
+  function makeOpps(s) {
+    const n = 1 + (s.title >= 1 ? 1 : 0);
+    const taken = new Set(s.plans.map((p) => p.loc));
+    const pool = D.events.filter(
+      (e) => e.opp && eligible(s, e, true) && !taken.has(e.loc) && unlocked(s, D.locations.find((l) => l.id === e.loc)) &&
+        (s.seen[e.id] === undefined || s.season - s.seen[e.id] >= 4),
+    );
+    const out = [];
+    while (out.length < n && pool.length) {
+      const e = pool.splice(Math.floor(rnd(s) * pool.length), 1)[0];
+      if (out.some((o) => o.loc === e.loc)) continue;
+      out.push({ id: e.id, loc: e.loc });
+    }
+    s.opps = out;
+  }
   // ── 조건·확률 ──
-  function eligible(s, e) {
+  function eligible(s, e, forOpp = false) {
     const c = e.cond || {};
+    if (e.opp && !forOpp) return false;
+    if (c.stage) {
+      const st = s.stages[c.stage[0]];
+      if (c.stage[1] === undefined ? st !== undefined : !st || st.v !== c.stage[1]) return false;
+      if (c.wait && st && s.season - st.at < c.wait) return false;
+    }
+    if (c.titleMax !== undefined && s.title > c.titleMax) return false;
     if (e.once && s.seen[e.id] !== undefined) return false;
     if (e.cooldown && s.seen[e.id] !== undefined && s.season - s.seen[e.id] < e.cooldown) return false;
     if (c.seasonMin !== undefined && s.season < c.seasonMin) return false;
@@ -119,7 +152,9 @@
         ? 0.5 + (s.fame - s.rivalFame) / 40
         : choice.odds === "showdown"
           ? 0.4 + (s.fame - s.rivalFame) / 60
-          : choice.odds;
+          : choice.odds === "duel"
+            ? Math.max(0.35, 0.6 + (s.fame - s.rivalFame) / 80)
+            : choice.odds;
     for (const [who, amt] of choice.bonus || []) {
       if (who.startsWith("b:") ? built(s, who.slice(2)) : has(s, who)) p += amt;
     }
@@ -134,7 +169,12 @@
     }
     if (n.companion && !has(s, n.companion)) return `${D.companions[n.companion].name} 필요`;
     if (n.flag && !s.flags[n.flag]) return "그림자 조합 가입 필요";
-    if (n.hostilityMax !== undefined && s.hostility > n.hostilityMax) return `강씨 적의 ${n.hostilityMax} 이하 필요`;
+    if (n.hostilityMax !== undefined) {
+      const max = ["ally", "friend", "kind"].includes(s.stages.son?.v) ? 50 : n.hostilityMax;
+      if (s.hostility > max) return `강씨 적의 ${max} 이하 필요`;
+    }
+    if (n.notFlag && s.flags[n.notFlag]) return "이미 혼인했다";
+    if (n.dirt !== undefined && s.dirt < n.dirt) return `약점 ${n.dirt}개 필요`;
     return "";
   }
   function fill(s, text) {
@@ -148,18 +188,22 @@
         "{requirement}",
         need
           ? `${need.name} 선거는 ${nextElection(s) === null ? "더 이상 없다" : date(nextElection(s)) + " 끝에 열린다"}. 출마하려면 명성 ★${need.fame} (지금 ★${s.fame}). 당선 확률은 도윤(★${s.rivalFame})과의 명성 차이로 정해진다.`
-          : "당신은 시장이다. 이제 강씨 저택에서 결판을 낼 때다 (명성 ★120 필요).",
+          : "당신은 시장이다. 이제 강씨 저택에서 결판을 낼 때다 (명성 ★110 필요).",
       );
   }
   // 화면이 그대로 쓰는 사건 보기: 문구 채우기, 선택 가능 여부, 확률.
   function view(s) {
     if (!s.event) return null;
-    const e = D.events.find((x) => x.id === s.event.id);
+    const e = getEvent(s, s.event.id);
+    const move = e.duel ? D.rivalMoves.find((m) => "duel:" + m.id === e.id) : null;
     return {
       id: e.id,
       icon: e.icon,
       title: fill(s, e.title),
-      text: fill(s, e.text),
+      text: fill(s, e.text).replace("{fail}", move ? describe(s, move.fail) : ""),
+      duel: !!e.duel,
+      opp: !!e.opp,
+      chain: !!e.chain,
       loc: D.locations.find((l) => l.id === e.loc),
       choices: e.choices.map((c, i) => ({
         i,
@@ -181,6 +225,10 @@
     }
     if (fx.recruit) out.push(`${D.companions[fx.recruit].name} 동료`);
     if (fx.marry) out.push("혼인");
+    if (fx.loyalty) out.push(`${D.companions[fx.loyalty[0]].name} 충성 ${fx.loyalty[1] > 0 ? "+" : ""}${fx.loyalty[1]}`);
+    if (fx.block) out.push("도윤의 계획 저지");
+    if (fx.duelLoss) out.push("도윤의 계획 성공(1.2배)");
+    if (fx.loseSibling) out.push("동생을 잃는다");
     if (fx.title) out.push("지위 상승");
     if (fx.resolve) out.push(`${D.threats[fx.resolve].name} 해결`);
     if (fx.threat) out.push(`위협: ${D.threats[fx.threat.id].name}`);
@@ -201,11 +249,30 @@
     bump("money", resolveMoney(s, fx.money));
     for (const k of ["fame", "health", "hostility", "rivalFame", "dirt"]) bump(k, fx[k]);
     if (fx.recruit && !has(s, fx.recruit)) {
-      s.companions.push({ id: fx.recruit });
+      s.companions.push({ id: fx.recruit, loyalty: 6 });
       deltas.push({ k: "recruit", v: D.companions[fx.recruit].name });
       log(s, `${D.companions[fx.recruit].name}이(가) 동료가 되었다.`);
     }
     if (fx.leave) s.companions = s.companions.filter((c) => c.id !== fx.leave);
+    if (fx.loyalty) {
+      const c = s.companions.find((x) => x.id === fx.loyalty[0]);
+      if (c) {
+        c.loyalty = clamp((c.loyalty ?? 6) + fx.loyalty[1], 0, 10);
+        deltas.push({ k: "loyalty", v: `${D.companions[c.id].name} ${fx.loyalty[1] > 0 ? "+" : ""}${fx.loyalty[1]}` });
+      }
+    }
+    if (fx.virtue) s.virtue = clamp(s.virtue + fx.virtue, -100, 100);
+    if (fx.stage) s.stages[fx.stage[0]] = { v: fx.stage[1], at: s.season };
+    if (fx.hook) s.hooks.push({ text: fx.hook, at: s.season });
+    if (fx.loseSibling) {
+      const sib = s.family.find((p, i) => p.role === "동생" && p.alive && i !== s.head);
+      if (sib) {
+        sib.alive = false;
+        sib.lost = true;
+        deltas.push({ k: "lost", v: sib.name });
+        log(s, `동생 ${sib.name}을(를) 잃었다.`);
+      }
+    }
     if (fx.flag) s.flags[fx.flag] = true;
     if (fx.resolve && hasThreat(s, fx.resolve)) {
       s.threats = s.threats.filter((t) => t.id !== fx.resolve);
@@ -273,10 +340,16 @@
     const reason = visitReason(state, locId);
     if (reason) return { state, error: reason };
     const s = clone(state);
+    const plan = s.plans.find((p) => p.loc === locId && !p.blocked);
+    const opp = s.opps.find((o) => o.loc === locId);
     const pool = D.events.filter((e) => e.loc === locId && eligible(s, e));
     const priority = pool.filter((e) => e.priority);
     let e;
-    if (priority.length) e = pick(s, priority);
+    if (plan) e = getEvent(s, "duel:" + plan.id);
+    else if (opp) {
+      e = getEvent(s, opp.id);
+      s.opps = s.opps.filter((o) => o !== opp);
+    } else if (priority.length) e = pick(s, priority);
     else {
       const weighted = [];
       for (const ev of pool) for (let i = 0; i < (ev.repeat ? 1 : 3); i++) weighted.push(ev);
@@ -284,16 +357,12 @@
     }
     s.ap -= 1;
     s.seen[e.id] = s.season;
-    s.event = { id: e.id, blocked: [] };
-    for (const p of s.plans) if (p.loc === locId && !p.blocked) {
-      p.blocked = true;
-      s.event.blocked.push(p.id);
-    }
+    s.event = { id: e.id };
     return { state: s };
   }
   function choose(state, index) {
     if (!state.event) return { state, error: "열린 사건이 없습니다." };
-    const e = D.events.find((x) => x.id === state.event.id);
+    const e = getEvent(state, state.event.id);
     const c = e.choices[index];
     if (!c) return { state, error: "알 수 없는 선택입니다." };
     const reason = needReason(state, c);
@@ -301,21 +370,33 @@
     const s = clone(state);
     const deltas = [],
       notes = [];
-    let text, success = null, p = null;
+    let text, success = null, p = null, fx;
     if (c.odds !== undefined) {
       p = odds(s, c);
       success = rnd(s) < p;
       const out = success ? c.win : c.lose;
-      apply(s, out.fx, deltas);
+      fx = out.fx;
       text = out.text;
     } else {
-      apply(s, c.fx, deltas);
+      fx = c.fx;
       text = c.text;
     }
-    for (const id of state.event.blocked || []) {
-      const m = D.rivalMoves.find((x) => x.id === id);
-      apply(s, { fame: 2, hostility: 3 }, deltas);
-      notes.unshift(`🛡 도윤의 계획 ‘${m.text}’을(를) 막았다!`);
+    apply(s, fx, deltas);
+    const tag = D.virtueTags[`${e.id}:${index}`];
+    if (tag) s.virtue = clamp(s.virtue + tag, -100, 100);
+    if (e.duel) {
+      const move = D.rivalMoves.find((m) => "duel:" + m.id === e.id);
+      const plan = s.plans.find((x) => x.id === move.id);
+      if (plan) plan.blocked = true;
+      if (fx.block) {
+        apply(s, { hostility: 3 }, deltas);
+        notes.unshift(`🛡 도윤의 계획 ‘${move.text}’을(를) 막았다!`);
+      } else if (fx.duelLoss) {
+        const big = {};
+        for (const [k, v] of Object.entries(move.fail)) big[k] = Math.round(v * 1.2);
+        apply(s, big, deltas);
+        notes.unshift(`⚔ 도윤이 ${move.text}: ${describe(s, big)}`);
+      }
     }
     checkDeath(s, notes);
     s.event = null;
@@ -368,9 +449,11 @@
       fame += D.buildings[b.id].fame;
     }
     if (s.flags.edict_tax) income += 8;
+    if (s.flags.partner) income += 6;
+    income += [0, 15, 30, 30][s.title]; // 직책 봉급
     if (s.flags.edict_relief) fame += 2;
     if (has(s, "sora")) fame += 1;
-    const upkeep = UPKEEP_FAMILY * s.family.filter((p) => p.alive).length + UPKEEP_COMPANION * s.companions.length + 6 * s.title;
+    const upkeep = UPKEEP_FAMILY * s.family.filter((p) => p.alive).length + UPKEEP_COMPANION * s.companions.length + 5 * s.title;
     return { income, upkeep, fame, net: income - upkeep };
   }
   function endSeason(state) {
@@ -387,7 +470,7 @@
       lines.push(`건물·동료·칙령 덕에 명성 +${f.fame}`);
     }
     if (built(s, "press")) s.rivalFame = Math.max(0, s.rivalFame - 2);
-    const rivalGain = 3 + s.title * 2;
+    const rivalGain = 2 + s.title;
     s.rivalFame += rivalGain;
     lines.push(`도윤의 명성 +${rivalGain} (★${s.rivalFame})`);
     if (s.title >= 1) s.hostility = clamp(s.hostility + 2 * s.title, 0, 100);
@@ -423,6 +506,16 @@
       }
       delete s.flags.bought;
     }
+    // 공포로 다스리면 곧은 동료들이 등을 돌린다. 충성이 바닥나면 배신.
+    if (s.virtue <= -30) for (const c of s.companions) if (["sora", "minseok", "seoyun", "yun"].includes(c.id)) c.loyalty = Math.max(0, (c.loyalty ?? 6) - 1);
+    for (const c of s.companions.slice()) {
+      if ((c.loyalty ?? 6) > 2) continue;
+      s.companions = s.companions.filter((x) => x !== c);
+      s.rivalFame += 5;
+      s.dirt = 0;
+      lines.push(`🐍 ${D.companions[c.id].name}이(가) 도윤에게 넘어갔다. 당신이 모은 약점도 함께 사라졌다. 도윤 ★+5`);
+      log(s, `${D.companions[c.id].name}이(가) 배신했다.`);
+    }
     // 위협 진행
     for (const t of s.threats) t.left -= 1;
     const due = s.threats.filter((t) => t.left <= 0);
@@ -446,10 +539,12 @@
     s.season += 1;
     s.ap = AP;
     makePlans(s);
+    makeOpps(s);
     if (s.season % 4 === 0) s.family.forEach((p) => p.alive && p.age++);
     checkDeath(s, notes);
     if (!s.ending && s.season >= LAST_SEASON) s.ending = "time";
-    s.summary = { date: date(s.season - 1), headline: pick(s, D.headlines), lines: [...lines, ...notes], net: f.net, election };
+    const hooks = s.hooks.filter((h) => h.at === s.season - 1).map((h) => h.text);
+    s.summary = { date: date(s.season - 1), headline: pick(s, D.headlines), lines: [...lines, ...notes], net: f.net, election, hooks };
     return { state: s };
   }
   function expire(s, id) {
@@ -461,6 +556,7 @@
       return ` ${D.buildings[v.id].name}이(가) 물에 잠겼다.`;
     };
     if (id === "flood") {
+      if (s.flags.promise && has(s, "sora")) s.stages.sora = { v: built(s, "dike") ? "kept" : "broken", at: s.season };
       if (built(s, "dike")) {
         const bonus = s.flags.promise ? 15 : 10;
         s.fame += bonus;
@@ -511,8 +607,8 @@
       s && s.v === 1 && Number.isInteger(s.season) && s.season >= 0 && s.season <= LAST_SEASON &&
       Number.isInteger(s.rng) && [s.money, s.fame, s.health, s.hostility, s.rivalFame, s.dirt].every(Number.isFinite) &&
       Array.isArray(s.family) && s.family.length >= 1 && s.family[s.head] && Array.isArray(s.companions) &&
-      Array.isArray(s.buildings) && Array.isArray(s.threats) && Array.isArray(s.plans) && s.flags && s.seen && Array.isArray(s.log) &&
-      (!s.event || D.events.some((e) => e.id === s.event.id)) &&
+      Array.isArray(s.buildings) && Array.isArray(s.threats) && Array.isArray(s.plans) && Array.isArray(s.opps) && s.stages && Array.isArray(s.hooks) && Number.isFinite(s.virtue) && s.flags && s.seen && Array.isArray(s.log) &&
+      (!s.event || !!getEvent(s, s.event.id)) &&
       s.buildings.every((b) => D.buildings[b.id]) && s.threats.every((t) => D.threats[t.id]) &&
       s.companions.every((c) => D.companions[c.id]);
     if (!ok) throw Error("저장이 손상되었습니다.");
@@ -520,7 +616,7 @@
   }
   const api = {
     newGame, visit, visitReason, choose, dismiss, build, buildReason, buildCost, endSeason, forecast,
-    view, describe, canElect, nextElection, electionChance, date, headName, score, validate, unlocked, odds,
+    view, describe, canElect, nextElection, electionChance, date, getEvent, eligible, headName, score, validate, unlocked, odds,
     AP, LAST_SEASON,
   };
   if (typeof module !== "undefined") module.exports = api;
