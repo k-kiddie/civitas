@@ -70,6 +70,10 @@
     const d = prev && prev[key] !== undefined ? value - prev[key] : 0;
     return `<div class="stat ${key}"><span class="ico">${icon}</span><b>${value}</b>${extra}${d ? `<i class="pop ${d > 0 ? "up" : "down"}">${d > 0 ? "+" : ""}${d}</i>` : ""}</div>`;
   }
+  function statLine() {
+    const h = state.family[state.head];
+    return `<button class="statline" data-action="sheet" data-sheet="family">${Object.entries(D.stats).map(([k, m]) => `<span>${m.icon}<b>${h.stats[k]}</b></span>`).join("")}<span class="fate">🎲 운명 <b>${state.fate}</b></span></button>`;
+  }
   function goal() {
     const s = state;
     if (s.title >= 2) {
@@ -172,7 +176,9 @@
   function eventModal() {
     const v = P.view(state);
     const outcome = (c) =>
-      c.odds !== null
+      c.check
+        ? `<small><b class="odds">${D.stats[c.check.stat].icon} ${D.stats[c.check.stat].name} 판정 · 난이도 ${c.check.dc} · 성공 ${Math.round(c.check.p * 100)}%</b><span class="mods">보정 ${c.check.parts.map(([n, v]) => `${n} ${v >= 0 ? "+" : ""}${v}`).join(" · ")}</span>성공: ${esc(c.win) || "변화 없음"}<br><b class="fail">실패</b> ${esc(c.lose) || "변화 없음"}</small>`
+        : c.odds !== null
         ? `<small><b class="odds">성공 ${Math.round(c.odds * 100)}%</b> ${esc(c.win) || "변화 없음"}<br><b class="fail">실패</b> ${esc(c.lose) || "변화 없음"}</small>`
         : c.preview
           ? `<small>${esc(c.preview)}</small>`
@@ -181,8 +187,11 @@
       .map((c) => btn(`<span>${esc(c.label)}</span>${outcome(c)}${c.reason ? `<em>${esc(c.reason)}</em>` : ""}`, "choose", `data-i="${c.i}" ${c.reason ? "disabled" : ""}`))
       .join("")}</div></section></div>`;
   }
+  function perkModal() {
+    return `<div class="veil"><section class="card perk" role="dialog" aria-modal="true" aria-labelledby="t"><div class="big-icon">⭐</div><h2 id="t">${esc(P.headName(state))}이(가) 성장했다</h2><p class="story">특기를 하나 고르세요. 이 인물이 살아 있는 동안 유지됩니다.</p><div class="choices">${state.perkChoice.map((id) => { const pk = D.perks[id]; return btn(`<span>${pk.icon} ${pk.name}</span><small>${pk.desc}</small>`, "perk", `data-id="${id}"`); }).join("")}</div></section></div>`;
+  }
   function rollModal() {
-    return `<div class="veil"><section class="card roll" role="dialog" aria-modal="true" aria-label="결과를 굴리는 중"><p class="picked">“${esc(rolling.label)}”</p><div class="dice">🎲</div><div class="odds-bar"><i style="width:${Math.round(rolling.odds * 100)}%"></i><b class="needle"></b></div><p class="roll-odds">성공 확률 ${Math.round(rolling.odds * 100)}%</p></section></div>`;
+    return `<div class="veil"><section class="card roll" role="dialog" aria-modal="true" aria-label="결과를 굴리는 중"><p class="picked">“${esc(rolling.label)}”</p>${rolling.check ? `<p class="roll-head">${D.stats[rolling.check.stat].icon} ${D.stats[rolling.check.stat].name} 판정 · 난이도 ${rolling.check.dc} · 보정 ${rolling.check.mod >= 0 ? "+" : ""}${rolling.check.mod}</p>` : ""}<div class="dice">🎲</div><div class="odds-bar"><i style="width:${Math.round(rolling.odds * 100)}%"></i><b class="needle"></b></div><p class="roll-odds">성공 확률 ${Math.round(rolling.odds * 100)}%</p></section></div>`;
   }
   function deltaChips(deltas) {
     return deltas
@@ -191,7 +200,7 @@
           const good = d.k === "hostility" || d.k === "rivalFame" ? d.v < 0 : d.v > 0;
           return `<span class="chip ${good ? "good" : "bad"}">${STAT[d.k][0]} ${d.v > 0 ? "+" : ""}${d.v}</span>`;
         }
-        const label = { recruit: "🤝 동료: ", resolve: "✅ 해결: ", threat: "⚠ 위협: ", family: "💍 가족: ", title: "👑 지위: ", loyalty: "💛 충성 ", lost: "🕯 잃음: " }[d.k] || "";
+        const label = { recruit: "🤝 동료: ", resolve: "✅ 해결: ", threat: "⚠ 위협: ", family: "💍 가족: ", title: "👑 지위: ", loyalty: "💛 충성 ", lost: "🕯 잃음: ", item: "🎒 ", level: "⬆ ", fate: "🎲 운명 +" }[d.k] || "";
         const bad = d.k === "threat" || d.k === "lost" || (d.k === "loyalty" && /-/.test(d.v));
         return `<span class="chip ${bad ? "bad" : "good"}">${label}${esc(d.v)}</span>`;
       })
@@ -199,8 +208,12 @@
   }
   function resultModal() {
     const r = state.result;
-    const head = r.success === null ? "" : r.success ? `<div class="verdict win">성공! <small>(${Math.round(r.odds * 100)}%)</small></div>` : `<div class="verdict lose">실패… <small>(${Math.round(r.odds * 100)}%)</small></div>`;
-    return `<div class="veil"><section class="card result ${r.success === true ? "burst" : r.success === false ? "shake" : ""}" role="dialog" aria-modal="true" aria-labelledby="t"><div class="big-icon">${r.icon}</div><h2 id="t">${esc(r.title)}</h2>${r.choice ? `<p class="picked">“${esc(r.choice)}”</p>` : ""}${head}<p class="story">${esc(r.text)}</p><div class="chips">${deltaChips(r.deltas)}</div>${r.notes.map((n) => `<p class="note">${esc(n)}</p>`).join("")}${btn(state.ending ? "결말 보기" : "계속", "dismiss", 'class="primary" autofocus')}</section></div>`;
+    const c = r.check;
+    const head = c
+      ? `<div class="roll-line"><span class="d20 ${c.crit ? "crit" : c.fumble ? "fumble" : ""}">${c.roll}</span><span class="calc">${c.parts.map(([n, v]) => ` + ${n} ${v}`).join("")} = <b>${c.total}</b> <small>vs 난이도 ${c.dc}</small></span></div><div class="verdict ${r.success ? "win" : "lose"}">${c.crit ? "🎉 대성공!" : c.fumble ? "💥 대실패!" : r.success ? "성공!" : "실패…"}</div>`
+      : r.success === null ? "" : r.success ? `<div class="verdict win">성공! <small>(${Math.round(r.odds * 100)}%)</small></div>` : `<div class="verdict lose">실패… <small>(${Math.round(r.odds * 100)}%)</small></div>`;
+    const reroll = r.pre && state.fate > 0 ? btn(`🎲 운명으로 다시 굴리기 <small>(남은 운명 ${state.fate})</small>`, "reroll", 'class="secondary reroll"') : "";
+    return `<div class="veil"><section class="card result ${r.success === true ? "burst" : r.success === false ? "shake" : ""} ${c?.crit ? "crit" : ""}" role="dialog" aria-modal="true" aria-labelledby="t"><div class="big-icon">${r.icon}</div><h2 id="t">${esc(r.title)}</h2>${r.choice ? `<p class="picked">“${esc(r.choice)}”</p>` : ""}${head}<p class="story">${esc(r.text)}</p><div class="chips">${deltaChips(r.deltas)}</div>${r.notes.map((n) => `<p class="note">${esc(n)}</p>`).join("")}${reroll}${btn(state.ending ? "결말 보기" : "계속", "dismiss", 'class="primary" autofocus')}</section></div>`;
   }
   function summaryModal() {
     const m = state.summary;
@@ -229,11 +242,14 @@
   }
   function familySheet() {
     const s = state;
-    const fam = s.family.map((p, i) => `<li class="${p.alive ? "" : "dead"}">${i === s.head ? "👑" : p.alive ? "🙂" : "🕯"} <b>${esc(p.name)}</b> <small>${p.role} · ${p.age}세${p.alive ? "" : " · 사망"}</small></li>`).join("");
+    const statTxt = (p) => Object.entries(D.stats).map(([k, m]) => `${m.icon}${p.stats[k]}`).join(" ");
+    const fam = s.family.map((p, i) => `<li class="${p.alive ? "" : "dead"}">${i === s.head ? "👑" : p.alive ? "🙂" : "🕯"} <b>${esc(p.name)}</b> <small>${p.role} · ${p.age}세${p.alive ? "" : p.lost ? " · 잃음" : " · 사망"}</small><br><span class="perk">${statTxt(p)}${p.perks.length ? " · " + p.perks.map((id) => D.perks[id].icon + D.perks[id].name).join(", ") : ""}</span></li>`).join("");
+    const h = s.family[s.head];
+    const sheet = `<div class="charsheet">${Object.entries(D.stats).map(([k, m]) => `<div><span>${m.icon} ${m.name}</span><b>${h.stats[k]}</b><i class="xp"><i style="width:${((h.xp[k] || 0) / 6) * 100}%"></i></i></div>`).join("")}</div><p class="muted">판정 = 🎲d20 + 능력치 + 동료 도움 + 물건 ≥ 난이도. 20은 대성공, 1은 대실패. 판정할수록 경험이 쌓여 능력치가 오른다.</p><p>🎲 운명 ${s.fate}/${P.fateMax(s)} <small>(실패한 판정을 다시 굴린다 · 지위 상승·장마 극복 때 회복)</small></p><p>🎒 ${s.items.length ? s.items.map((id) => `${D.items[id].icon} ${D.items[id].name}${D.items[id].stat ? ` (${D.stats[D.items[id].stat].name} +${D.items[id].bonus})` : ""}`).join(", ") : "가진 물건 없음"}</p>`;
     const comp = s.companions.length
       ? s.companions.map((c) => { const d = D.companions[c.id]; const l = c.loyalty ?? 6; return `<li>${d.icon} <b>${d.name}</b> <small>${d.role}</small> <span class="loyal ${l <= 3 ? "low" : ""}">충성 ${"♥".repeat(Math.ceil(l / 2))}${"♡".repeat(5 - Math.ceil(l / 2))}${l <= 3 ? " 배신 위험!" : ""}</span><br><span class="perk">${d.perk}</span></li>`; }).join("")
       : "<li class='muted'>아직 동료가 없습니다. 장소를 돌며 사람을 만나세요.</li>";
-    return `<div class="veil bottom"><section class="card sheet" role="dialog" aria-modal="true" aria-labelledby="t"><h2 id="t">👪 ${esc(P.headName(s))} 가문 <small>${D.titles[s.title].name}</small></h2><h3>가족 <small>가장이 쓰러지면 다음 사람이 잇는다</small></h3><ul class="list">${fam}</ul><h3>동료 <small>계절마다 ₭2 · 충성이 바닥나면 도윤에게 넘어간다</small></h3><ul class="list">${comp}</ul><h3>가문의 평판 <small>${s.virtue >= 30 ? "존경받는 가문 · 선거 +5%" : s.virtue <= -30 ? "두려운 가문 · 곧은 동료들의 충성이 줄어든다" : "아직 색이 없다"}</small></h3><div class="virtue"><span>👁 공포</span><span class="vbar"><i style="left:${50 + s.virtue / 2}%"></i></span><span>존경 🕊</span></div><h3>강씨 가문</h3><p>도윤 명성 ★${s.rivalFame} · 적의 ${s.hostility}/100 <small>(70 이상이면 자객)</small><br>모은 약점 🗝 ${s.dirt}/3 <small>(3개면 시청에서 폭로)</small></p>${btn("닫기", "close", 'class="secondary"')}</section></div>`;
+    return `<div class="veil bottom"><section class="card sheet" role="dialog" aria-modal="true" aria-labelledby="t"><h2 id="t">👪 ${esc(P.headName(s))} 가문 <small>${D.titles[s.title].name}</small></h2><h3>가장 ${esc(h.name)}의 능력</h3>${sheet}<h3>가족 <small>가장이 쓰러지면 다음 사람이 잇는다</small></h3><ul class="list">${fam}</ul><h3>동료 <small>계절마다 ₭2 · 충성이 바닥나면 도윤에게 넘어간다</small></h3><ul class="list">${comp}</ul><h3>가문의 평판 <small>${s.virtue >= 30 ? "존경받는 가문 · 선거 +5%" : s.virtue <= -30 ? "두려운 가문 · 곧은 동료들의 충성이 줄어든다" : "아직 색이 없다"}</small></h3><div class="virtue"><span>👁 공포</span><span class="vbar"><i style="left:${50 + s.virtue / 2}%"></i></span><span>존경 🕊</span></div><h3>강씨 가문</h3><p>도윤 명성 ★${s.rivalFame} · 적의 ${s.hostility}/100 <small>(70 이상이면 자객)</small><br>모은 약점 🗝 ${s.dirt}/3 <small>(3개면 시청에서 폭로)</small></p>${btn("닫기", "close", 'class="secondary"')}</section></div>`;
   }
   function confirmNew() {
     return `<div class="veil"><section class="card" role="dialog" aria-modal="true" aria-labelledby="t"><div class="big-icon">🕯</div><h2 id="t">새 가문으로 시작할까요?</h2><p class="story">지금 가문의 진행은 사라집니다.</p>${btn("새로 시작", "new-yes", 'class="primary"')}${btn("취소", "close", 'class="secondary"')}</section></div>`;
@@ -245,7 +261,7 @@
     const origins = Object.entries(D.origins)
       .map(([id, o], i) => `<label class="origin ${originOpen(id) ? "" : "locked"}"><input type="radio" name="origin" value="${id}" ${i === 0 ? "checked" : ""} ${originOpen(id) ? "" : "disabled"}><b>${o.name}</b><small>${originOpen(id) ? o.desc : "🔒 " + o.unlock}</small></label>`)
       .join("");
-    return `<div class="title-screen"><div class="logo">CIVITAS</div><p class="sub">이름 없는 가문의 연대기</p><form id="new"><label class="name">가장의 이름<input name="name" maxlength="12" required placeholder="이름" autocomplete="off"></label><div class="origins">${origins}</div><ul class="how"><li>🗺 <b>장소를 누르면 사건</b>이 터지고 결과가 바로 나온다. 계절마다 3번.</li><li>🏗 번 돈으로 <b>건물</b>을 지으면 계절마다 수입·명성이 쌓인다.</li><li>🗳 <b>명성</b>을 모아 도윤을 이기고 동장 → 시장 → 도시의 주인이 되라.</li><li>❤ 가장이 쓰러지면 가족이 잇는다. 대가 끊기면 끝.</li></ul><button class="primary" type="submit">가문 시작 →</button></form>${legacy.runs ? `<p class="legacy">지난 기록: ${legacy.runs}판 · 엔딩 ${Object.keys(legacy.endings).length}종 · 최고 지위 ${D.titles[legacy.bestTitle].name}</p>` : ""}<a class="back" href="../next/">이전 시제품(/next)</a></div>`;
+    return `<div class="title-screen"><div class="logo">CIVITAS</div><p class="sub">이름 없는 가문의 연대기</p><form id="new"><label class="name">가장의 이름<input name="name" maxlength="12" required placeholder="이름" autocomplete="off"></label><div class="origins">${origins}</div><ul class="how"><li>🗺 <b>장소를 누르면 사건</b>이 터지고 결과가 바로 나온다. 계절마다 3번.</li><li>🏗 번 돈으로 <b>건물</b>을 지으면 계절마다 수입·명성이 쌓인다.</li><li>🗳 <b>명성</b>을 모아 도윤을 이기고 동장 → 시장 → 도시의 주인이 되라.</li><li>🎲 위험한 선택은 <b>d20 판정</b>: 주사위 + 능력치 + 동료 ≥ 난이도. 20 대성공, 1 대실패.</li><li>❤ 가장이 쓰러지면 가족이 잇는다(능력치도 바뀐다). 대가 끊기면 끝.</li></ul><button class="primary" type="submit">가문 시작 →</button></form>${legacy.runs ? `<p class="legacy">지난 기록: ${legacy.runs}판 · 엔딩 ${Object.keys(legacy.endings).length}종 · 최고 지위 ${D.titles[legacy.bestTitle].name}</p>` : ""}<a class="back" href="../next/">이전 시제품(/next)</a></div>`;
   }
   function render() {
     if (!state || state.restart) {
@@ -253,9 +269,9 @@
       return;
     }
     const s = state;
-    const modal = rolling ? rollModal() : s.event ? eventModal() : s.result ? resultModal() : s.summary ? summaryModal() : sheet === "build" ? buildSheet() : sheet === "family" ? familySheet() : sheet === "log" ? logSheet() : sheet === "confirm-new" ? confirmNew() : s.ending ? endingModal() : "";
+    const modal = rolling ? rollModal() : s.event ? eventModal() : s.result ? resultModal() : s.summary ? summaryModal() : s.perkChoice ? perkModal() : s.event ? eventModal() : s.result ? resultModal() : s.summary ? summaryModal() : sheet === "build" ? buildSheet() : sheet === "family" ? familySheet() : sheet === "log" ? logSheet() : sheet === "confirm-new" ? confirmNew() : s.ending ? endingModal() : "";
     const t = tip();
-    app.innerHTML = `<div class="shell"><header><div class="top"><span class="house">${esc(P.headName(s))} 가문 · <b>${D.titles[s.title].name}</b> ${s.virtue >= 30 ? '<i class="vchip good">🕊 존경</i>' : s.virtue <= -30 ? '<i class="vchip bad">👁 공포</i>' : ""}</span><span class="season">${P.date(s.season)} <small>${s.season + 1}/${P.LAST_SEASON}</small> ${btn("새 가문", "new", 'class="mini"')}</span></div><div class="stats">${stat("money", "₭", s.money)}${stat("health", "❤", s.health, `<span class="hbar"><i style="width:${s.health}%"></i></span>`)}${stat("fame", "★", s.fame)}</div>${goal()}${plans()}${threats()}</header>${t ? `<div class="tip">${t}</div>` : ""}${map()}${bottom()}</div>${modal}${toastHtml()}`;
+    app.innerHTML = `<div class="shell"><header><div class="top"><span class="house">${esc(P.headName(s))} 가문 · <b>${D.titles[s.title].name}</b> ${s.virtue >= 30 ? '<i class="vchip good">🕊 존경</i>' : s.virtue <= -30 ? '<i class="vchip bad">👁 공포</i>' : ""}</span><span class="season">${P.date(s.season)} <small>${s.season + 1}/${P.LAST_SEASON}</small> ${btn("새 가문", "new", 'class="mini"')}</span></div><div class="stats">${stat("money", "₭", s.money)}${stat("health", "❤", s.health, `<span class="hbar"><i style="width:${s.health}%"></i></span>`)}${stat("fame", "★", s.fame)}</div>${statLine()}${goal()}${plans()}${threats()}</header>${t ? `<div class="tip">${t}</div>` : ""}${map()}${bottom()}</div>${modal}${toastHtml()}`;
     prev = null;
     document.body.classList.toggle("modal-open", !!modal);
     if (!matchMedia("(pointer: coarse)").matches) {
@@ -307,7 +323,7 @@
       const i = Number(a.dataset.i);
       const c = P.view(state).choices[i];
       if (c && c.odds !== null && !c.reason) {
-        rolling = { odds: c.odds, label: c.label, i };
+        rolling = { odds: c.odds, label: c.label, i, check: c.check };
         render();
         setTimeout(() => {
           rolling = null;
@@ -316,6 +332,16 @@
       } else commit(P.choose(state, i));
     }
     else if (act === "dismiss") doDismiss();
+    else if (act === "perk") commit(P.pickPerk(state, a.dataset.id));
+    else if (act === "reroll") {
+      const r = state.result;
+      rolling = { odds: r.check?.p ?? 0.5, label: "운명을 걸고 다시", i: r.index, check: r.check };
+      render();
+      setTimeout(() => {
+        rolling = null;
+        commit(P.reroll(state));
+      }, 1300);
+    }
     else if (act === "end") {
       commit(P.endSeason(state));
     } else if (act === "build") {

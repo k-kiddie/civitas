@@ -1074,3 +1074,104 @@ button.secondary {
   background: #4a2622;
   color: var(--red);
 }
+
+.statline {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #13252c;
+  font-size: 0.9rem;
+}
+.statline b {
+  margin-left: 3px;
+}
+.statline .fate {
+  color: var(--gold);
+}
+.mods {
+  display: block;
+  font-size: 0.72rem;
+  opacity: 0.8;
+}
+.roll-head {
+  color: var(--gold);
+  font-weight: 700;
+}
+.roll-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.d20 {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  font-size: 1.6rem;
+  font-weight: 900;
+  border-radius: 12px;
+  background: #e8dcc0;
+  color: #1d1a12;
+  transform: rotate(-6deg);
+  animation: burst 0.45s ease-out;
+}
+.d20.crit {
+  background: var(--gold);
+  box-shadow: 0 0 18px var(--gold);
+}
+.d20.fumble {
+  background: #b33a2c;
+  color: #fff;
+}
+.calc {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.calc b {
+  color: var(--text);
+  font-size: 1.2rem;
+}
+.result.crit {
+  box-shadow: 0 0 0 2px var(--gold), 0 0 30px #e2c27f66;
+}
+.reroll small {
+  font-weight: 400;
+  opacity: 0.8;
+}
+.charsheet {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.charsheet div {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--panel2);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  font-size: 0.85rem;
+}
+.charsheet b {
+  font-size: 1.3rem;
+}
+.xp {
+  grid-column: span 2;
+  height: 4px;
+  margin-top: 4px;
+  border-radius: 2px;
+  background: #33464a;
+  overflow: hidden;
+}
+.xp i {
+  display: block;
+  height: 100%;
+  background: var(--teal);
+}
