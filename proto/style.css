@@ -26,6 +26,7 @@ body.modal-open {
   overflow: hidden;
 }
 button {
+  touch-action: manipulation;
   font: inherit;
   color: inherit;
   cursor: pointer;
@@ -926,4 +927,9 @@ button.secondary {
 .elect small {
   font-weight: 400;
   font-size: 0.8rem;
+}
+
+.mini.armed {
+  border-color: var(--red);
+  color: var(--red);
 }

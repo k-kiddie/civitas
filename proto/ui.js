@@ -26,7 +26,10 @@
   let state = null,
     sheet = null, // build | family | log | help
     toast = "",
-    prev = null; // 직전 수치(숫자 튀는 효과)
+    prev = null, // 직전 수치(숫자 튀는 효과)
+    armed = null, // 두 번 눌러 확인하는 버튼(앱 내 브라우저는 confirm 창이 막힐 수 있다)
+    armedAt = 0,
+    lastDismiss = 0;
   let legacy = store.get(LEGACY) || { endings: {}, runs: 0, bestTitle: 0 };
   try {
     const saved = store.get(SAVE);
@@ -156,7 +159,7 @@
   }
   function bottom() {
     const f = P.forecast(state);
-    return `<section class="bar"><div class="forecast">계절 끝 정산: 수입 ₭+${f.income} · 생활비 ₭−${f.upkeep}${f.fame ? ` · 명성 +${f.fame}` : ""} → <b>₭${state.money + f.net}</b></div><div class="actions">${btn("🏗<span>건설</span>", "sheet", 'data-sheet="build"')}${btn("👪<span>가문</span>", "sheet", 'data-sheet="family"')}${btn("📜<span>연대기</span>", "sheet", 'data-sheet="log"')}${btn(`계절 넘기기 →${state.ap ? `<small>행동 ${state.ap}회 남음</small>` : ""}`, "end", `class="primary ${state.ap ? "" : "pulse"}"`)}</div></section>`;
+    return `<section class="bar"><div class="forecast">계절 끝 정산: 수입 ₭+${f.income} · 생활비 ₭−${f.upkeep}${f.fame ? ` · 명성 +${f.fame}` : ""} → <b>₭${state.money + f.net}</b></div><div class="actions">${btn("🏗<span>건설</span>", "sheet", 'data-sheet="build"')}${btn("👪<span>가문</span>", "sheet", 'data-sheet="family"')}${btn("📜<span>연대기</span>", "sheet", 'data-sheet="log"')}${btn(armed === "end" ? `정말 넘길까요?<small>행동 ${state.ap}회가 사라집니다 · 한 번 더</small>` : `계절 넘기기 →${state.ap ? `<small>행동 ${state.ap}회 남음</small>` : ""}`, "end", `class="primary ${state.ap && armed !== "end" ? "" : "pulse"}"`)}</div></section>`;
   }
   // ── 모달 ──
   function eventModal() {
@@ -236,7 +239,7 @@
     const s = state;
     const modal = s.event ? eventModal() : s.result ? resultModal() : s.summary ? summaryModal() : sheet === "build" ? buildSheet() : sheet === "family" ? familySheet() : sheet === "log" ? logSheet() : s.ending ? endingModal() : "";
     const t = tip();
-    app.innerHTML = `<div class="shell"><header><div class="top"><span class="house">${esc(P.headName(s))} 가문 · <b>${D.titles[s.title].name}</b></span><span class="season">${P.date(s.season)} <small>${s.season + 1}/${P.LAST_SEASON}</small> ${btn("새 가문", "new", 'class="mini"')}</span></div><div class="stats">${stat("money", "₭", s.money)}${stat("health", "❤", s.health, `<span class="hbar"><i style="width:${s.health}%"></i></span>`)}${stat("fame", "★", s.fame)}</div>${goal()}${plans()}${threats()}</header>${t ? `<div class="tip">${t}</div>` : ""}${map()}${bottom()}</div>${modal}${toastHtml()}`;
+    app.innerHTML = `<div class="shell"><header><div class="top"><span class="house">${esc(P.headName(s))} 가문 · <b>${D.titles[s.title].name}</b></span><span class="season">${P.date(s.season)} <small>${s.season + 1}/${P.LAST_SEASON}</small> ${btn(armed === "new" ? "한 번 더 누르면 새로 시작" : "새 가문", "new", `class="mini ${armed === "new" ? "armed" : ""}"`)}</span></div><div class="stats">${stat("money", "₭", s.money)}${stat("health", "❤", s.health, `<span class="hbar"><i style="width:${s.health}%"></i></span>`)}${stat("fame", "★", s.fame)}</div>${goal()}${plans()}${threats()}</header>${t ? `<div class="tip">${t}</div>` : ""}${map()}${bottom()}</div>${modal}${toastHtml()}`;
     prev = null;
     document.body.classList.toggle("modal-open", !!modal);
     const focus = document.querySelector("[role=dialog] [autofocus], [role=dialog] button:not(:disabled)");
@@ -245,6 +248,29 @@
   function toastHtml() {
     return toast ? `<div class="toast" role="status">${esc(toast)} ${btn("×", "toast-close")}</div>` : "";
   }
+  function confirmTwice(name) {
+    if (armed === name && Date.now() - armedAt < 5000) return true;
+    armed = name;
+    armedAt = Date.now();
+    render();
+    return false;
+  }
+  function doDismiss() {
+    if (Date.now() - lastDismiss < 400) return;
+    lastDismiss = Date.now();
+    commit(P.dismiss(state));
+    if (state.ending) recordEnding(), render();
+  }
+  // "계속"은 손가락을 떼는 순간 바로 처리하고, 카드 바깥(어두운 배경)을 눌러도 넘어간다.
+  app.addEventListener("pointerup", (e) => {
+    if (!state || state.restart || !(state.result || state.summary)) return;
+    const onButton = e.target.closest("[data-action=dismiss]");
+    const onVeil = e.target.classList?.contains("veil");
+    if (onButton || onVeil) {
+      e.preventDefault();
+      doDismiss();
+    }
+  });
   app.addEventListener("submit", (e) => {
     if (e.target.id !== "new") return;
     e.preventDefault();
@@ -264,12 +290,12 @@
     const a = e.target.closest("[data-action]");
     if (!a) return;
     const act = a.dataset.action;
+    if (armed && act !== armed) armed = null;
     if (act === "choose") commit(P.choose(state, Number(a.dataset.i)));
-    else if (act === "dismiss") {
-      commit(P.dismiss(state));
-      if (state.ending) recordEnding(), render();
-    } else if (act === "end") {
-      if (state.ap > 0 && !confirm(`행동이 ${state.ap}회 남았습니다. 그래도 계절을 넘길까요?`)) return;
+    else if (act === "dismiss") doDismiss();
+    else if (act === "end") {
+      if (state.ap > 0 && !confirmTwice("end")) return;
+      armed = null;
       commit(P.endSeason(state));
     } else if (act === "build") {
       sheet = null;
@@ -285,7 +311,8 @@
       toast = `${d.icon} ${d.name}: ${d.hint}`;
       render();
     } else if (act === "new") {
-      if (!confirm("지금 가문을 버리고 새 가문으로 시작할까요?")) return;
+      if (!confirmTwice("new")) return;
+      armed = null;
       state = { restart: true };
       sheet = null;
       store.set(SAVE, null);
