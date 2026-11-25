@@ -4,6 +4,9 @@
 (function (root) {
   const D = typeof module !== "undefined" ? require("./data") : root.SurviveData;
   const SC = typeof module !== "undefined" ? require("./scenarios") : root.SurviveScenarios;
+  const N = typeof module !== "undefined" ? require("./night") : root.SurviveNight;
+  const NOISE = { force: 3, talk: 2, craft: 1, wits: 1 }, NOISE_MAX = 8;
+  const RES = ["food", "wood", "meds"];
   const clone = (v) => JSON.parse(JSON.stringify(v));
   const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
   const STATS = ["force", "talk", "craft", "wits"];
@@ -22,10 +25,11 @@
   }
   function newGame({ name = "대표", seed = 1, scenario = "random" } = {}) {
     const s = {
-      v: 2, scenario: "flood", rng: seed >>> 0, day: 1, rescueDay: 13, phase: "dawn",
-      food: 8, wood: 5, meds: 1, hope: 60, tools: [], people: [], plan: null, threats: [],
+      v: 3, scenario: "flood", rng: seed >>> 0, day: 1, rescueDay: 13, phase: "dawn",
+      food: 8, wood: 5, meds: 1, hope: 60, gear: [], uid: 1, people: [], plan: null, threats: [],
+      stock: {}, known: {}, rumors: [], used: {},
       rivalAlert: 0, exp: null, event: null, eventResult: null, report: null, log: [], memorial: [], seen: {}, total: 0, dayLines: [], flags: {},
-      deaths: [], depleted: {},
+      deaths: [],
     };
     s.scenario = SC.scenarios[scenario] ? scenario : pick(s, SC.order);
     const sc = scen(s);
@@ -39,7 +43,11 @@
     for (let i = 0; i < (withKid ? 2 : 3) && adults.length; i++) s.people.push(person(adults.splice(Math.floor(rnd(s) * adults.length), 1)[0]));
     if (withKid) s.people.push(person(kid));
     s.total = s.people.length;
-    if (rnd(s) < 0.6) s.tools.push(pick(s, Object.keys(D.tools)));
+    const sg = N.startGear[s.scenario].slice();
+    addGear(s, sg.splice(Math.floor(rnd(s) * sg.length), 1)[0]);
+    if (rnd(s) < 0.5) addGear(s, sg.splice(Math.floor(rnd(s) * sg.length), 1)[0]);
+    initStock(s);
+    for (let i = 0; i < 2; i++) addRumor(s);
     s.threats = [3, 7, 10].map((d, i) => ({ day: d + Math.floor(rnd(s) * 2), done: false, need: 2 + i }));
     s.rescueDay = 12 + Math.floor(rnd(s) * 3);
     const w = sc.words;
@@ -49,7 +57,8 @@
         ...sc.intro,
         `함께 있는 사람: ${s.people.filter((p) => !p.leader).map((p) => `${p.name}(${p.role})`).join(", ")}.`,
         `${w.goal}은(는) ${s.rescueDay - 1}~${s.rescueDay + 1}일쯤. 첫 ${w.threat}은(는) ${s.threats[0].day}일.`,
-        s.tools.length ? `챙겨 온 것: ${s.tools.map((t) => D.tools[t].icon + D.tools[t].name).join(", ")}.` : "챙겨 온 도구는 없다.",
+        `챙겨 온 것: ${s.gear.map((g) => gearName(g)).join(", ")}.`,
+        ...s.rumors.map((r) => `소문: ${r.text}`),
       ],
     };
     return s;
@@ -62,9 +71,53 @@
   const canGo = (s, p) => home(s, p) && !p.child && p.hp <= 1 && !p.broken;
   const nextThreat = (s) => s.threats.find((t) => !t.done);
   const meta = (s, id) => scen(s).people.find((x) => x.id === id) || {};
+  // ── 장비 ──
+  const G = (k) => N.gear[k];
+  const gearName = (g) => `${G(g.k).icon}${G(g.k).name}${G(g.k).uses ? `(${g.u})` : ""}`;
+  function addGear(s, k, notes) {
+    if (!k || !G(k)) return;
+    s.gear.push({ uid: s.uid++, k, u: G(k).uses || 0, with: null });
+    if (notes) notes.push(`🎒 ${G(k).icon} ${G(k).name}을(를) 얻었다.`);
+  }
+  function dropGear(s, g, why, notes) {
+    s.gear = s.gear.filter((x) => x !== g && x.uid !== g.uid);
+    if (notes && why) notes.push(`💔 ${G(g.k).icon} ${G(g.k).name}: ${why}`);
+  }
+  // 지금 탐색에 함께 나간(살아 있는) 사람이 든 장비
+  const carried = (s) => (s.exp ? s.gear.filter((g) => g.with && s.exp.party.includes(g.with) && byId(s, g.with)?.alive) : []);
+  const findGear = (s, test) => carried(s).find((g) => { const d = G(g.k); return test(d, g.k) && (!d.uses || g.u > 0); });
+  const hasTool = (s, k) => !!k && !!findGear(s, (d, gk) => gk === k || d.alias === k);
+  // ── 장소: 몰래 정해진 재고, 기억, 소문 ──
+  const LEVELS = [["텅 빔", 0], ["조금", 2], ["반쯤", 6], ["가득", 12]];
+  const total = (st) => st.food + st.wood + st.meds;
+  const lvl = (st) => LEVELS.slice().reverse().find(([, n]) => total(st) >= n)[0];
+  function initStock(s) {
+    const w = W(s);
+    for (const [loc, pl] of Object.entries(scen(s).places)) {
+      const r = rnd(s), m = r < 0.15 ? 0.2 : r < 0.4 ? 0.6 : r < 0.75 ? 1 : 1.5;
+      const big = /많이/.test(pl.loot) ? 1.5 : 1, any = /무엇이든/.test(pl.loot);
+      const prim = RES.find((k) => pl.loot.startsWith(w[k])) || "food";
+      const st = {};
+      for (const k of RES) st[k] = Math.round((any ? 6 : k === prim ? 13 * big : 2) * m);
+      s.stock[loc] = st;
+    }
+  }
+  function addRumor(s, loc) {
+    const keys = Object.keys(scen(s).places).filter((k) => !s.rumors.some((r) => r.loc === k));
+    if (!keys.length) return;
+    loc = loc || pick(s, keys);
+    const pl = scen(s).places[loc], truth = rnd(s) < 0.6, rich = total(s.stock[loc]) >= 8;
+    const saysRich = truth ? rich : !rich;
+    s.rumors.push({ loc, day: s.day, text: saysRich ? `${pl.name}에 아직 손 안 탄 게 잔뜩 있다더라.` : `${pl.name}은(는) 벌써 다 털렸다더라.` });
+  }
+  function placeInfo(s, loc) {
+    const k = s.known[loc], r = s.rumors.filter((x) => x.loc === loc).at(-1);
+    const hz = N.placeHazard[s.scenario]?.[loc];
+    return { known: k ? `${k.day}일에 봤을 때: ${k.lvl}` : null, rumor: !k || (r && r.day > k.day) ? r?.text || null : null, hazard: hz ? N.hazards[hz] : null, guarded: hz ? s.gear.some((g) => G(g.k).guard === hz) : true };
+  }
   // 저녁 기본안: 식량이 되는 만큼 먹이고, 중상 이상은 약
   function defaultPlan(s) {
-    const plan = { feed: {}, med: {}, send: [], place: null };
+    const plan = { feed: {}, med: {}, send: [], place: null, carry: {}, scout: null };
     let food = s.food;
     const order = alive(s).filter((p) => home(s, p)).sort((a, b) => (b.child ? 1 : 0) - (a.child ? 1 : 0) || b.hunger - a.hunger);
     for (const p of order) if (food > 0) { plan.feed[p.id] = true; food--; }
@@ -101,9 +154,37 @@
   const toggleSend = (state, id) => evening(state, (s) => {
     const p = byId(s, id);
     if (!p || !canGo(s, p)) return "지금 내보낼 수 없는 사람입니다.";
-    if (s.plan.send.includes(id)) s.plan.send = s.plan.send.filter((x) => x !== id);
-    else if (s.plan.send.length >= 2) return "최대 두 명까지 보낼 수 있습니다.";
-    else s.plan.send.push(id);
+    if (s.plan.send.includes(id)) {
+      s.plan.send = s.plan.send.filter((x) => x !== id);
+      for (const [u, who] of Object.entries(s.plan.carry)) if (who === id) delete s.plan.carry[u];
+    } else if (s.plan.send.length >= 2) return "최대 두 명까지 보낼 수 있습니다.";
+    else {
+      if (s.plan.scout === id) s.plan.scout = null;
+      s.plan.send.push(id);
+      autoCarry(s);
+    }
+  });
+  // 보낸 사람에게 아직 아무도 안 든 장비를 하나씩 들려 준다(한 사람 최대 2개)
+  function autoCarry(s) {
+    for (const id of s.plan.send) {
+      const mine = () => Object.values(s.plan.carry).filter((x) => x === id).length;
+      for (const g of s.gear) if (!s.plan.carry[g.uid] && mine() < 1) s.plan.carry[g.uid] = id;
+    }
+  }
+  const toggleCarry = (state, uid, id) => evening(state, (s) => {
+    const g = s.gear.find((x) => x.uid === Number(uid));
+    if (!g) return "없는 장비입니다.";
+    if (s.plan.carry[g.uid] === id) { delete s.plan.carry[g.uid]; return; }
+    if (!s.plan.send.includes(id)) return "밤에 나가는 사람만 들 수 있습니다.";
+    if (Object.values(s.plan.carry).filter((x) => x === id).length >= 2) return "한 사람은 두 개까지 들 수 있습니다.";
+    s.plan.carry[g.uid] = id;
+  });
+  const toggleScout = (state, id) => evening(state, (s) => {
+    const p = byId(s, id);
+    if (!p || !canGo(s, p)) return "지금 정찰 보낼 수 없는 사람입니다.";
+    if (s.plan.scout === id) { s.plan.scout = null; return; }
+    if (s.plan.send.includes(id)) return "탐색에 나가는 사람입니다.";
+    s.plan.scout = id;
   });
   const setPlace = (state, loc) => evening(state, (s) => {
     if (!scen(s).places[loc]) return "알 수 없는 장소입니다.";
@@ -134,7 +215,7 @@
         lines.push(`${p.name}에게 ${w.meds}을(를) 썼다 (${D.hpNames[p.hp]}).`);
       }
     }
-    const stay = here.filter((p) => !p.child && !plan.send.includes(p.id));
+    const stay = here.filter((p) => !p.child && !plan.send.includes(p.id) && plan.scout !== p.id);
     for (const p of stay) {
       p.stress = clamp(p.stress - 10, 0, 100);
       if (p.hp === 1 && !p.medToday && rnd(s) < 0.35) { p.hp = 0; lines.push(`${p.name}의 상처가 아물었다.`); }
@@ -162,12 +243,18 @@
     else {
       lines.push(`🥶 ${w.wood}이(가) 떨어져 밤새 떨었다.`);
       for (const p of alive(s)) p.stress = clamp(p.stress + 10, 0, 100);
-      if (rnd(s) < 0.3) hurt(s, pick(s, alive(s)), 1, "추위", notes);
+      const coat = s.gear.find((g) => G(g.k).warm && !plan.send.includes(plan.carry[g.uid]));
+      if (coat) lines.push(`${G(coat.k).icon}${G(coat.k).name}을(를) 돌려 덮으며 버텼다.`);
+      else if (rnd(s) < 0.3) hurt(s, pick(s, alive(s)), 1, "추위", notes);
     }
+    if (plan.scout) scout(s, byId(s, plan.scout), lines, notes);
     s.dayLines = [...lines, ...notes];
+    for (const g of s.gear) g.with = plan.send.includes(plan.carry[g.uid]) ? plan.carry[g.uid] : null;
     if (plan.send.length) {
-      s.exp = { loc: plan.place, party: plan.send.slice(), step: 0, loot: { food: 0, wood: 0, meds: 0, hope: 0 }, scene: null, result: null, story: [], stock: stockOf(s, plan.place) };
-      s.depleted[plan.place] = (s.depleted[plan.place] || 0) + 1;
+      const pl = scen(s).places[plan.place];
+      s.exp = { loc: plan.place, party: plan.send.slice(), step: 0, loot: { food: 0, wood: 0, meds: 0, hope: 0 }, scene: null, result: null, story: [], noise: pl.danger - 1, chased: false, chaseNext: false, isChase: false, truth: null, p1: null, refuse: null, scan: null };
+      const gg = findGear(s, (d) => d.scan);
+      if (gg) s.exp.scan = `${G(gg.k).icon} 계수기가 가리킨다: 남은 것 ${lvl(s.stock[plan.place])}`;
       for (const id of plan.send) byId(s, id).stress = clamp(byId(s, id).stress + 5, 0, 100);
       drawScene(s);
       s.phase = "exp";
@@ -177,26 +264,84 @@
     return dawn(s);
   }
   // ── 밤 탐색 ──
-  function drawScene(s) {
-    const e = s.exp, used = new Set(e.story.map((x) => x.scene));
-    const sc = scen(s).scenes;
-    let pool = sc.filter((x) => x.loc === e.loc && !used.has(x.id));
-    if (e.step >= 1 && rnd(s) < 0.3) pool = sc.filter((x) => x.loc === null && !used.has(x.id));
-    if (!pool.length) pool = sc.filter((x) => x.loc === null && !used.has(x.id));
-    e.scene = pool.length ? pick(s, pool).id : null;
+  function scout(s, p, lines, notes) {
+    const keys = Object.keys(scen(s).places).sort((a, b) => (s.known[a]?.day || 0) - (s.known[b]?.day || 0));
+    if (d20(s) + p.stats.wits >= 11) {
+      const seen = keys.slice(0, 2);
+      for (const k of seen) s.known[k] = { day: s.day, lvl: lvl(s.stock[k]) };
+      lines.push(`👁 ${p.name}이(가) 몰래 둘러보고 왔다: ${seen.map((k) => `${scen(s).places[k].name} ${s.known[k].lvl}`).join(" · ")}`);
+    } else {
+      p.stress = clamp(p.stress + 10, 0, 100);
+      lines.push(`👁 ${p.name}의 정찰은 허탕이었다. 쫓기듯 돌아왔다.`);
+      if (rnd(s) < 0.25) hurt(s, p, 1, "정찰 중 사고", notes);
+    }
   }
-  const sceneById = (s, id) => scen(s).scenes.find((x) => x.id === id);
+  // 장면 모음: 시나리오 기본 + 재난별 추가 + 공통. 추격·다시 찾은 곳은 따로
+  const CACHE = {};
+  function allScenes(s) {
+    if (!CACHE[s.scenario]) CACHE[s.scenario] = [...scen(s).scenes, ...(N.extra[s.scenario] || []), ...N.common].map((x) => ({ kind: "search", ...x }));
+    return CACHE[s.scenario];
+  }
+  const sceneById = (s, id) => allScenes(s).find((x) => x.id === id) || N.chase.find((x) => x.id === id) || N.revisit.find((x) => x.id === id);
+  function setScene(s, sc) {
+    const e = s.exp;
+    e.scene = sc ? sc.id : null;
+    e.truth = sc?.truths ? Math.floor(rnd(s) * sc.truths.length) : null;
+    const party = e.party.filter((id) => byId(s, id).alive);
+    e.p1 = party.length ? party[Math.floor(rnd(s) * party.length)] : null;
+    if (sc && !["*chase", "*revisit"].includes(sc.loc)) s.used[sc.id] = true;
+  }
+  function drawScene(s) {
+    const e = s.exp, sc = allScenes(s), n = e.party.filter((id) => byId(s, id).alive).length;
+    const ok = (x) => !s.used[x.id] && (!x.minParty || n >= x.minParty) && (!x.after || s.used[x.after]);
+    let pool = sc.filter((x) => x.loc === e.loc && ok(x));
+    if (e.step >= 1 && rnd(s) < 0.35) pool = sc.filter((x) => x.loc === null && ok(x));
+    if (!pool.length) pool = sc.filter((x) => x.loc === null && ok(x));
+    if (!pool.length || (e.loc && !sc.some((x) => x.loc === e.loc && ok(x)) && rnd(s) < 0.6)) {
+      const rv = N.revisit.filter((x) => !e.story.some((y) => y.scene === x.id));
+      if (rv.length) pool = rv;
+    }
+    setScene(s, pool.length ? pick(s, pool) : null);
+  }
+  function drawChase(s) {
+    const pool = N.chase.filter((x) => !s.used[x.id]);
+    setScene(s, pick(s, pool.length ? pool : N.chase));
+    s.exp.isChase = true;
+  }
+  const fillScene = (s, text) => {
+    const w = W(s), p1 = s.exp?.p1 ? byId(s, s.exp.p1).name : "동료";
+    return String(text ?? "").replaceAll("{p1}", p1).replaceAll("{food}", w.food).replaceAll("{wood}", w.wood).replaceAll("{meds}", w.meds).replaceAll("{rival}", w.rival).replaceAll("{shelter}", w.shelter);
+  };
+  // 이 장면에서 고를 수 있는 것: 장면의 선택지 + (조우·추격에서 총이 있으면) 쏜다
+  function approachesOf(s, sc) {
+    const list = sc.approaches.slice();
+    const gun = ["meet", "chase"].includes(sc.kind) && findGear(s, (d) => d.gun);
+    if (gun) {
+      const base = sc.approaches.find((a) => a.stat === "force" && !a.auto && a.win) || { win: { text: "" } };
+      list.push({ label: `${G(gun.k).icon} ${G(gun.k).name}을(를) 쏜다`, stat: "force", dc: 0, auto: true, gun: true, noise: 5,
+        win: { ...(base.win || {}), stress: 10, text: `총성이 울렸다. 그리고 조용해졌다. ${base.win?.text || ""}`.trim() } });
+    }
+    return list;
+  }
+  // 정체를 모르는 장면은 몰래 정해진 진실에 따라 결과가 달라진다
+  function outcomeOf(s, sc, i, a) {
+    const t = sc.truths && s.exp.truth !== null ? sc.truths[s.exp.truth] : null;
+    const o = t && t.by[i] ? t.by[i] : { win: a.win, lose: a.lose };
+    return { win: o.win || a.win || { text: "" }, lose: o.lose || o.win || a.lose || a.win || { text: "" }, reveal: t ? t.reveal : null };
+  }
   // 세상은 날이 갈수록 험해지고, 같은 곳은 갈수록 빈다
   const harsh = (s) => Math.floor((s.day - 1) / 4);
-  const stockOf = (s, loc) => Math.max(0.25, 1 - 0.25 * (s.depleted[loc] || 0));
-  const STOCK = ["많음", "보통", "적음", "거의 없음"];
-  const stockLabel = (s, loc) => STOCK[Math.min(3, s.depleted[loc] || 0)];
   function approach(s, a) {
     const party = s.exp.party.map((id) => byId(s, id)).filter((p) => p.alive);
     const roller = party.slice().sort((x, y) => y.stats[a.stat] - x.stats[a.stat])[0];
     const parts = [[`${roller.name} ${D.stats[a.stat].icon}${D.stats[a.stat].name}`, roller.stats[a.stat]]];
     if (party.length > 1) parts.push(["동행", 1]);
-    if (a.tool && s.tools.includes(a.tool)) parts.push([D.tools[a.tool].name, 2]);
+    if (a.tool && hasTool(s, a.tool)) parts.push([G(a.tool).name, 2]);
+    const sc = s.exp.scene ? sceneById(s, s.exp.scene) : null;
+    const tg = sc && findGear(s, (d) => d.tag && d.tag === sc.kind);
+    if (tg && !(a.tool && hasTool(s, a.tool))) parts.push([G(tg.k).name, 2]);
+    const wg = a.stat === "wits" && findGear(s, (d) => d.wits);
+    if (wg) parts.push([G(wg.k).name, 1]);
     if (roller.hp === 1) parts.push(["부상", -1]);
     if (roller.hunger >= 1) parts.push([D.hungerNames[roller.hunger], -roller.hunger]);
     if (roller.traits.includes("겁쟁이")) parts.push(["겁쟁이", -2]);
@@ -204,7 +349,8 @@
     const mod = parts.reduce((n, [, v]) => n + v, 0);
     const dc = a.dc + (scen(s).places[s.exp.loc].danger - 1) + s.exp.step + harsh(s);
     const p = clamp((21 - (dc - mod)) / 20, 0.05, 0.95);
-    return { roller: roller.id, rollerName: roller.name, mod, parts, dc, p: Math.round(p * 100) / 100, tool: a.tool || null, hasTool: !!(a.tool && s.tools.includes(a.tool)) };
+    if (a.auto) return { roller: roller.id, rollerName: roller.name, mod: 0, parts: [], dc: 0, p: 1, auto: true, tool: null, hasTool: false };
+    return { roller: roller.id, rollerName: roller.name, mod, parts, dc, p: Math.round(p * 100) / 100, tool: a.tool || null, hasTool: hasTool(s, a.tool) };
   }
   function describe(s, o) {
     const w = W(s), out = [], L = o.loot || {};
@@ -216,7 +362,7 @@
     if (o.stress) out.push(`스트레스 +${o.stress}`);
     if (o.lose) out.push("짐 절반 잃음");
     if (o.join) out.push("새 식구");
-    if (o.tool) out.push(`${D.tools[o.tool].icon}${D.tools[o.tool].name}`);
+    if (o.tool || o.gear) out.push(`${G(o.tool || o.gear).icon}${G(o.tool || o.gear).name}`);
     if (o.radio) out.push(`${w.goal} 앞당김`);
     if (o.forecast) out.push(`${w.threat} 하루 늦춤`);
     if (o.rivalAlert) out.push(`${w.rival}이(가) 눈치챔`);
@@ -224,8 +370,32 @@
   }
   function sceneView(s) {
     if (!s.exp || !s.exp.scene) return null;
-    const sc = sceneById(s, s.exp.scene);
-    return { id: sc.id, text: sc.text, loc: s.exp.loc, place: scen(s).places[s.exp.loc], step: s.exp.step, stock: s.exp.stock ?? 1, harsh: harsh(s), approaches: sc.approaches.map((a, i) => ({ i, label: a.label, stat: a.stat, ...approach(s, a), win: describe(s, a.win), lose: describe(s, a.lose) })) };
+    const e = s.exp, sc = sceneById(s, e.scene), party = e.party.map((id) => byId(s, id)).filter((p) => p.alive);
+    const hinter = party.slice().sort((a, b) => b.stats.wits - a.stats.wits)[0];
+    const sharp = hinter && hinter.stats.wits + (findGear(s, (d) => d.wits) ? 1 : 0) >= 3 ? hinter : null;
+    const hz = N.placeHazard[s.scenario]?.[e.loc], guarded = hz && findGear(s, (d) => d.guard === hz);
+    const approaches = approachesOf(s, sc).map((a, i) => {
+      const info = approach(s, a), o = outcomeOf(s, sc, i, a);
+      return { i, label: fillScene(s, a.label), stat: a.stat, ...info, feel: feelOf(info), hint: sharp ? hintOf(o, info) : "", win: describe(s, o.win), lose: describe(s, o.lose) };
+    });
+    return { id: sc.id, kind: sc.kind, kindName: N.KINDS[sc.kind] || "탐색", text: fillScene(s, sc.text), loc: e.loc, place: scen(s).places[e.loc], step: e.step, harsh: harsh(s),
+      noise: e.noise, noiseMax: NOISE_MAX, chase: e.isChase, scan: e.scan, hazard: hz && !guarded ? N.hazards[hz] : null, hinter: sharp ? sharp.name : null, approaches };
+  }
+  function feelOf(info) {
+    if (info.auto) return "확실하다";
+    return info.p >= 0.75 ? "해볼 만하다" : info.p >= 0.55 ? "반반이다" : info.p >= 0.35 ? "위험하다" : "무모하다";
+  }
+  // 눈치 빠른 동행의 귀띔: 실패하면 무엇을 잃는지 한마디로
+  function hintOf(o, info) {
+    if (info.auto) return "";
+    const L = o.lose || {};
+    if ((L.harm || 0) >= 2) return "“이건 진짜 죽을 수도 있어.”";
+    if (L.harm) return "“잘못되면 다쳐.”";
+    if (L.rivalAlert) return "“들키면 끝이야.”";
+    if (L.lose) return "“잘못하면 짐을 다 잃어.”";
+    if (L.stress >= 15) return "“…안 보는 게 나을 거야.”";
+    if (L.loot && Object.values(L.loot).some((v) => v < 0)) return "“우리 것도 내줘야 할 거야.”";
+    return "“실패해도 잃을 건 없어.”";
   }
   function hurt(s, p, n, cause, notes) {
     if (!n || !p || !p.alive) return;
@@ -260,6 +430,7 @@
     const lost = m.care ? "이제 다친 사람을 제대로 돌볼 사람이 없다." : m.cook ? "이제 한 줌으로 여럿을 먹이던 손이 없다." : m.radio ? "무전기는 이제 아무도 켜지 않는다." : p.leader ? "모두가 다음 대표를 바라본다." : "";
     s.deaths.push({ id: p.id, name: p.name, cause, last: lastWords(s, p), reactions: reactions(s, p, cause), lost });
     s.memorial.push({ id: p.id, name: p.name, day: s.day, cause });
+    for (const g of s.gear.filter((x) => x.with === p.id)) dropGear(s, g, `${p.name}와(과) 함께 잃었다.`, notes);
     s.hope = clamp(s.hope - (p.child ? 15 : 10), 0, 100);
     for (const q of alive(s)) q.stress = clamp(q.stress + (q.traits.includes("냉혈한") ? 0 : p.child ? 25 : 18), 0, 100);
     notes.push(`🕯 ${p.name}이(가) 죽었다.`);
@@ -271,6 +442,7 @@
     s.people.push(np);
     s.total += 1;
     notes.push(`🤝 ${np.name}(${np.role})이(가) 합류했다.`);
+    if (rnd(s) < 0.4) { const ks = Object.keys(N.gear).filter((k) => !G(k).scen || G(k).scen === s.scenario); addGear(s, pick(s, ks), notes); }
   }
   function gainXp(s, p, stat, notes) {
     p.xp[stat] = (p.xp[stat] || 0) + 1;
@@ -282,24 +454,63 @@
   }
   function choose(state, index) {
     if (state.phase !== "exp" || !state.exp?.scene || state.exp.result) return { state, error: "고를 장면이 없습니다." };
-    const sc = sceneById(state, state.exp.scene), a = sc.approaches[index];
-    if (!a) return { state, error: "알 수 없는 선택입니다." };
-    const s = clone(state), e = s.exp, info = approach(s, a), roller = byId(s, info.roller);
-    const roll = d20(s), crit = roll === 20, fumble = roll === 1;
-    const success = crit || (!fumble && roll + info.mod >= info.dc);
-    const o = success ? a.win : a.lose, notes = [];
-    for (const [k, v] of Object.entries(o.loot || {})) e.loot[k] += Math.round(v * (v > 0 && crit ? 1.5 : 1) * (v > 0 && k !== "hope" ? e.stock ?? 1 : 1));
-    if (o.lose) for (const k of ["food", "wood", "meds"]) e.loot[k] = Math.floor(e.loot[k] * (1 - o.lose));
-    hurt(s, roller, (o.harm || 0) + (fumble ? 1 : 0), "밤 탐색 중 사고", notes);
+    const sc0 = sceneById(state, state.exp.scene), a0 = approachesOf(state, sc0)[index];
+    if (!a0) return { state, error: "알 수 없는 선택입니다." };
+    const s = clone(state), e = s.exp, sc = sceneById(s, e.scene), a = approachesOf(s, sc)[index], info = approach(s, a), roller = byId(s, info.roller);
+    const oc = outcomeOf(s, sc, index, a);
+    const roll = a.auto ? 0 : d20(s), crit = roll === 20, fumble = roll === 1;
+    const success = a.auto || crit || (!fumble && roll + info.mod >= info.dc);
+    const o = success ? oc.win : oc.lose, notes = [];
+    const carry = Math.max(1, ...carried(s).map((g) => G(g.k).carry || 1));
+    let short = false;
+    for (const [k, v] of Object.entries(o.loot || {})) {
+      if (v > 0 && k !== "hope") {
+        const want = Math.round(v * (crit ? 1.5 : 1) * carry), got = Math.min(want, s.stock[e.loc]?.[k] ?? want);
+        if (s.stock[e.loc]) s.stock[e.loc][k] -= got;
+        if (got < want) short = true;
+        e.loot[k] += got;
+      } else e.loot[k] += v;
+    }
+    if (o.lose) for (const k of RES) e.loot[k] = Math.floor(e.loot[k] * (1 - o.lose));
+    let harm = (o.harm || 0) + (fumble ? 1 : 0);
+    const kit = harm && findGear(s, (d) => d.armor);
+    if (kit) { harm -= 1; kit.u -= 1; notes.push(`${G(kit.k).icon} ${G(kit.k).name}으로 상처를 막았다.`); if (kit.u <= 0) dropGear(s, kit, "다 썼다.", notes); }
+    if (fumble && a.tool) { const t = findGear(s, (d, k) => k === a.tool || d.alias === a.tool); if (t) dropGear(s, t, "부러졌다.", notes); }
+    if (a.gun) { const g = findGear(s, (d) => d.gun); g.u -= 1; if (g.u <= 0) dropGear(s, g, "총알이 떨어졌다.", notes); }
+    hurt(s, roller, harm, "밤 탐색 중 사고", notes);
     if (o.stress) for (const id of e.party) { const p = byId(s, id); if (p.alive) p.stress = clamp(p.stress + (p.traits.includes("냉혈한") ? Math.round(o.stress / 2) : o.stress), 0, 100); }
+    const p1 = e.p1 ? byId(s, e.p1) : null;
+    if (p1 && p1.alive) {
+      if (o.p1Stress) p1.stress = clamp(p1.stress + o.p1Stress, 0, 100);
+      if (o.p1Harm) hurt(s, p1, o.p1Harm, "동료와의 다툼", notes);
+      if (o.p1Home && e.party.length > 1) {
+        e.party = e.party.filter((id) => id !== p1.id);
+        for (const g of s.gear.filter((x) => x.with === p1.id)) g.with = null;
+      }
+    }
     if (o.join) joinStranger(s, notes);
-    if (o.tool && !s.tools.includes(o.tool)) { s.tools.push(o.tool); notes.push(`🎒 ${D.tools[o.tool].icon} ${D.tools[o.tool].name}을(를) 얻었다.`); }
+    if (o.tool || o.gear) addGear(s, o.tool || o.gear, notes);
     if (o.radio) { s.rescueDay = Math.max(s.day + 2, s.rescueDay - 1); notes.push(`📻 ${W(s).goal}이(가) ${s.rescueDay}일에 온다!`); }
     if (o.forecast) { const t = nextThreat(s); if (t) t.day += 1; }
     if (o.ledger) s.flags.ledger = true;
     if (o.rivalAlert) s.rivalAlert += 1;
-    if (roller.alive) gainXp(s, roller, a.stat, notes);
-    e.result = { approach: a.label, roller: roller.name, stat: a.stat, roll, mod: info.mod, parts: info.parts, dc: info.dc, total: roll + info.mod, success, crit, fumble, text: (crit ? "대성공! " : fumble ? "대실패! " : "") + o.text, notes };
+    if (roller.alive && !a.auto) gainXp(s, roller, a.stat, notes);
+    // 소음: 행동마다 쌓이고 넘치면 '그것'이 온다
+    const quiet = carried(s).some((g) => G(g.k).quiet) ? 1 : 0;
+    e.noise = Math.max(0, e.noise + (a.noise ?? NOISE[a.stat]) + (success ? 0 : 2) - quiet);
+    if (e.noise >= NOISE_MAX && !e.chased && !e.isChase) { e.chaseNext = true; notes.push("🔊 너무 시끄러웠다. 어딘가에서 무언가가 고개를 든다."); }
+    if (e.isChase) e.noise = 2;
+    // 장소 위험: 막는 장비가 없으면 누군가 다친다
+    const hz = N.placeHazard[s.scenario]?.[e.loc];
+    if (hz && !findGear(s, (d) => d.guard === hz) && rnd(s) < 0.3) {
+      const live = e.party.map((id) => byId(s, id)).filter((p) => p.alive);
+      if (live.length) { const v = pick(s, live); notes.push(`${N.hazards[hz].icon} ${N.hazards[hz].text}`); hurt(s, v, 1, N.hazards[hz].hit, notes); }
+    }
+    // 더 들어가자고 하면 반대할 사람
+    const scared = e.party.map((id) => byId(s, id)).filter((p) => p.alive && (p.stress >= 60 || p.traits.includes("겁쟁이") || p.hp >= 1));
+    e.refuse = scared.length && rnd(s) < 0.5 ? pick(s, scared).id : null;
+    const text = (oc.reveal ? fillScene(s, oc.reveal) + " " : "") + (crit ? "대성공! " : fumble ? "대실패! " : "") + fillScene(s, o.text) + (short ? " …그런데 남은 게 거의 없었다. 누군가 먼저 다녀갔다." : "");
+    e.result = { approach: fillScene(s, a.label), roller: roller.name, stat: a.stat, auto: !!a.auto, roll, mod: info.mod, parts: info.parts, dc: info.dc, total: roll + info.mod, success, crit, fumble, text, notes };
     e.story.push({ scene: sc.id, success });
     return { state: s };
   }
@@ -307,12 +518,24 @@
     if (state.phase !== "exp" || !state.exp?.result) return { state, error: "결과를 먼저 확인하세요." };
     const s = clone(state), e = s.exp, w = W(s);
     const party = e.party.map((id) => byId(s, id)).filter((p) => p.alive);
-    if (deeper && party.length && e.step < MAX_STEP) {
+    if (party.length && e.chaseNext && !e.chased) {
+      e.chaseNext = false;
+      e.chased = true;
+      e.result = null;
+      drawChase(s);
+      return { state: s };
+    }
+    if (deeper && party.length && e.step < MAX_STEP && !e.isChase) {
+      if (e.refuse && byId(s, e.refuse).alive) { const r = byId(s, e.refuse); r.stress = clamp(r.stress + 15, 0, 100); s.hope = clamp(s.hope - 2, 0, 100); }
       e.step += 1;
+      e.noise += 1;
       e.result = null;
       drawScene(s);
       if (e.scene) return { state: s };
     }
+    s.known[e.loc] = { day: s.day, lvl: lvl(s.stock[e.loc]) };
+    for (const g of carried(s)) if (G(g.k).uses && g.k === "lamp") { g.u -= 1; if (g.u <= 0) dropGear(s, g, "기름이 다 떨어졌다.", s.dayLines); }
+    for (const g of s.gear) g.with = null;
     s.food = Math.max(0, s.food + e.loot.food);
     s.wood = Math.max(0, s.wood + e.loot.wood);
     s.meds = Math.max(0, s.meds + e.loot.meds);
@@ -361,11 +584,24 @@
     if (s.day % 4 === 0) s.rivalAlert += 1; // 굶주린 라이벌은 점점 가까워진다
     if (s.rivalAlert >= 2 && rnd(s) < 0.4 + s.day * 0.03) {
       s.rivalAlert = 0;
-      const lf = Math.ceil(s.food * 0.3);
-      s.food -= lf;
-      lines.push(`⚔ ${w.rival}이(가) ${w.shelter}을(를) 습격했다. ${w.food} −${lf}.`);
-      hurt(s, pick(s, adults(s)), 1, `${w.rival}의 습격`, notes);
+      const guard = alive(s).filter((p) => home(s, p) && !p.child && p.hp <= 1).sort((a, b) => b.stats.force - a.stats.force)[0];
+      const gun = s.gear.find((g) => G(g.k).gun && g.u > 0);
+      if (guard && d20(s) + guard.stats.force + (gun ? 3 : 0) >= 15) {
+        if (gun) { gun.u -= 1; if (gun.u <= 0) dropGear(s, gun, "총알이 떨어졌다.", notes); }
+        lines.push(`⚔ ${w.rival}이(가) 밤에 쳐들어왔다. ${guard.name}이(가) ${gun ? "총을 쏘며 " : ""}막아 냈다!`);
+        if (rnd(s) < 0.4) { const ks = Object.keys(N.gear).filter((k) => !G(k).scen || G(k).scen === s.scenario); addGear(s, pick(s, ks), notes); }
+      } else {
+        const lf = Math.ceil(s.food * 0.3);
+        s.food -= lf;
+        lines.push(`⚔ ${w.rival}이(가) ${w.shelter}을(를) 습격했다. ${w.food} −${lf}.`);
+        hurt(s, pick(s, adults(s)), 1, `${w.rival}의 습격`, notes);
+      }
     }
+    // 세상은 우리 없이도 돌아간다: 다른 생존자가 털어 가고, 가끔 새로 생긴다(알려 주지 않는다)
+    const locs = Object.keys(scen(s).places);
+    if (rnd(s) < 0.4) { const st = s.stock[pick(s, locs)], k = pick(s, RES); st[k] = Math.floor(st[k] * (0.2 + rnd(s) * 0.4)); }
+    if (rnd(s) < 0.15) { const l = pick(s, locs), k = pick(s, RES); s.stock[l][k] += 3 + Math.floor(rnd(s) * 4); if (rnd(s) < 0.5) s.rumors.push({ loc: l, day: s.day, text: `${scen(s).places[l].name} 쪽에 피난민이 짐을 버리고 갔다더라.` }); }
+    else if (rnd(s) < 0.2) { s.rumors = s.rumors.filter((r) => s.day - r.day < 6); addRumor(s); }
     for (const p of alive(s).filter((x) => x.swimming)) {
       p.swimming = false;
       if (d20(s) + p.stats.force + p.stats.wits >= 15) {
@@ -537,9 +773,9 @@
     return { state: s };
   }
   function validate(s) {
-    const ok = s && s.v === 2 && SC.scenarios[s.scenario] && Number.isInteger(s.rng) && Number.isInteger(s.day) && Array.isArray(s.people) && s.people.length &&
-      ["dawn", "evening", "exp", "end"].includes(s.phase) && [s.food, s.wood, s.meds, s.hope].every(Number.isFinite) && Array.isArray(s.threats) && Array.isArray(s.memorial) && Array.isArray(s.tools) &&
-      (s.phase !== "evening" || (s.plan && s.plan.feed && s.plan.med && Array.isArray(s.plan.send)));
+    const ok = s && s.v === 3 && Array.isArray(s.gear) && s.stock && s.known && SC.scenarios[s.scenario] && Number.isInteger(s.rng) && Number.isInteger(s.day) && Array.isArray(s.people) && s.people.length &&
+      ["dawn", "evening", "exp", "end"].includes(s.phase) && [s.food, s.wood, s.meds, s.hope].every(Number.isFinite) && Array.isArray(s.threats) && Array.isArray(s.memorial) &&
+      (s.phase !== "evening" || (s.plan && s.plan.feed && s.plan.med && s.plan.carry && Array.isArray(s.plan.send)));
     if (!ok) throw Error("저장이 손상되었습니다.");
     return clone(s);
   }
@@ -549,7 +785,9 @@
     const lootOf = (k) => pl[k].loot;
     const w = W(s);
     const want = alive(s).some((p) => p.hp >= 2) && s.meds < 1 ? w.meds : s.food < alive(s).length * 2 ? w.food : s.wood < 3 ? w.wood : null;
-    const loc = keys.find((k) => want && lootOf(k).startsWith(want) && pl[k].danger <= 2) || keys.find((k) => pl[k].danger === 2) || keys[0];
+    const empty = (k) => s.known[k] && /텅 빔|조금/.test(s.known[k].lvl) && s.day - s.known[k].day < 4;
+    const cand = keys.filter((k) => !empty(k));
+    const loc = cand.find((k) => want && lootOf(k).startsWith(want) && pl[k].danger <= 2) || cand.find((k) => pl[k].danger === 2) || cand[0] || keys[0];
     let pool = s.people.filter((p) => canGo(s, p) && p.hp === 0 && p.stress < 75 && !p.leader);
     if (pool.length < 2) pool = s.people.filter((p) => canGo(s, p));
     const party = pool.sort((a, b) => b.stats.force + b.stats.wits - a.stats.force - a.stats.wits).slice(0, 2).map((p) => p.id);
@@ -557,7 +795,7 @@
   }
   const api = {
     newGame, toggleFeed, toggleMed, toggleSend, setPlace, nightfall, choose, proceed, resolveEvent, dismiss, validate, recommend,
-    sceneView, eventView, forecast, stockLabel, harsh, nextThreat, alive, adults, byId, canGo, home, describe, scen, meta, defaultPlan, MAX_STEP,
+    sceneView, eventView, forecast, harsh, toggleCarry, toggleScout, placeInfo, gearName, N, nextThreat, alive, adults, byId, canGo, home, describe, scen, meta, defaultPlan, MAX_STEP,
   };
   if (typeof module !== "undefined") module.exports = api;
   root.SurviveEngine = api;
