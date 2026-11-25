@@ -111,8 +111,11 @@ http
     if (art && req.method === "GET" && !url.pathname.includes("..")) {
       const file = path.join(root, "assets", art[1], art[2] + "." + art[3]);
       if (file.startsWith(path.join(root, "assets")) && fs.existsSync(file)) {
+        const st = fs.statSync(file), tag = `"${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}"`;
+        const head = { "cache-control": "public, max-age=86400", etag: tag, "x-content-type-options": "nosniff" };
+        if (req.headers["if-none-match"] === tag) { res.writeHead(304, head); res.end(); return; }
         const body = fs.readFileSync(file);
-        res.writeHead(200, { "content-type": art[3] === "png" ? "image/png" : "image/webp", "content-length": body.length, "cache-control": "no-store", "x-content-type-options": "nosniff" });
+        res.writeHead(200, { ...head, "content-type": art[3] === "png" ? "image/png" : "image/webp", "content-length": body.length });
         res.end(body);
         return;
       }
@@ -138,7 +141,8 @@ http
     res.writeHead(200, {
       "content-type": type,
       "content-length": body.length,
-      "cache-control": "no-store",
+      // 그림은 하루 동안 기억해 두고, 코드·화면은 매번 새로 받는다(업데이트 즉시 반영)
+      "cache-control": type.startsWith("image/") ? "public, max-age=86400" : "no-store",
       "x-content-type-options": "nosniff",
     });
     res.end(body);

@@ -109,8 +109,16 @@
     const cards = SC.order.map((k) => { const x = SC.scenarios[k]; return btn(`${A.scene(k, "title", "thumb")}<b>${x.icon} ${x.name}</b><small>${x.tagline}<br>난이도 ${x.level}</small>`, "pick", `data-k="${k}" class="scard ${pickScenario === k ? "on" : ""}"`); }).join("") + btn(`<div class="art thumb rand">?</div><b>🎲 무작위</b><small>어떤 재난일지 모른다</small>`, "pick", `data-k="random" class="scard ${pickScenario === "random" ? "on" : ""}"`);
     return `<div class="title"><div class="logo">넷이서 버티기</div><p class="sub">CIVITAS · 생존</p><form id="new"><label>당신의 이름<input name="name" maxlength="10" required placeholder="이름" autocomplete="off"></label><h3>어떤 재난인가</h3><div class="scards">${cards}</div><ul class="how"><li>👥 당신과 세 사람. 한 명 한 명이 소중하다.</li><li>🌆 <b>저녁</b>: 누구를 먹일지, 누구에게 약을 쓸지, 누구를 밤에 내보낼지 정한다. 남은 사람은 거처를 지킨다.</li><li>🌙 <b>밤</b>: 장면마다 <b>d20 판정</b>. 도구가 있으면 +2. 더 들어갈수록 많이 얻고 더 위험하다.</li><li>🌅 <b>새벽</b>: 굶주림·병·상처·재난이 덮친다. 위독한 사람은 약이나 간호 없이는 하루를 못 넘긴다.</li></ul><button class="primary" type="submit">시작 →</button></form><a class="back" href="../proto/">이전 맛보기(/proto)</a></div>`;
   }
+  // 바뀐 부분만 다시 그린다: 화면 전체를 매번 갈아엎으면 그림이 깜빡이고 다시 불러온다
+  let paintedMain = null, paintedTop = null;
+  function paint(main, top) {
+    let m = app.querySelector(":scope > .layer-main"), t = app.querySelector(":scope > .layer-top");
+    if (!m || !t) { app.innerHTML = '<div class="layer-main"></div><div class="layer-top"></div>'; m = app.firstChild; t = app.lastChild; paintedMain = paintedTop = null; }
+    if (main !== paintedMain) { m.innerHTML = main; paintedMain = main; }
+    if (top !== paintedTop) { t.innerHTML = top; paintedTop = top; }
+  }
   function render() {
-    if (!state || state.restart) { app.innerHTML = titleScreen() + toastHtml(); return; }
+    if (!state || state.restart) { paint(titleScreen(), toastHtml()); return; }
     const s = state;
     let modal = "";
     if (rolling) modal = rollModal();
@@ -123,7 +131,7 @@
     else if (sheet === "memorial") modal = memorialSheet();
     else if (sheet === "new") modal = confirmNew();
     else if (sheet) modal = personSheet(sheet);
-    app.innerHTML = `<div class="shell sc-${s.scenario}">${header()}${eveningView()}</div>${modal}${toastHtml()}`;
+    paint(`<div class="shell sc-${s.scenario}">${header()}${eveningView()}</div>`, modal + toastHtml());
     document.body.classList.toggle("modal-open", !!modal);
   }
   function toastHtml() { return toast ? `<div class="toast">${esc(toast)} ${btn("×", "toast")}</div>` : ""; }
