@@ -1035,7 +1035,10 @@
       ["dawn", "evening", "exp", "end"].includes(s.phase) && [s.food, s.wood, s.meds, s.hope].every(Number.isFinite) && Array.isArray(s.threats) && Array.isArray(s.memorial) &&
       (s.phase !== "evening" || (s.plan && s.plan.feed && s.plan.med && s.plan.carry && Array.isArray(s.plan.send)));
     if (!ok) throw Error("저장이 손상되었습니다.");
-    return clone(s);
+    const c = clone(s);
+    if (c.plan && !c.plan.role) c.plan.role = {}; // 역할이 생기기 전 저장
+    if (c.story === undefined) c.story = null;
+    return c;
   }
   // 밤 추천: 가장 모자란 것을 구하러, 그 장소에 맞는 두 사람
   function recommend(s) {
