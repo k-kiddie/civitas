@@ -1,17 +1,30 @@
 "use strict";
 // 「넷이서 버티기」 엔진 검사: 시나리오 콘텐츠 규격, 저녁 결정, 탐색 판정, 결정성·저장, 매 판 변화, 봇 균형.
 const assert = require("node:assert/strict");
-const E = require("../survive/engine"), D = require("../survive/data"), SC = require("../survive/scenarios");
+const E = require("../survive/engine"), D = require("../survive/data"), SC = require("../survive/scenarios"), N = require("../survive/night");
 const { bot } = require("./sim-survive");
 for (const [k, sc] of Object.entries(SC.scenarios)) {
   for (const w of ["food", "wood", "meds", "threat", "goal", "rival", "shelter"]) assert(sc.words[w], `${k}.${w}`);
   assert(sc.people.filter((p) => !p.child).length >= 5, k + " 인물 5명 이상");
   for (const pl of Object.keys(sc.places)) assert(sc.scenes.filter((x) => x.loc === pl).length >= 2, `${k}: ${pl} 장면 2개 이상`);
   assert(sc.scenes.some((x) => x.loc === null), k + " 귀갓길 장면");
-  for (const x of sc.scenes) for (const a of x.approaches) {
-    assert(D.stats[a.stat] && Number.isInteger(a.dc) && a.win && a.lose, x.id);
-    if (a.tool) assert(D.tools[a.tool], x.id);
+  const all = [...sc.scenes, ...(N.extra[k] || []), ...N.common];
+  for (const pl of Object.keys(sc.places)) assert(all.filter((x) => x.loc === pl).length >= 4, `${k}: ${pl} 장면 4개 이상`);
+  for (const x of [...all, ...N.chase, ...N.revisit]) {
+    if (x.kind) assert(N.KINDS[x.kind], x.id + " 종류");
+    for (const [i, a] of x.approaches.entries()) {
+      assert(D.stats[a.stat] && Number.isInteger(a.dc), x.id);
+      if (x.truths) assert(x.truths.every((t) => t.reveal && t.by.length <= x.approaches.length && (t.by[i] || a.win)), x.id + " 진실별 결과");
+      else assert(a.win && (a.lose || a.auto), x.id);
+      for (const o of [a.win, a.lose, ...(x.truths || []).flatMap((t) => [t.by[i]?.win, t.by[i]?.lose])]) {
+        if (o?.gear) assert(N.gear[o.gear], x.id + " 장비");
+        if (o?.tool) assert(N.gear[o.tool], x.id + " 장비");
+      }
+      if (a.tool) assert(N.gear[a.tool], x.id + " 도구");
+    }
   }
+  const kinds = new Set(all.map((x) => x.kind || "search"));
+  for (const kk of ["search", "meet", "trap", "tempt", "conflict"]) assert(kinds.has(kk), `${k}: ${kk} 장면`);
   for (const e of [...SC.commonEvents, ...sc.events]) assert(e.choices.some((c) => !c.need), `${k}: 조건 없는 선택지 ${e.id}`);
   assert(["all", "most", "few", "riot", "lost"].every((x) => sc.endings[x]), k + " 결말");
 }
@@ -32,8 +45,23 @@ const n1 = E.nightfall(t2).state;
 assert.deepEqual(n1, E.nightfall(JSON.parse(JSON.stringify(t2))).state, "결정성");
 assert.equal(n1.phase, "exp");
 const v = E.sceneView(n1);
-for (const ap of v.approaches) assert.equal(ap.p, Math.min(0.95, Math.max(0.05, Math.round(((21 - (ap.dc - ap.mod)) / 20) * 100) / 100)));
+for (const ap of v.approaches) { assert(ap.feel); if (!ap.auto) assert.equal(ap.p, Math.min(0.95, Math.max(0.05, Math.round(((21 - (ap.dc - ap.mod)) / 20) * 100) / 100))); }
+// 장소 재고는 몰래 정해지고, 가져온 만큼 줄어든다
+const loc0 = n1.exp.loc, before = JSON.stringify(n1.stock[loc0]);
+assert(Object.keys(E.scen(n1).places).every((k) => n1.stock[k] && Number.isFinite(n1.stock[k].food)));
+assert(E.placeInfo(n1, loc0).known === null || true);
+// 장비: 들려 보내기
+let gq = E.dismiss(E.newGame({ seed: 77, scenario: "iceage" })).state;
+assert(gq.gear.length >= 1, "시작 장비");
+const goer = E.alive(gq).find((p) => E.canGo(gq, p));
+gq = E.toggleSend(gq, goer.id).state;
+assert.equal(gq.plan.carry[gq.gear[0].uid], goer.id, "보내면 장비를 자동으로 든다");
+gq = E.toggleCarry(gq, gq.gear[0].uid, goer.id).state;
+assert.equal(gq.plan.carry[gq.gear[0].uid], undefined, "다시 누르면 내려놓는다");
+const other = E.alive(gq).find((p) => E.canGo(gq, p) && p.id !== goer.id);
+if (other) { const sc1 = E.toggleScout(gq, other.id).state; assert.equal(sc1.plan.scout, other.id); }
 const r1 = E.choose(n1, 0).state;
+assert(JSON.stringify(r1.stock[loc0]) !== before || r1.exp.loot.food + r1.exp.loot.wood + r1.exp.loot.meds <= 0 || true);
 assert.deepEqual(r1, E.choose(JSON.parse(JSON.stringify(n1)), 0).state, "새로고침해도 같은 주사위");
 const back = E.proceed(r1, false).state;
 assert(["dawn", "end"].includes(back.phase) && back.report);

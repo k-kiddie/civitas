@@ -238,3 +238,28 @@ h3 { font-size: 0.95rem; margin: 14px 0 6px; }
 .modal.death .last{font-size:1.15em;line-height:1.6;margin:1em .4em;padding:.6em .8em;border-left:3px solid #8a4b4b;text-align:left;font-style:italic;color:#ead9d0}
 .modal.death .react{display:flex;gap:.5em;align-items:center;text-align:left;margin:.4em 0;color:#cbbdb5}
 .stock.s0{color:#8fc48f}.stock.s1{color:#d8c27a}.stock.s2{color:#e09a5c}.stock.s3{color:#e06060}
+/* 밤 탐색: 어둡고 쫄리게 */
+.veil.night{background:rgba(0,0,0,.88)}
+.veil.night .modal{background:#0b0d0f;border:1px solid #1f262b;color:#d6d0c4}
+.veil.night .nightart .art{filter:brightness(.55) contrast(1.1) saturate(.7)}
+.veil.night .story.big{font-size:1.08em;line-height:1.75;letter-spacing:.01em}
+.kind{padding:0 .4em;border-radius:4px;background:#26303a;font-weight:600}
+.k-meet{background:#3b2a1a}.k-trap{background:#3a1f1f}.k-tempt{background:#2e1f38}.k-conflict{background:#3a3417}.k-chase{background:#6a1010;color:#fff}.k-revisit{background:#22313a}
+.noise{display:flex;align-items:center;gap:.5em;margin:.3em 0}.noise>i{flex:1;height:6px;background:#1c2226;border-radius:3px;overflow:hidden;display:block}
+.noise>i>i{display:block;height:100%;background:linear-gradient(90deg,#4f6b55,#c9a64a,#c0392b);transition:width .4s}
+.noise.hot small{color:#e05a4a;animation:pulse 1s infinite}
+.feel{font-weight:700}.f-sure{color:#9fb7c9}.f-good{color:#8fc48f}.f-mid{color:#d8c27a}.f-bad{color:#e09a5c}.f-awful{color:#e06060}
+.whisper{color:#a9b8a0;font-style:italic}
+.modal.scene.chase{border-color:#7a1a1a;animation:shake .5s 2}
+.modal.result.flash{animation:flash .6s 1}
+@keyframes flash{0%{box-shadow:0 0 0 0 rgba(200,30,30,0);background:#3a0b0b}100%{box-shadow:none}}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+@keyframes pulse{50%{opacity:.4}}
+.heartbeat{animation:pulse .9s infinite}
+.modal.roll .dice{animation:spin 1.8s ease-out}
+button.warn small{color:#e09a5c}
+.carry{display:flex;flex-wrap:wrap;gap:.3em;margin-top:.35em;align-items:center}.carry small{opacity:.7;margin-right:.2em}
+.gchip{font-size:.8em;padding:.25em .5em;border-radius:12px;border:1px solid #445;background:transparent;color:inherit}
+.gchip.on{background:#2f4a3a;border-color:#6a9;}.gchip.other{opacity:.4}
+.place .memo{color:#b9c7a8}.place .rumor{color:#c9b38a;font-style:italic}.place .unknown{opacity:.6}.place .hz{color:#e08a5c}.place .hz.ok{color:#8fb89a}
+.note.hz{color:#e08a5c}
