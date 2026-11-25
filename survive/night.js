@@ -30,7 +30,7 @@
     cold: { name: "혹한", icon: "🥶", hit: "동상", text: "손가락 끝의 감각이 사라진다." },
     water: { name: "급류", icon: "🌊", hit: "물살", text: "발밑의 물이 끌어당긴다." },
   };
-  const placeHazard = { nuclear: { hospital: "rad", depot: "rad" }, iceage: { plane: "cold", station: "cold" }, flood: { wreck: "water", pharmacy: "water" } };
+  const placeHazard = { nuclear: { hospital: "rad", depot: "rad" }, iceage: { plane: "cold", station: "cold", finale: "cold" }, flood: { wreck: "water", pharmacy: "water" } };
 
   const S = (id, loc, kind, text, approaches, extra = {}) => ({ id, loc, kind, text, approaches, ...extra });
   const A = (label, stat, dc, win, lose, tool, extra = {}) => ({ label, stat, dc, win, lose, tool, ...extra });

@@ -25,21 +25,49 @@
     const tools = s.gear.map((g) => `<span class="tool" title="${esc(E.N.gear[g.k].desc)}">${esc(E.gearName(g))}</span>`).join("");
     return `<header><div class="top"><span>${S.icon} <b>${S.name}</b> · ${s.day}일째</span><span>${btn(`🕯 ${s.memorial.length}`, "sheet", 'data-sheet="memorial" class="mini"')} ${btn("새로", "sheet", 'data-sheet="new" class="mini"')}</span></div>
     <div class="res"><div class="r ${s.food < E.alive(s).length ? "low" : ""}"><small>${w.food}</small><b>${s.food}</b></div><div class="r ${s.wood < 2 ? "low" : ""}"><small>${w.wood}</small><b>${s.wood}</b></div><div class="r ${s.meds === 0 ? "low" : ""}"><small>${w.meds}</small><b>${s.meds}</b></div><div class="r ${s.hope < 25 ? "low" : ""}"><small>희망</small><b>${s.hope}</b><i class="hbar"><i style="width:${s.hope}%"></i></i></div></div>
-    <div class="chips"><span class="chip goal">🚩 ${w.goal} ${s.rescueDay - 1}~${s.rescueDay + 1}일</span>${t ? `<span class="chip threat ${t.day - s.day <= 1 ? "urgent" : ""}">⚠ ${w.threat} ${t.day - s.day <= 0 ? "오늘 밤" : t.day - s.day + "일 뒤"}${s.flags.braced ? " · 대비함" : ""}</span>` : ""}${tools}</div></header>`;
+    <div class="chips">${E.storyGoal(s) ? `<span class="chip goal story">${esc(E.storyGoal(s))}</span>` : `<span class="chip goal">🚩 ${w.goal} ${s.rescueDay - 1}~${s.rescueDay + 1}일</span>`}${t ? `<span class="chip threat ${t.day - s.day <= 1 ? "urgent" : ""}">⚠ ${w.threat} ${t.day - s.day <= 0 ? "오늘 밤" : t.day - s.day + "일 뒤"}${s.flags.braced ? " · 대비함" : ""}</span>` : ""}${tools}</div></header>`;
   }
   // ── 저녁: 한 화면에서 다 정한다 ──
+  const RL = () => ({ explore: { icon: "🌙", name: "밤 탐색" }, scout: { icon: "👁", name: "정찰" }, ...E.ROLES });
+  function roleBtn(p) {
+    const r = E.roleOf(state, p.id), d = RL()[r];
+    return btn(`${d.icon} ${d.name} ▾`, "sheet", `data-sheet="role:${p.id}" class="tg role r-${r}"`);
+  }
+  // 오늘 밤 맡길 일: 각 일이 지금 무엇을 바꾸는지 보여 준다
+  function roleSheet(id) {
+    const s = state, p = E.byId(s, id), w = words(), cur = E.roleOf(s, id);
+    const patients = E.alive(s).filter((x) => x.hp >= 1 && x.id !== id);
+    const guards = E.alive(s).filter((x) => x.id !== id && E.roleOf(s, x.id) === "guard");
+    const st = (k) => `${D.stats[k].icon}${D.stats[k].name} ${p.stats[k]}`;
+    const why = {
+      explore: E.canGo(s, p) ? `${st("force")} · ${st("wits")}${p.hp === 1 ? " · 부상(−1)" : ""}${p.hunger ? ` · ${HU[p.hunger]}(−${p.hunger})` : ""}${p.stress >= 70 ? " · 지침(−1)" : ""} — 위험하지만 물자는 밖에만 있다.` : "지금은 밖에 나갈 수 없다.",
+      scout: E.canGo(s, p) ? `${st("wits")} — 장소 두 곳의 지금 상태를 보고 온다. 오늘 밤 거처엔 없다.` : "지금은 밖에 나갈 수 없다.",
+      guard: guards.length ? `이미 ${guards.map((x) => x.name).join("·")}이(가) 지킨다.` : `${st("force")} — 아무도 지키지 않으면 도둑이 들 수 있다. 습격도 이 사람이 막는다.`,
+      nurse: patients.length ? `${patients.map((x) => `${x.name}(${HP[x.hp]})`).join(", ")}을(를) 돌본다.${E.meta(s, id).care ? " 간호 경험이 있어 둘까지 확실히." : ""}` : "돌볼 환자가 없다.",
+      forage: `${st("wits")} — 성공하면 ${w.food} 1~2.${s.scenario === "iceage" ? " 밖이라 동상을 입을 수 있다." : ""}`,
+      fix: `${st("craft")} — 성공하면 오늘 밤 ${w.wood}을(를) 쓰지 않는다.`,
+      rest: `스트레스 ${p.stress} → 크게 줄어든다.${p.hp === 1 ? " 상처가 아물 수 있다." : ""}`,
+    };
+    const opts = Object.entries(RL()).map(([k, d]) => {
+      const dis = (k === "explore" || k === "scout") && !E.canGo(s, p);
+      return btn(`<span>${d.icon} ${d.name}${cur === k ? " ✔" : ""}</span><small>${esc(why[k])}</small>`, "role", `data-id="${id}" data-r="${k}" class="ropt ${cur === k ? "on" : ""}" ${dis ? "disabled" : ""}`);
+    }).join("");
+    return `<div class="veil bottom"><section class="sheet" role="dialog" aria-modal="true"><div class="pfhead">${face(p, 56)}<div><h2>${esc(p.name)}에게 오늘 밤 맡길 일</h2><p class="muted">${HP[p.hp]} · 스트레스 ${p.stress}</p></div></div><div class="ropts">${opts}</div>${btn("닫기", "close", 'class="secondary"')}</section></div>`;
+  }
   function personRow(p) {
     const s = state, plan = s.plan, home = E.home(s, p);
     const status = !home ? "밖에 나가 있음" : p.broken ? "무너져 아무것도 못 함" : "";
-    const fed = plan && plan.feed[p.id], med = plan && plan.med[p.id], sent = plan && plan.send.includes(p.id);
-    const toggles = !plan || !home ? "" : `<div class="toggles">${btn(fed ? `🍚 먹인다` : `🍚 굶긴다`, "feed", `data-id="${p.id}" class="tg ${fed ? "on" : "off"}"`)}${p.hp >= 1 ? btn(med ? "💊 약 쓴다" : "💊 약 안 씀", "med", `data-id="${p.id}" class="tg ${med ? "on" : ""}"`) : ""}${E.canGo(s, p) ? btn(sent ? "🌙 보낸다" : "🌙 남는다", "send", `data-id="${p.id}" class="tg ${sent ? "go" : ""}"`) : ""}${E.canGo(s, p) && !sent ? btn(plan.scout === p.id ? "👁 정찰 간다" : "👁 정찰", "scout", `data-id="${p.id}" class="tg ${plan.scout === p.id ? "go" : ""}"`) : ""}</div>${sent && s.gear.length ? `<div class="carry"><small>들려 보낼 것</small>${s.gear.map((g) => { const who = plan.carry[g.uid]; return btn(esc(E.gearName(g)), "carry", `data-uid="${g.uid}" data-id="${p.id}" class="gchip ${who === p.id ? "on" : who ? "other" : ""}" title="${esc(E.N.gear[g.k].desc)}"`); }).join("")}</div>` : ""}`;
+    const fed = plan && plan.feed[p.id], med = plan && plan.med[p.id], sent = plan && plan.send.includes(p.id), finale = E.isFinaleNight(s);
+    const toggles = !plan || !home ? "" : `<div class="toggles">${btn(fed ? `🍚 먹인다` : `🍚 굶긴다`, "feed", `data-id="${p.id}" class="tg ${fed ? "on" : "off"}"`)}${p.hp >= 1 ? btn(med ? "💊 약 쓴다" : "💊 약 안 씀", "med", `data-id="${p.id}" class="tg ${med ? "on" : ""}"`) : ""}${!p.child && !finale ? roleBtn(p) : ""}</div>${sent && s.gear.length ? `<div class="carry"><small>들려 보낼 것</small>${s.gear.map((g) => { const who = plan.carry[g.uid]; return btn(esc(E.gearName(g)), "carry", `data-uid="${g.uid}" data-id="${p.id}" class="gchip ${who === p.id ? "on" : who ? "other" : ""}" title="${esc(E.N.gear[g.k].desc)}"`); }).join("")}</div>` : ""}`;
     return `<div class="prow hp${p.hp}"><button class="pface" data-action="person" data-id="${p.id}">${face(p, 64)}</button><div class="pmain"><div class="pname"><b>${esc(p.name)}</b>${p.leader ? " 👑" : ""} <small>${esc(p.role)}</small></div><div class="pstate"><span class="st h${p.hp}">${HP[p.hp]}</span>${p.hunger ? `<span class="st hu${p.hunger}">${HU[p.hunger]}</span>` : ""}${p.traits.map((t) => `<span class="st tr">${esc(t)}</span>`).join("")}${status ? `<span class="st">${status}</span>` : ""}</div><span class="stress" title="스트레스 ${p.stress}"><i style="width:${p.stress}%"></i></span>${toggles}</div></div>`;
   }
   function eveningView() {
     const s = state, w = words(), plan = s.plan, f = E.forecast(s);
     const people = E.alive(s).map(personRow).join("");
     let night = "";
-    if (plan) {
+    const finale = E.isFinaleNight(s);
+    if (plan && finale) night = `<div class="finale-banner">🚂 오늘 밤, 선로로 떠난다. 걸을 수 있는 사람은 모두 간다.<br><small>마지막으로 먹이고, 약을 쓰고, 출발한다.</small></div>`;
+    else if (plan) {
       const rec = E.recommend(s);
       const places = Object.entries(E.scen(s).places).map(([k, pl]) => {
         const info = E.placeInfo(s, k);
@@ -52,9 +80,10 @@
         ? `<h3>어디로 보낼까</h3><div class="places">${places}</div>`
         : rec.party.length ? `<div class="rec">추천: <b>${E.scen(s).places[rec.loc].name}</b> · ${rec.party.map((id) => esc(E.byId(s, id).name)).join("·")} <small>(${esc(rec.why)})</small> ${btn("추천대로", "rec", 'class="mini"')}</div>` : "";
     }
-    const go = !plan ? "" : (plan.scout ? `👁 ${esc(E.byId(s, plan.scout).name)} 정찰 · ` : "") + (plan.send.length ? (plan.place ? `${plan.send.map((id) => esc(E.byId(s, id).name)).join("·")} → ${E.scen(s).places[plan.place].name}` : "보낼 곳을 고르세요") : "아무도 나가지 않는다");
-    return `<main><p class="hint">저녁. 누구를 먹이고, 누구에게 약을 쓰고, 누구를 밤에 내보낼지 정하세요. 남은 사람은 거처를 지키고 쉰다.</p><div class="plist">${people}</div>${night}</main>
-    <section class="bar"><div class="fc">오늘 밤: ${w.food} −${f ? f.fed : 0}${f && f.hungry ? ` (${f.hungry}명 굶음)` : ""} · ${w.wood} −1 · 지키는 사람 ${f ? f.guard : 0}명 · ${go}</div>${btn("밤이 된다 →", "night", 'class="primary"')}</section>`;
+    const roleSum = !plan || finale ? "" : ["guard", "nurse", "forage", "fix"].map((r) => { const who = E.alive(s).filter((p) => E.roleOf(s, p.id) === r && !p.child); return who.length ? `${E.ROLES[r].icon}${who.map((p) => esc(p.name)).join("·")}` : r === "guard" ? `<b class="warn">🛡 아무도 안 지킴</b>` : ""; }).filter(Boolean).join(" ");
+    const go = !plan || finale ? "" : (plan.scout ? `👁 ${esc(E.byId(s, plan.scout).name)} 정찰 · ` : "") + (plan.send.length ? (plan.place ? `${plan.send.map((id) => esc(E.byId(s, id).name)).join("·")} → ${E.scen(s).places[plan.place].name}` : "보낼 곳을 고르세요") : "아무도 나가지 않는다");
+    return `<main><p class="hint">${finale ? "마지막 저녁." : "저녁. 누구를 먹일지, 누구에게 약을 쓸지, 그리고 각자 오늘 밤 무엇을 맡을지 정하세요."}</p><div class="plist">${people}</div>${night}</main>
+    <section class="bar"><div class="fc">오늘 밤: ${w.food} −${f ? f.fed : 0}${f && f.hungry ? ` (${f.hungry}명 굶음)` : ""} · ${w.wood} −1 · ${roleSum}${go ? " · " + go : ""}</div>${btn(finale ? "선로로 떠난다 →" : "밤이 된다 →", "night", 'class="primary"')}</section>`;
   }
   function personSheet(id) {
     const p = E.byId(state, id);
@@ -64,22 +93,24 @@
   }
   // ── 밤 탐색 ──
   function expModal() {
-    const s = state, e = s.exp, pl = E.scen(s).places[e.loc], w = words();
+    const s = state, e = s.exp, w = words();
+    const pl = E.sceneView(s)?.place || { name: "" };
     const party = e.party.map((id) => E.byId(s, id));
     const gear = s.gear.filter((g) => g.with);
     const loot = `${w.food} ${e.loot.food} · ${w.wood} ${e.loot.wood} · ${w.meds} ${e.loot.meds}`;
     const v = E.sceneView(s);
     const nz = Math.min(100, Math.round((e.noise / 8) * 100));
     const noise = `<div class="noise ${nz >= 75 ? "hot" : ""}"><small>🔊 소음</small><i><i style="width:${nz}%"></i></i></div>`;
-    const head = `<div class="nightart">${A.scene(sc(), e.isChase ? "threat_hit" : e.loc)}</div><div class="eyebrow">🌙 ${pl.name} · ${e.step + 1}번째 장면${v ? ` · <b class="kind k-${v.kind}">${v.kindName}</b>` : ""}${E.harsh(s) ? ` · 세상이 험해졌다` : ""}</div>${noise}<div class="party">${party.map((p) => `<span class="${p.alive ? "" : "dead"}">${face(p, 26)} ${esc(p.name)} <small>${HP[p.hp]}</small></span>`).join("")}<span class="loot">챙긴 것 ${loot}${gear.length ? ` · ${gear.map((g) => esc(E.gearName(g))).join(" ")}` : ""}</span></div>${e.scan ? `<p class="note">${esc(e.scan)}</p>` : ""}`;
+    const head = `<div class="nightart">${A.scene(sc(), e.finale ? (e.queue.length ? "night" : "ending_good") : e.isChase ? "threat_hit" : e.loc)}</div><div class="eyebrow">🌙 ${pl.name} · ${e.step + 1}번째 장면${v ? ` · <b class="kind k-${v.kind}">${v.kindName}</b>` : ""}${E.harsh(s) ? ` · 세상이 험해졌다` : ""}</div>${noise}<div class="party">${party.map((p) => `<span class="${p.alive ? "" : "dead"}">${face(p, 26)} ${esc(p.name)} <small>${HP[p.hp]}</small></span>`).join("")}<span class="loot">챙긴 것 ${loot}${gear.length ? ` · ${gear.map((g) => esc(E.gearName(g))).join(" ")}` : ""}</span></div>${e.scan ? `<p class="note">${esc(e.scan)}</p>` : ""}`;
     if (e.result) {
       const r = e.result, alive = party.filter((p) => p.alive), anyAlive = alive.length > 0;
       const refuser = e.refuse ? E.byId(s, e.refuse) : null;
       const canDeeper = anyAlive && e.step < E.MAX_STEP && !e.isChase && !e.chaseNext;
       const dice = r.auto ? "" : `<div class="roll-line"><span class="d20 ${r.crit ? "crit" : r.fumble ? "fumble" : ""}">${r.roll}</span><span class="calc">${r.parts.map(([n, v]) => ` ${v >= 0 ? "+" : "−"} ${esc(n)} ${Math.abs(v)}`).join("")} = <b>${r.total}</b> <small>vs ${r.dc}</small></span></div><div class="verdict">${r.crit ? "대성공" : r.fumble ? "대실패" : r.success ? "성공" : "실패"}</div>`;
       const deeper = canDeeper ? (refuser && refuser.alive ? btn(`더 들어간다 <small>${esc(refuser.name)}: “난 더 못 가…” — 강행하면 원망을 산다</small>`, "deeper", 'class="secondary warn"') : btn("더 들어간다 <small>더 많이, 더 위험하게, 더 시끄럽게</small>", "deeper", 'class="secondary"')) : "";
+      const rum = anyAlive && !r.rummaged && !e.isChase && !e.finale ? btn(`🔦 주변을 더 뒤진다 <small>장비나 물자가 있을지도 · 소리가 난다</small>`, "rummage", 'class="secondary"') : "";
       const homeLabel = !anyAlive ? "…" : e.chaseNext ? "돌아간다… <small>뒤에서 무언가 온다</small>" : "돌아간다";
-      return `<div class="veil night"><section class="modal result ${r.success ? "win" : "lose"} ${r.crit ? "crit" : ""} ${r.success ? "" : "flash"}" role="dialog" aria-modal="true">${head}<p class="picked">“${esc(r.approach)}” — ${esc(r.roller)}</p>${dice}<p class="story">${esc(r.text)}</p>${r.notes.map((n) => `<p class="note">${esc(n)}</p>`).join("")}${deeper}${btn(homeLabel, "home", 'class="primary"')}</section></div>`;
+      return `<div class="veil night"><section class="modal result ${r.success ? "win" : "lose"} ${r.crit ? "crit" : ""} ${r.success ? "" : "flash"}" role="dialog" aria-modal="true">${head}<p class="picked">“${esc(r.approach)}” — ${esc(r.roller)}</p>${dice}<p class="story">${esc(r.text)}</p>${r.notes.map((n) => `<p class="note">${esc(n)}</p>`).join("")}${rum}${e.finale ? btn(e.queue.length && anyAlive ? "계속 간다" : "…", "home", 'class="primary"') : deeper + btn(homeLabel, "home", 'class="primary"')}</section></div>`;
     }
     const FEEL = { "확실하다": "sure", "해볼 만하다": "good", "반반이다": "mid", "위험하다": "bad", "무모하다": "awful" };
     const choices = v.approaches.map((a) => btn(`<span>${esc(a.label)}</span><small><b class="feel f-${FEEL[a.feel]}">${a.feel}</b>${a.auto ? "" : ` · ${D.stats[a.stat].icon} ${esc(a.rollerName)}`}${a.tool ? ` · <span class="${a.hasTool ? "has" : "no"}">${E.N.gear[a.tool]?.icon || ""} ${a.hasTool ? "도구 있음" : "도구가 있으면 나을 텐데"}</span>` : ""}${a.hint ? `<br><i class="whisper">${esc(v.hinter)}: ${esc(a.hint)}</i>` : ""}</small>`, "approach", `data-i="${a.i}"`)).join("");
@@ -103,6 +134,10 @@
     const r = state.eventResult;
     return `<div class="veil"><section class="modal" role="dialog" aria-modal="true"><p class="story">${esc(r.text)}</p>${r.notes.map((n) => `<p class="note">${esc(n)}</p>`).join("")}${btn("계속", "dismiss", 'class="primary"')}</section></div>`;
   }
+  function cardModal() {
+    const c = state.card;
+    return `<div class="veil night"><section class="modal actcard" role="dialog" aria-modal="true">${A.scene(sc(), state.story.act === 3 ? "night" : "threat_hit")}<h2>${esc(c.title)}</h2>${c.lines.map((l) => `<p class="story">${esc(l)}</p>`).join("")}<p class="goal">🎯 ${esc(c.goal)}</p>${btn("계속", "dismiss", 'class="primary"')}</section></div>`;
+  }
   function deathModal() {
     const d = state.deaths[0], p = E.byId(state, d.id);
     return `<div class="veil"><section class="modal death" role="dialog" aria-modal="true"><div class="dface">${p ? face(p, 120) : ""}</div><h2>🕯 ${esc(d.name)}</h2><p class="muted">${state.day}일 · ${esc(d.cause)}</p><blockquote class="last">“${esc(d.last)}”</blockquote>${d.reactions.map((r) => { const q = E.byId(state, r.id); return `<p class="react">${q ? face(q, 30) : ""} ${esc(r.text)}</p>`; }).join("")}${d.lost ? `<p class="note">${esc(d.lost)}</p>` : ""}${btn("벽에 이름을 새긴다", "dismiss", 'class="primary"')}</section></div>`;
@@ -111,12 +146,13 @@
     return state.memorial.map((m) => { const p = E.byId(state, m.id); return `<li>${p ? face(p, 32) : ""} <b>${esc(m.name)}</b> <small>${m.day}일 · ${esc(m.cause)}</small></li>`; }).join("");
   }
   function endingModal() {
-    const s = state, base = D.endings[s.ending], text = E.scen(s).endings[s.ending] || base.text;
+    const s = state, base = D.endings[s.ending], text = (s.ending === "missed" && E.N && SurviveStory[s.scenario]?.endings.missed) || E.scen(s).endings[s.ending] || base.text;
+    const moments = s.story ? s.story.journal.slice().sort((a, b) => b.w - a.w || a.day - b.day).slice(0, 5).sort((a, b) => a.day - b.day) : [];
     const good = ["all", "most"].includes(s.ending);
-    return `<div class="veil"><section class="modal ending" role="dialog" aria-modal="true">${A.scene(sc(), good ? "ending_good" : "ending_bad")}<h2>${base.icon} ${base.title}</h2><p class="story">${esc(text)}</p><p class="muted">${s.day - 1}일을 버텼다 · ${E.alive(s).length}/${s.total}명 생존</p><div class="living">${E.alive(s).map((p) => `<span>${face(p, 34)} ${esc(p.name)}</span>`).join("")}</div>${s.memorial.length ? `<h3>🕯 벽에 새긴 이름</h3><ul class="wall">${wallList()}</ul>` : ""}${btn("다른 재난으로 다시", "restart", 'class="primary"')}</section></div>`;
+    return `<div class="veil"><section class="modal ending" role="dialog" aria-modal="true">${A.scene(sc(), good ? "ending_good" : "ending_bad")}<h2>${base.icon} ${base.title}</h2><p class="story">${esc(text)}</p><p class="muted">${s.day - 1}일을 버텼다 · ${E.alive(s).length}/${s.total}명 생존</p><div class="living">${E.alive(s).map((p) => `<span>${face(p, 34)} ${esc(p.name)}</span>`).join("")}</div>${moments.length ? `<h3>📖 그 겨울의 결정들</h3><ul class="wall moments">${moments.map((m) => `<li><small>${m.day}일</small> ${esc(m.text)}</li>`).join("")}</ul>` : ""}${s.memorial.length ? `<h3>🕯 벽에 새긴 이름</h3><ul class="wall">${wallList()}</ul>` : ""}${btn("다른 재난으로 다시", "restart", 'class="primary"')}</section></div>`;
   }
   function memorialSheet() {
-    return `<div class="veil bottom"><section class="sheet" role="dialog" aria-modal="true"><h2>🕯 벽에 새긴 이름</h2><ul class="wall">${wallList() || "<li class='muted'>아직 아무도 잃지 않았다.</li>"}</ul><h3>기록</h3><ul class="wall">${state.log.slice().reverse().map((l) => `<li><small>${l.day}일</small> ${esc(l.text)}</li>`).join("")}</ul>${btn("닫기", "close", 'class="secondary"')}</section></div>`;
+    return `<div class="veil bottom"><section class="sheet" role="dialog" aria-modal="true"><h2>🕯 벽에 새긴 이름</h2><ul class="wall">${wallList() || "<li class='muted'>아직 아무도 잃지 않았다.</li>"}</ul>${state.story?.journal.length ? `<h3>📖 일기</h3><ul class="wall moments">${state.story.journal.map((m) => `<li><small>${m.day}일</small> ${esc(m.text)}</li>`).join("")}</ul>` : ""}<h3>기록</h3><ul class="wall">${state.log.slice().reverse().map((l) => `<li><small>${l.day}일</small> ${esc(l.text)}</li>`).join("")}</ul>${btn("닫기", "close", 'class="secondary"')}</section></div>`;
   }
   function confirmNew() {
     return `<div class="veil"><section class="modal" role="dialog" aria-modal="true"><h2>처음부터 다시 할까요?</h2><p class="story">지금 이야기는 사라집니다.</p>${btn("새로 시작", "restart", 'class="primary"')}${btn("취소", "close", 'class="secondary"')}</section></div>`;
@@ -140,12 +176,14 @@
     if (rolling) modal = rollModal();
     else if (s.phase === "exp") modal = expModal();
     else if (s.report) modal = reportModal();
+    else if (s.card) modal = cardModal();
     else if (s.eventResult) modal = eventResultModal();
     else if (s.deaths && s.deaths.length) modal = deathModal();
     else if (s.event) modal = eventModal();
     else if (s.ending) modal = endingModal();
     else if (sheet === "memorial") modal = memorialSheet();
     else if (sheet === "new") modal = confirmNew();
+    else if (sheet && sheet.startsWith("role:")) modal = roleSheet(sheet.slice(5));
     else if (sheet) modal = personSheet(sheet);
     paint(`<div class="shell sc-${s.scenario}">${header()}${eveningView()}</div>`, modal + toastHtml());
     document.body.classList.toggle("modal-open", !!modal);
@@ -166,6 +204,8 @@
     else if (k === "med") commit(E.toggleMed(state, a.dataset.id));
     else if (k === "send") commit(E.toggleSend(state, a.dataset.id));
     else if (k === "scout") commit(E.toggleScout(state, a.dataset.id));
+    else if (k === "role") { if (commit(E.setRole(state, a.dataset.id, a.dataset.r))) { sheet = null; render(); } }
+    else if (k === "rummage") commit(E.rummage(state));
     else if (k === "carry") commit(E.toggleCarry(state, a.dataset.uid, a.dataset.id));
     else if (k === "place") commit(E.setPlace(state, a.dataset.k));
     else if (k === "rec") {

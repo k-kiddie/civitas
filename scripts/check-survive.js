@@ -93,4 +93,24 @@ for (const k of SC.order) {
   assert(out[k].smart / 120 < 0.9, k + " 너무 쉬우면 안 됨");
   assert(out[k].ends.size >= 3, k + " 결말이 다양");
 }
+// 빙하기 이야기: 막이 넘어가고, 선로를 찾고, 마지막 밤까지 간다
+const story = { act3: 0, rail: 0, sled: 0, finale: 0, arcs: new Set(), cbs: new Set(), rival: new Set(), journal: 0 };
+const orig = E.resolveEvent;
+for (let i = 1; i <= 150; i++) {
+  const g = bot("smart", (i * 40503) >>> 0, "iceage");
+  assert(g.story, "빙하기엔 이야기가 있다");
+  if (g.story.act === 3) story.act3++;
+  if (g.story.rail) story.rail++;
+  if (g.story.prog.sled) story.sled++;
+  if (g.seen.fin_eve) story.finale++;
+  for (const [pid, n] of Object.entries(g.story.arcs)) for (let k = 0; k < n; k++) story.arcs.add(pid + k);
+  for (const id of Object.keys(g.seen)) { if (id.startsWith("cb_")) story.cbs.add(id); if (id.startsWith("rv")) story.rival.add(id); }
+  story.journal += g.story.journal.length;
+  assert.deepEqual(E.validate(JSON.parse(JSON.stringify(g))), g);
+}
+assert(story.act3 > 50 && story.rail > 20 && story.sled > 10 && story.finale > 20, JSON.stringify({ ...story, arcs: story.arcs.size }));
+assert(story.cbs.size >= 2 && story.rival.size >= 4, "돌아오는 선택과 라이벌 사건 " + [...story.cbs, ...story.rival]);
+assert(story.arcs.size >= 15, "식구 사연 단계가 고루 나온다 " + story.arcs.size);
+assert(E.newGame({ seed: 1, scenario: "flood" }).story === null, "다른 재난은 이야기 없음");
+console.log(`빙하기 이야기: 3막 ${story.act3}/150 · 선로 발견 ${story.rail} · 썰매 ${story.sled} · 마지막 밤 ${story.finale} · 사연 단계 ${story.arcs.size}종 · 돌아온 선택 ${story.cbs.size}종`);
 console.log("넷이서 버티기 엔진: " + SC.order.map((k) => `${SC.scenarios[k].name} 잘함 ${Math.round((out[k].smart / 120) * 100)}%/무작위 ${Math.round((out[k].random / 120) * 100)}%`).join(" · ") + " · 결정성/저장/저녁 결정 통과");

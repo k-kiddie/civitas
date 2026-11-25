@@ -263,3 +263,12 @@ button.warn small{color:#e09a5c}
 .gchip.on{background:#2f4a3a;border-color:#6a9;}.gchip.other{opacity:.4}
 .place .memo{color:#b9c7a8}.place .rumor{color:#c9b38a;font-style:italic}.place .unknown{opacity:.6}.place .hz{color:#e08a5c}.place .hz.ok{color:#8fb89a}
 .note.hz{color:#e08a5c}
+/* 역할 · 막 · 목표 */
+.tg.role{min-width:7.5em}.tg.r-explore,.tg.r-scout{background:#3a3218;border-color:#c9a64a}.tg.r-guard{background:#1f2f3a}.tg.r-nurse{background:#2a1f2f}.tg.r-forage{background:#1f3326}.tg.r-fix{background:#33291c}
+.ropts{display:flex;flex-direction:column;gap:.45em;margin:.6em 0}
+.ropt{text-align:left;display:flex;flex-direction:column;gap:.2em;padding:.65em .8em}.ropt small{opacity:.8;line-height:1.45}.ropt.on{border-color:#c9a64a;background:#2c2817}
+.chip.story{background:#1d2b36;border-color:#4d7a99;color:#cfe3f2}
+.actcard h2{font-size:1.4em;margin:.5em 0;letter-spacing:.04em}.actcard .goal{color:#e4c87a;font-weight:700;margin-top:.8em}
+.finale-banner{margin:1em 0;padding:1em;border:1px solid #c9a64a;border-radius:12px;background:#231e12;text-align:center;line-height:1.6}
+.fc .warn{color:#e08a5c}
+.moments li{line-height:1.5}

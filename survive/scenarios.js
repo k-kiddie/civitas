@@ -188,7 +188,7 @@
 
   // ── ❄ 극 빙하기 ──
   const iceage = {
-    id: "iceage", name: "극 빙하기", icon: "❄", level: "어려움", start: { food: 10, wood: 7, meds: 1 }, tagline: "영하 60도, 눈에 묻힌 연구 기지",
+    id: "iceage", name: "극 빙하기", icon: "❄", level: "어려움", start: { food: 11, wood: 7, meds: 2 }, tagline: "영하 60도, 눈에 묻힌 연구 기지",
     words: { food: "식량", wood: "연료", meds: "의약품", threat: "눈보라", goal: "남행 열차", rival: "늑대단", shelter: "연구 기지" },
     intro: [
       "태양이 흐려진 지 세 해. 북반구는 얼음에 덮였다.",
