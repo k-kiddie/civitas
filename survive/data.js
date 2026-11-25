@@ -199,6 +199,7 @@
     few: { title: "물이 빠진 뒤의 침묵", icon: "🕯", text: "살아남은 자들은 그 겨울 이야기를 하지 않는다." },
     riot: { title: "폭동", icon: "🔥", text: "희망이 꺼진 밤, 사람들이 당신을 끌어내렸다." },
     lost: { title: "아무도 남지 않았다", icon: "🌊", text: "물은 모든 것을 삼켰다." },
+    missed: { title: "놓친 열차", icon: "🚂", text: "열차는 서지 않았다." },
   };
   const api = { stats, people, child, jobs, rations, hpNames, hungerNames, tools, places, scenes, events, endings };
   if (typeof module !== "undefined") module.exports = api;
