@@ -231,3 +231,10 @@ h3 { font-size: 0.95rem; margin: 14px 0 6px; }
 .living span { display: inline-flex; }
 .shell.sc-nuclear { background: linear-gradient(180deg, #121510 0%, #1a1d16 60%, #262a20 100%); }
 .shell.sc-iceage { background: linear-gradient(180deg, #0c1622 0%, #13263a 60%, #1f3a55 100%); }
+/* 죽음 장면 */
+.modal.death{text-align:center;background:#120d0d;border:1px solid #4a2b2b}
+.modal.death .dface .pt{filter:grayscale(1) brightness(.8);border-radius:50%;display:inline-block}
+.modal.death h2{margin:.4em 0 0}
+.modal.death .last{font-size:1.15em;line-height:1.6;margin:1em .4em;padding:.6em .8em;border-left:3px solid #8a4b4b;text-align:left;font-style:italic;color:#ead9d0}
+.modal.death .react{display:flex;gap:.5em;align-items:center;text-align:left;margin:.4em 0;color:#cbbdb5}
+.stock.s0{color:#8fc48f}.stock.s1{color:#d8c27a}.stock.s2{color:#e09a5c}.stock.s3{color:#e06060}

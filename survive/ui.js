@@ -40,7 +40,7 @@
     let night = "";
     if (plan) {
       const rec = E.recommend(s);
-      const places = Object.entries(E.scen(s).places).map(([k, pl]) => btn(`${A.scene(sc(), k, "thumb")}<b>${pl.name}</b><small>${pl.loot} · 위험 ${["", "낮음", "보통", "높음"][pl.danger]}</small>`, "place", `data-k="${k}" class="place ${plan.place === k ? "on" : ""}"`)).join("");
+      const places = Object.entries(E.scen(s).places).map(([k, pl]) => btn(`${A.scene(sc(), k, "thumb")}<b>${pl.name}</b><small>${pl.loot} · 위험 ${["", "낮음", "보통", "높음"][pl.danger]}<br><span class="stock s${Math.min(3, s.depleted?.[k] || 0)}">남은 것: ${E.stockLabel(s, k)}</span></small>`, "place", `data-k="${k}" class="place ${plan.place === k ? "on" : ""}"`)).join("");
       night = plan.send.length
         ? `<h3>어디로 보낼까</h3><div class="places">${places}</div>`
         : rec.party.length ? `<div class="rec">추천: <b>${E.scen(s).places[rec.loc].name}</b> · ${rec.party.map((id) => esc(E.byId(s, id).name)).join("·")} <small>(${esc(rec.why)})</small> ${btn("추천대로", "rec", 'class="mini"')}</div>` : "";
@@ -60,7 +60,7 @@
     const s = state, e = s.exp, pl = E.scen(s).places[e.loc], w = words();
     const party = e.party.map((id) => E.byId(s, id));
     const loot = `${w.food} ${e.loot.food} · ${w.wood} ${e.loot.wood} · ${w.meds} ${e.loot.meds}`;
-    const head = `${A.scene(sc(), e.loc)}<div class="eyebrow">🌙 ${pl.name} · ${e.step + 1}번째 장면${e.step ? ` (깊이 ${e.step} · 난이도 +${e.step})` : ""}</div><div class="party">${party.map((p) => `<span class="${p.alive ? "" : "dead"}">${face(p, 26)} ${esc(p.name)} <small>${HP[p.hp]}</small></span>`).join("")}<span class="loot">챙긴 것 ${loot}</span></div>`;
+    const head = `${A.scene(sc(), e.loc)}<div class="eyebrow">🌙 ${pl.name} · ${e.step + 1}번째 장면${e.stock < 1 ? ` · 이미 뒤진 곳 (수확 ×${Math.round(e.stock * 100) / 100})` : ""}${E.harsh(s) ? ` · 세상이 험해졌다 +${E.harsh(s)}` : ""}${e.step ? ` (깊이 ${e.step} · 난이도 +${e.step})` : ""}</div><div class="party">${party.map((p) => `<span class="${p.alive ? "" : "dead"}">${face(p, 26)} ${esc(p.name)} <small>${HP[p.hp]}</small></span>`).join("")}<span class="loot">챙긴 것 ${loot}</span></div>`;
     if (e.result) {
       const r = e.result, anyAlive = party.some((p) => p.alive);
       return `<div class="veil"><section class="modal result ${r.success ? "win" : "lose"} ${r.crit ? "crit" : ""}" role="dialog" aria-modal="true">${head}<p class="picked">“${esc(r.approach)}” — ${esc(r.roller)}</p><div class="roll-line"><span class="d20 ${r.crit ? "crit" : r.fumble ? "fumble" : ""}">${r.roll}</span><span class="calc">${r.parts.map(([n, v]) => ` ${v >= 0 ? "+" : "−"} ${esc(n)} ${Math.abs(v)}`).join("")} = <b>${r.total}</b> <small>vs 난이도 ${r.dc}</small></span></div><div class="verdict">${r.crit ? "🎉 대성공!" : r.fumble ? "💥 대실패!" : r.success ? "성공" : "실패"}</div><p class="story">${esc(r.text)}</p>${r.notes.map((n) => `<p class="note">${esc(n)}</p>`).join("")}${anyAlive && e.step < E.MAX_STEP ? btn("더 깊이 들어간다 <small>(난이도 +1 · 더 많이)</small>", "deeper", 'class="secondary"') : ""}${btn(anyAlive ? "돌아간다" : "…", "home", 'class="primary"')}</section></div>`;
@@ -86,6 +86,10 @@
   function eventResultModal() {
     const r = state.eventResult;
     return `<div class="veil"><section class="modal" role="dialog" aria-modal="true"><p class="story">${esc(r.text)}</p>${r.notes.map((n) => `<p class="note">${esc(n)}</p>`).join("")}${btn("계속", "dismiss", 'class="primary"')}</section></div>`;
+  }
+  function deathModal() {
+    const d = state.deaths[0], p = E.byId(state, d.id);
+    return `<div class="veil"><section class="modal death" role="dialog" aria-modal="true"><div class="dface">${p ? face(p, 120) : ""}</div><h2>🕯 ${esc(d.name)}</h2><p class="muted">${state.day}일 · ${esc(d.cause)}</p><blockquote class="last">“${esc(d.last)}”</blockquote>${d.reactions.map((r) => { const q = E.byId(state, r.id); return `<p class="react">${q ? face(q, 30) : ""} ${esc(r.text)}</p>`; }).join("")}${d.lost ? `<p class="note">${esc(d.lost)}</p>` : ""}${btn("벽에 이름을 새긴다", "dismiss", 'class="primary"')}</section></div>`;
   }
   function wallList() {
     return state.memorial.map((m) => { const p = E.byId(state, m.id); return `<li>${p ? face(p, 32) : ""} <b>${esc(m.name)}</b> <small>${m.day}일 · ${esc(m.cause)}</small></li>`; }).join("");
@@ -113,6 +117,7 @@
     else if (s.phase === "exp") modal = expModal();
     else if (s.report) modal = reportModal();
     else if (s.eventResult) modal = eventResultModal();
+    else if (s.deaths && s.deaths.length) modal = deathModal();
     else if (s.event) modal = eventModal();
     else if (s.ending) modal = endingModal();
     else if (sheet === "memorial") modal = memorialSheet();

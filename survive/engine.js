@@ -25,6 +25,7 @@
       v: 2, scenario: "flood", rng: seed >>> 0, day: 1, rescueDay: 13, phase: "dawn",
       food: 8, wood: 5, meds: 1, hope: 60, tools: [], people: [], plan: null, threats: [],
       rivalAlert: 0, exp: null, event: null, eventResult: null, report: null, log: [], memorial: [], seen: {}, total: 0, dayLines: [], flags: {},
+      deaths: [], depleted: {},
     };
     s.scenario = SC.scenarios[scenario] ? scenario : pick(s, SC.order);
     const sc = scen(s);
@@ -39,7 +40,7 @@
     if (withKid) s.people.push(person(kid));
     s.total = s.people.length;
     if (rnd(s) < 0.6) s.tools.push(pick(s, Object.keys(D.tools)));
-    s.threats = [3, 7, 10].map((d) => ({ day: d + Math.floor(rnd(s) * 2), done: false }));
+    s.threats = [3, 7, 10].map((d, i) => ({ day: d + Math.floor(rnd(s) * 2), done: false, need: 2 + i }));
     s.rescueDay = 12 + Math.floor(rnd(s) * 3);
     const w = sc.words;
     s.report = {
@@ -139,7 +140,8 @@
       if (p.hp === 1 && !p.medToday && rnd(s) < 0.35) { p.hp = 0; lines.push(`${p.name}의 상처가 아물었다.`); }
     }
     // 남은 사람이 환자를 돌본다(간호 경험자는 확실히, 다른 사람은 운에 따라 한 단계)
-    const patients = () => alive(s).filter((p) => p.hp >= 1 && !p.medToday).sort((a, b) => b.hp - a.hp);
+    const patients = () => alive(s).filter((p) => p.hp >= 1 && !p.medToday && !(p.isolated > 0)).sort((a, b) => b.hp - a.hp);
+    for (const p of alive(s)) if (p.isolated > 0) p.isolated -= 1;
     for (const c of stay) {
       const pt = patients().find((p) => p !== c);
       if (!pt) break;
@@ -164,7 +166,8 @@
     }
     s.dayLines = [...lines, ...notes];
     if (plan.send.length) {
-      s.exp = { loc: plan.place, party: plan.send.slice(), step: 0, loot: { food: 0, wood: 0, meds: 0, hope: 0 }, scene: null, result: null, story: [] };
+      s.exp = { loc: plan.place, party: plan.send.slice(), step: 0, loot: { food: 0, wood: 0, meds: 0, hope: 0 }, scene: null, result: null, story: [], stock: stockOf(s, plan.place) };
+      s.depleted[plan.place] = (s.depleted[plan.place] || 0) + 1;
       for (const id of plan.send) byId(s, id).stress = clamp(byId(s, id).stress + 5, 0, 100);
       drawScene(s);
       s.phase = "exp";
@@ -183,6 +186,11 @@
     e.scene = pool.length ? pick(s, pool).id : null;
   }
   const sceneById = (s, id) => scen(s).scenes.find((x) => x.id === id);
+  // 세상은 날이 갈수록 험해지고, 같은 곳은 갈수록 빈다
+  const harsh = (s) => Math.floor((s.day - 1) / 4);
+  const stockOf = (s, loc) => Math.max(0.25, 1 - 0.25 * (s.depleted[loc] || 0));
+  const STOCK = ["많음", "보통", "적음", "거의 없음"];
+  const stockLabel = (s, loc) => STOCK[Math.min(3, s.depleted[loc] || 0)];
   function approach(s, a) {
     const party = s.exp.party.map((id) => byId(s, id)).filter((p) => p.alive);
     const roller = party.slice().sort((x, y) => y.stats[a.stat] - x.stats[a.stat])[0];
@@ -194,7 +202,7 @@
     if (roller.traits.includes("겁쟁이")) parts.push(["겁쟁이", -2]);
     if (roller.stress >= 70) parts.push(["지침", -1]);
     const mod = parts.reduce((n, [, v]) => n + v, 0);
-    const dc = a.dc + (scen(s).places[s.exp.loc].danger - 1) + s.exp.step;
+    const dc = a.dc + (scen(s).places[s.exp.loc].danger - 1) + s.exp.step + harsh(s);
     const p = clamp((21 - (dc - mod)) / 20, 0.05, 0.95);
     return { roller: roller.id, rollerName: roller.name, mod, parts, dc, p: Math.round(p * 100) / 100, tool: a.tool || null, hasTool: !!(a.tool && s.tools.includes(a.tool)) };
   }
@@ -217,7 +225,7 @@
   function sceneView(s) {
     if (!s.exp || !s.exp.scene) return null;
     const sc = sceneById(s, s.exp.scene);
-    return { id: sc.id, text: sc.text, loc: s.exp.loc, place: scen(s).places[s.exp.loc], step: s.exp.step, approaches: sc.approaches.map((a, i) => ({ i, label: a.label, stat: a.stat, ...approach(s, a), win: describe(s, a.win), lose: describe(s, a.lose) })) };
+    return { id: sc.id, text: sc.text, loc: s.exp.loc, place: scen(s).places[s.exp.loc], step: s.exp.step, stock: s.exp.stock ?? 1, harsh: harsh(s), approaches: sc.approaches.map((a, i) => ({ i, label: a.label, stat: a.stat, ...approach(s, a), win: describe(s, a.win), lose: describe(s, a.lose) })) };
   }
   function hurt(s, p, n, cause, notes) {
     if (!n || !p || !p.alive) return;
@@ -225,9 +233,32 @@
     if (p.hp >= 4) die(s, p, cause, notes);
     else notes.push(`${p.name}: ${D.hpNames[p.hp]}`);
   }
+  function lastWords(s, p) {
+    if (p.leader && p.id === "leader") return "다들… 미안해. 끝까지 같이 못 가서. 꼭… 살아.";
+    return meta(s, p.id).last || "…가지 마. 아직… 할 말이…";
+  }
+  function reactions(s, dead, cause) {
+    const out = [];
+    const pool = alive(s).filter((q) => q !== dead).slice().sort(() => rnd(s) - 0.5).slice(0, 2);
+    for (const q of pool) {
+      let t;
+      if (q.child) t = `${q.name}이(가) 이해하지 못하고 계속 ${dead.name}을(를) 부른다.`;
+      else if (q.traits.includes("냉혈한")) t = `${q.name}은(는) 아무 말 없이 ${dead.name}의 신발을 벗겨 챙겼다.`;
+      else if (/밤 탐색|홀로/.test(cause) && rnd(s) < 0.5) t = `${q.name}이(가) 당신을 노려봤다. “당신이 보냈잖아.”`;
+      else if (q.stress >= 70) t = `${q.name}이(가) 벽을 치며 울었다.`;
+      else t = pick(s, [`${q.name}이(가) ${dead.name}의 눈을 감겨 주었다.`, `${q.name}이(가) 끝내 울음을 터뜨렸다.`, `${q.name}이(가) ${dead.name}의 손을 오래 잡고 있었다.`]);
+      out.push({ id: q.id, text: t });
+      q.grief = dead.name;
+      q.griefDay = s.day;
+    }
+    return out;
+  }
   function die(s, p, cause, notes) {
     p.alive = false;
     p.hp = 4;
+    const m = meta(s, p.id);
+    const lost = m.care ? "이제 다친 사람을 제대로 돌볼 사람이 없다." : m.cook ? "이제 한 줌으로 여럿을 먹이던 손이 없다." : m.radio ? "무전기는 이제 아무도 켜지 않는다." : p.leader ? "모두가 다음 대표를 바라본다." : "";
+    s.deaths.push({ id: p.id, name: p.name, cause, last: lastWords(s, p), reactions: reactions(s, p, cause), lost });
     s.memorial.push({ id: p.id, name: p.name, day: s.day, cause });
     s.hope = clamp(s.hope - (p.child ? 15 : 10), 0, 100);
     for (const q of alive(s)) q.stress = clamp(q.stress + (q.traits.includes("냉혈한") ? 0 : p.child ? 25 : 18), 0, 100);
@@ -257,7 +288,7 @@
     const roll = d20(s), crit = roll === 20, fumble = roll === 1;
     const success = crit || (!fumble && roll + info.mod >= info.dc);
     const o = success ? a.win : a.lose, notes = [];
-    for (const [k, v] of Object.entries(o.loot || {})) e.loot[k] += Math.round(v * (v > 0 && crit ? 1.5 : 1));
+    for (const [k, v] of Object.entries(o.loot || {})) e.loot[k] += Math.round(v * (v > 0 && crit ? 1.5 : 1) * (v > 0 && k !== "hope" ? e.stock ?? 1 : 1));
     if (o.lose) for (const k of ["food", "wood", "meds"]) e.loot[k] = Math.floor(e.loot[k] * (1 - o.lose));
     hurt(s, roller, (o.harm || 0) + (fumble ? 1 : 0), "밤 탐색 중 사고", notes);
     if (o.stress) for (const id of e.party) { const p = byId(s, id); if (p.alive) p.stress = clamp(p.stress + (p.traits.includes("냉혈한") ? Math.round(o.stress / 2) : o.stress), 0, 100); }
@@ -298,7 +329,7 @@
       if (p.hunger >= 2) p.stress = clamp(p.stress + 10, 0, 100);
       if (p.hunger >= 3) hurt(s, p, 1, "굶주림", notes);
     }
-    const sick = 0.22 + (alive(s).some((p) => p.hunger >= 2) ? 0.1 : 0);
+    const sick = 0.22 + (alive(s).some((p) => p.hunger >= 2) ? 0.1 : 0) + s.day * 0.01;
     if (rnd(s) < sick) {
       const v = pick(s, alive(s)), bad = rnd(s) < 0.3;
       if (v) { notes.push(`🤒 ${v.name}이(가) ${bad ? "심하게 " : ""}앓기 시작했다.`); hurt(s, v, bad ? 2 : 1, "병", notes); }
@@ -311,11 +342,13 @@
     if (t) {
       t.done = true;
       const stay = alive(s).filter((p) => home(s, p) && !p.child);
-      if (s.flags.braced || (s.wood >= 2 && stay.length)) {
-        if (!s.flags.braced) s.wood -= 2;
+      const needW = t.need || 2;
+      if (s.flags.braced || (s.wood >= needW && stay.length)) {
+        const braced = s.flags.braced;
+        if (!braced) s.wood -= needW;
         s.flags.braced = false;
-        s.hope = clamp(s.hope + 5, 0, 100);
-        lines.push(`⛈ ${w.threat}! ${scen(s).threatHeld}${s.flags.braced ? "" : ` (${w.wood} −2)`}`);
+        s.hope = clamp(s.hope + 4, 0, 100);
+        lines.push(`⛈ ${w.threat}! ${scen(s).threatHeld}${braced ? "" : ` (${w.wood} −${needW})`}`);
       } else {
         const lf = Math.ceil(s.food * 0.4), lw = Math.ceil(s.wood * 0.3);
         s.food -= lf;
@@ -325,7 +358,8 @@
         for (const p of alive(s).slice().sort(() => rnd(s) - 0.5).slice(0, 2)) hurt(s, p, 1, w.threat, notes);
       }
     }
-    if (s.rivalAlert >= 2 && rnd(s) < 0.5) {
+    if (s.day % 4 === 0) s.rivalAlert += 1; // 굶주린 라이벌은 점점 가까워진다
+    if (s.rivalAlert >= 2 && rnd(s) < 0.4 + s.day * 0.03) {
       s.rivalAlert = 0;
       const lf = Math.ceil(s.food * 0.3);
       s.food -= lf;
@@ -383,14 +417,20 @@
     if (kind === "hungry") return pool.filter((p) => p.hunger >= 1 || p.stress >= 45);
     if (kind === "brave") return pool.filter((p) => p.hp === 0 && p.stats.force + p.stats.wits >= 4);
     if (kind === "stressed") return pool.filter((p) => p.stress >= 65);
+    if (kind === "sick") return alive(s).filter((p) => !p.leader && p.hp >= 1 && p.away <= 0);
+    if (kind === "dying") return alive(s).filter((p) => !p.leader && p.hp >= 2 && s.meds === 0);
+    if (kind === "grieving") return alive(s).filter((p) => p.grief && s.day - p.griefDay <= 4 && !p.leader);
     return pool;
   }
-  const ONCE = ["rival_offer", "brave", "doyun_offer", "haejin", "radio_call", "forecast", "stranger"];
+  const ONCE = ["rival_offer", "brave", "doyun_offer", "haejin", "radio_call", "forecast", "stranger", "neighbor_hurt", "neighbor_food", "revenge", "child_share"];
   function eventOk(s, e) {
     const last = s.seen[e.id];
     if (ONCE.includes(e.id) && last !== undefined) return false;
     if (last !== undefined && s.day - last < 3) return false;
-    if (e.need && !(byId(s, e.need) && byId(s, e.need).alive)) return false;
+    if (e.need === "@child") { if (!alive(s).some((p) => p.child)) return false; }
+    else if (e.need === "@stole") { if (!s.flags.stole || s.day - (s.flags.stoleDay || 0) < 2) return false; }
+    else if (e.need && !(byId(s, e.need) && byId(s, e.need).alive)) return false;
+    if (e.id === "child_share" && s.food > 2) return false;
     if ((e.id === "rival_offer" || e.id === "doyun_offer") && s.day < 3) return false;
     if (e.id === "stranger" && s.day < 4) return false;
     if (e.cast === "two" && castFor(s, "two").length < 2) return false;
@@ -403,7 +443,7 @@
     if (!ok.length) return null;
     const e = pick(s, ok);
     s.seen[e.id] = s.day;
-    if ((e.id === "cough" || e.id === "fever_kid" || e.id === "frost_kid") && e.need) { const k = byId(s, e.need); if (k.hp === 0) k.hp = 1; }
+    if ((e.id === "cough" || e.id === "fever_kid" || e.id === "frost_kid") && e.need && byId(s, e.need)) { const k = byId(s, e.need); if (k.hp === 0) k.hp = 1; }
     let cast = null, cast2 = null;
     if (e.cast) {
       const pool = castFor(s, e.cast).slice();
@@ -414,7 +454,8 @@
   }
   function fillText(s, text) {
     const w = W(s), ev = s.event;
-    return String(text).replaceAll("{who}", ev?.cast ? byId(s, ev.cast).name : "").replaceAll("{who2}", ev?.cast2 ? byId(s, ev.cast2).name : "")
+    const dead = ev?.cast && byId(s, ev.cast)?.grief ? byId(s, ev.cast).grief : s.memorial.at(-1)?.name || "";
+    return String(text).replaceAll("{who}", ev?.cast ? byId(s, ev.cast).name : "").replaceAll("{who2}", ev?.cast2 ? byId(s, ev.cast2).name : "").replaceAll("{dead}", dead)
       .replaceAll("{rival}", w.rival).replaceAll("{goal}", w.goal).replaceAll("{food}", w.food).replaceAll("{wood}", w.wood).replaceAll("{meds}", w.meds);
   }
   function eventView(s) {
@@ -422,7 +463,7 @@
     const e = events(s).find((x) => x.id === s.event.id);
     return {
       id: e.id, text: fillText(s, e.text), cast: s.event.cast, cast2: s.event.cast2, need: e.need || null,
-      choices: e.choices.map((c, i) => ({ i, label: fillText(s, c.label), reason: c.need?.meds && s.meds < c.need.meds ? `${W(s).meds}이(가) 없다` : c.need?.wood && s.wood < c.need.wood ? `${W(s).wood}이(가) 모자라다` : c.need?.ledger && !s.flags.ledger ? "장부가 필요하다" : "" })),
+      choices: e.choices.map((c, i) => ({ i, label: fillText(s, c.label), reason: c.need?.meds && s.meds < c.need.meds ? `${W(s).meds}이(가) 없다` : c.need?.food && s.food < c.need.food ? `${W(s).food}이(가) 모자라다` : c.need?.wood && s.wood < c.need.wood ? `${W(s).wood}이(가) 모자라다` : c.need?.ledger && !s.flags.ledger ? "장부가 필요하다" : "" })),
     };
   }
   function resolveEvent(state, index) {
@@ -457,6 +498,20 @@
     if (fx.rivalAlert) s.rivalAlert += fx.rivalAlert;
     if (fx.radio) s.rescueDay = Math.max(s.day + 2, s.rescueDay - 1);
     if (fx.braceThreat) s.flags.braced = true;
+    if (fx.flag) { s.flags[fx.flag] = true; if (fx.flag === "stole") s.flags.stoleDay = s.day; }
+    if (fx.unflag) delete s.flags[fx.unflag];
+    if (fx.isolate && cast) { cast.isolated = 2; }
+    if (fx.spread && cast) { const others = alive(s).filter((p) => p !== cast && p.hp === 0); if (others.length && rnd(s) < 0.5) { const v = pick(s, others); hurt(s, v, 1, "옮은 병", notes); notes.unshift(`🤒 ${v.name}에게 병이 옮았다.`); } }
+    if (fx.childHunger) for (const p of alive(s).filter((x) => x.child)) p.hunger = Math.min(3, p.hunger + fx.childHunger);
+    if (fx.adultsHunger) for (const p of adults(s).slice().sort(() => rnd(s) - 0.5).slice(0, fx.adultsHunger)) p.hunger = Math.min(3, p.hunger + 1);
+    if (fx.castHeal && cast) cast.hp = Math.max(0, cast.hp - 1);
+    if (fx.hurtRandom) hurt(s, pick(s, adults(s)), fx.hurtRandom, "몸싸움", notes);
+    if (fx.rescueCheck) {
+      const r = adults(s).filter((p) => p.hp <= 1 && p.away <= 0).sort((a, b) => b.stats.force + b.stats.wits - a.stats.force - a.stats.wits)[0];
+      if (r && d20(s) + r.stats.force + r.stats.wits >= 16) { joinStranger(s, notes); text = `${r.name}이(가) 위험한 길을 건너 이웃을 업고 돌아왔다.`; s.hope = clamp(s.hope + 5, 0, 100); }
+      else if (r) { hurt(s, r, 1, "이웃을 구하러 갔다가", notes); text = `${r.name}이(가) 건너다 쓰러졌다. 이웃의 손짓은 멈췄다.`; }
+      else text = "갈 수 있는 사람이 없었다.";
+    }
     if (fx.law) s.flags.law = fx.law;
     if (fx.trustHaejin) s.flags.trustHaejin = true;
     if (fx.spy) {
@@ -472,9 +527,10 @@
   }
   function dismiss(state) {
     const s = clone(state);
-    if (s.eventResult) s.eventResult = null;
-    else if (s.report) s.report = null;
-    if (s.phase === "dawn" && !s.report && !s.event && !s.eventResult) {
+    if (s.report) s.report = null;
+    else if (s.eventResult) s.eventResult = null;
+    else if (s.deaths && s.deaths.length && s.phase !== "exp") s.deaths.shift();
+    if (s.phase === "dawn" && !(s.deaths && s.deaths.length) && !s.report && !s.event && !s.eventResult) {
       s.phase = "evening";
       s.plan = defaultPlan(s);
     }
@@ -501,7 +557,7 @@
   }
   const api = {
     newGame, toggleFeed, toggleMed, toggleSend, setPlace, nightfall, choose, proceed, resolveEvent, dismiss, validate, recommend,
-    sceneView, eventView, forecast, nextThreat, alive, adults, byId, canGo, home, describe, scen, meta, defaultPlan, MAX_STEP,
+    sceneView, eventView, forecast, stockLabel, harsh, nextThreat, alive, adults, byId, canGo, home, describe, scen, meta, defaultPlan, MAX_STEP,
   };
   if (typeof module !== "undefined") module.exports = api;
   root.SurviveEngine = api;
