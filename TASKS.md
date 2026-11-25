@@ -117,3 +117,9 @@ CHROMIUM_PATH=/usr/bin/chromium node scripts/check-season-browser.cjs
 ```
 
 스크린샷은 `artifacts/mobile-map.png`, `artifacts/mobile-event.png`, `artifacts/mobile-ending.png`에 보관한다.
+
+## /survive 절망감 강화 (2026-11-25)
+- 죽음 장면: 유언·남은 사람 반응·역할 상실 문구, 벽에 이름 새기기. 슬픔 사건({dead}).
+- 말라 가는 세상: 같은 장소는 갈 때마다 수확 감소(남은 것 표시), 4일마다 판정 난이도 +1, 재난마다 필요한 땔감 증가(2→3→4), 병·습격 확률 증가.
+- 도덕적 딜레마 7종: 격리, 아이 몫, 다친 이웃, 이웃 식량 훔치기, 안락사/간병, 슬픔, 복수.
+- 봇 생존율: 잘함 27~42% / 무작위 10~14%.
