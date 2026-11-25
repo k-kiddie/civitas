@@ -16,35 +16,25 @@ function bot(strategy, seed) {
       continue;
     }
     if (s.phase === "day") {
-      const workers = s.people.filter((p) => E.canWork(s, p));
-      const storm = E.nextStorm(s);
-      const hurt = E.alive(s).some((p) => p.hp >= 1);
-      if (strategy === "random") {
-        const jobs = Object.keys(D.jobs);
-        for (const p of workers) s = E.setJob(s, p.id, jobs[r(jobs.length)]).state;
-        s = E.setRation(s, ["full", "normal", "half"][r(3)]).state;
-      } else {
-        const order = workers.slice().sort((a, b) => b.stats.craft - a.stats.craft);
-        order.forEach((p, i) => {
-          let job;
-          const dikeNeed = storm && s.dike < storm.need && storm.day - s.day <= 4;
-          if (p.stress >= 75) job = "rest";
-          else if (dikeNeed && i < 2) job = "dike";
-          else if (hurt && i === order.length - 1) job = "care";
-          else job = s.food < 12 ? "fish" : s.wood < 4 ? "wood" : i % 2 ? "fish" : "dike";
-          s = E.setJob(s, p.id, job).state;
-        });
-        s = E.setRation(s, s.food >= 18 ? "normal" : "half").state;
-      }
+      // 사람마다 누르지 않고 방침 하나만 고른다
+      const storm = E.nextStorm(s), n = E.need(s);
+      let pol = "balanced";
+      if (strategy === "random") pol = ["balanced", "dike", "fish", "wood", "care", "rest"][r(6)];
+      else if (storm && s.dike < storm.need && storm.day - s.day <= 3) pol = "dike";
+      else if (s.food < n.food * 2) pol = "fish";
+      else if (E.alive(s).some((p) => p.hp >= 2)) pol = "care";
+      if (pol !== s.policy) s = E.setPolicy(s, pol).state;
+      s = E.setRation(s, strategy === "random" ? ["full", "normal", "half"][r(3)] : s.food >= n.food * 3 ? "normal" : "half").state;
       s = E.endDay(s).state;
       continue;
     }
     if (s.phase === "night") {
-      const goers = s.people.filter((p) => E.canGo(s, p) && p.stress < 80).sort((a, b) => b.stats.force + b.stats.wits - a.stats.force - a.stats.wits);
-      if (!goers.length || (strategy !== "random" && r(4) === 0)) { s = E.skipNight(s).state; continue; }
-      const hurtMeds = E.alive(s).some((p) => p.hp >= 2) && s.meds < 2;
-      const loc = strategy === "random" ? Object.keys(D.places)[r(5)] : hurtMeds ? "pharmacy" : s.wood < 4 ? "mill" : s.food < 15 ? "store" : ["wreck", "store", "mill"][r(3)];
-      s = E.startExp(s, loc, goers.slice(0, strategy === "random" ? 1 + r(2) : 2).map((p) => p.id)).state;
+      const rec = E.recommend(s);
+      if (!rec.party.length || (strategy !== "random" && r(5) === 0)) { s = E.skipNight(s).state; continue; }
+      if (strategy === "random") {
+        const goers = s.people.filter((p) => E.canGo(s, p));
+        s = E.startExp(s, Object.keys(D.places)[r(5)], goers.slice(0, 1 + r(2)).map((p) => p.id)).state;
+      } else s = E.startExp(s, rec.loc, rec.party).state;
       continue;
     }
     if (s.phase === "exp") {

@@ -30,11 +30,18 @@
   };
   const rations = {
     full: { name: "넉넉히", per: 1, hope: 4, stress: -5 },
-    normal: { name: "보통", per: 0.75, hope: 0, stress: 0 },
+    normal: { name: "보통", per: 0.85, hope: 0, stress: 0 },
     half: { name: "반만", per: 0.5, hope: -3, stress: 8 },
     none: { name: "굶긴다", per: 0, hope: -12, stress: 15 },
   };
   const hpNames = ["건강", "부상", "중상", "위독", "사망"];
+  const hungerNames = ["배부름", "배고픔", "굶주림", "아사 직전"];
+  // 들고 나가면 해당 판정에 +2
+  const tools = {
+    crowbar: { name: "쇠지레", icon: "🪛", desc: "문·선반·잔해를 여는 판정 +2" },
+    knife: { name: "칼", icon: "🔪", desc: "몸싸움 판정 +2" },
+    lamp: { name: "등불", icon: "🏮", desc: "밤에 살피는 판정 +2" },
+  };
   // 밤 탐색 장소
   const places = {
     store: { name: "무너진 창고", icon: "🏚", danger: 1, loot: "식량", desc: "물에 반쯤 잠긴 상점 창고" },
@@ -45,12 +52,12 @@
   };
   // 탐색 장면: 접근법마다 능력치 판정. win/lose: loot {food,wood,meds,hope}, harm(부상 단계), stress, special
   const S = (id, loc, text, approaches) => ({ id, loc, text, approaches });
-  const A = (label, stat, dc, win, lose) => ({ label, stat, dc, win, lose });
+  const A = (label, stat, dc, win, lose, tool) => ({ label, stat, dc, win, lose, tool });
   const scenes = [
     // 창고
     S("st_shelf", "store", "무너진 선반 밑에 쌀자루가 깔려 있다. 천장이 삐걱거린다.", [
-      A("선반을 들어 올린다", "force", 12, { loot: { food: 5 }, text: "쌀자루 두 개를 끌어냈다." }, { harm: 1, loot: { food: 1 }, text: "선반이 무너지며 팔을 짓눌렀다." }),
-      A("받침을 대고 천천히 뺀다", "craft", 13, { loot: { food: 4 }, text: "천장을 받치고 무사히 꺼냈다." }, { stress: 15, text: "천장이 내려앉았다. 겨우 빠져나왔다." }),
+      A("선반을 들어 올린다", "force", 12, { loot: { food: 5 }, text: "쌀자루 두 개를 끌어냈다." }, { harm: 1, loot: { food: 1 }, text: "선반이 무너지며 팔을 짓눌렀다." }, "crowbar"),
+      A("받침을 대고 천천히 뺀다", "craft", 13, { loot: { food: 4 }, tool: "crowbar", text: "천장을 받치던 쇠지레까지 챙겨 나왔다." }, { stress: 15, text: "천장이 내려앉았다. 겨우 빠져나왔다." }),
     ]),
     S("st_rats", "store", "쌀통 주위로 쥐 떼가 들끓는다. 일부는 이미 썩었다.", [
       A("성한 것만 골라낸다", "wits", 12, { loot: { food: 4 }, text: "깨끗한 쌀만 골라 담았다." }, { loot: { food: 2 }, stress: 10, text: "썩은 쌀이 섞였다. 몇 명이 배앓이를 할 것이다." }),
@@ -63,16 +70,16 @@
     ]),
     // 약국
     S("ph_door", "pharmacy", "약국 문이 안에서 잠겼다. 사람의 숨소리가 들린다.", [
-      A("문을 부순다", "force", 13, { loot: { meds: 2 }, text: "문이 부서졌다. 안의 노인은 겁에 질려 도망쳤다." }, { harm: 1, text: "문틀이 무너지며 다쳤다." }),
+      A("문을 부순다", "force", 13, { loot: { meds: 2 }, text: "문이 부서졌다. 안의 노인은 겁에 질려 도망쳤다." }, { harm: 1, text: "문틀이 무너지며 다쳤다." }, "crowbar"),
       A("말을 건다", "talk", 12, { loot: { meds: 2, hope: 3 }, text: "약사가 문을 열었다. 약을 나눠 줬다." }, { stress: 10, text: "“꺼져!” 대답 대신 깨진 병이 날아왔다." }),
       A("뒷창문을 찾는다", "wits", 13, { loot: { meds: 3 }, text: "뒷창문으로 들어가 선반을 털었다." }, { harm: 1, text: "유리 조각에 손이 찢겼다." }),
     ]),
     S("ph_shelf", "pharmacy", "물에 젖은 약병들. 이름표가 다 지워졌다.", [
-      A("냄새와 색으로 가려낸다", "wits", 14, { loot: { meds: 3 }, text: "쓸 만한 약을 가려냈다." }, { loot: { meds: 1 }, harm: 1, text: "잘못 맛본 약에 속이 뒤집혔다." }),
+      A("냄새와 색으로 가려낸다", "wits", 14, { loot: { meds: 3 }, text: "쓸 만한 약을 가려냈다." }, { loot: { meds: 1 }, harm: 1, text: "잘못 맛본 약에 속이 뒤집혔다." }, "lamp"),
       A("서랍째 챙긴다", "craft", 12, { loot: { meds: 2 }, text: "서랍을 뜯어 통째로 챙겼다." }, { stress: 10, text: "서랍이 물에 불어 열리지 않았다." }),
     ]),
     S("ph_rival", "pharmacy", "도윤의 사병 두 명이 먼저 와서 약을 쓸어 담고 있다.", [
-      A("정면으로 덤빈다", "force", 15, { loot: { meds: 4, hope: 5 }, text: "사병들을 쫓아냈다. 그들의 약까지 챙겼다." }, { harm: 2, text: "몽둥이에 맞아 쓰러졌다." }),
+      A("정면으로 덤빈다", "force", 15, { loot: { meds: 4, hope: 5 }, tool: "knife", text: "사병들을 쫓아냈다. 그들의 약과 칼까지 챙겼다." }, { harm: 2, text: "몽둥이에 맞아 쓰러졌다." }, "knife"),
       A("도윤 이름을 팔아 속인다", "talk", 14, { loot: { meds: 3 }, text: "“도윤 어른이 더 가져오래.” 사병들이 약을 넘겼다." }, { harm: 1, stress: 10, text: "거짓말이 들통났다." }),
       A("숨어서 기다린다", "wits", 12, { loot: { meds: 1 }, text: "사병들이 떠난 뒤 남은 걸 주웠다." }, { stress: 15, text: "들킬 뻔했다. 심장이 아직도 뛴다." }),
     ]),
@@ -82,13 +89,13 @@
       A("갈고리를 만들어 건진다", "craft", 11, { loot: { wood: 4 }, text: "물에 들어가지 않고 건져 냈다." }, { loot: { wood: 1 }, text: "갈고리가 부러졌다." }),
     ]),
     S("ml_saw", "mill", "목재소 기계 밑에 마른 장작이 보인다. 기계가 기울어 있다.", [
-      A("기계를 받치고 꺼낸다", "craft", 13, { loot: { wood: 6 }, text: "마른 장작이다. 며칠은 따뜻하겠다." }, { harm: 2, text: "기계가 넘어졌다." }),
+      A("기계를 받치고 꺼낸다", "craft", 13, { loot: { wood: 6 }, text: "마른 장작이다. 며칠은 따뜻하겠다." }, { harm: 2, text: "기계가 넘어졌다." }, "crowbar"),
       A("포기하고 젖은 판자만 줍는다", "wits", 8, { loot: { wood: 2 }, text: "젖은 판자라도 없는 것보다 낫다." }, { loot: { wood: 1 }, text: "거의 건진 게 없다." }),
     ]),
     // 쌀 창고
     S("gr_guard", "granary", "횃불 아래 도윤의 사병이 졸고 있다. 창고 문은 쇠사슬로 묶였다.", [
-      A("사슬을 몰래 끊는다", "craft", 14, { loot: { food: 8 }, text: "사슬이 끊어졌다. 쌀가마를 둘이나 메고 나왔다." }, { harm: 1, rivalAlert: true, text: "쇳소리에 사병이 깼다. 화살이 날아왔다." }),
-      A("사병을 덮친다", "force", 14, { loot: { food: 9 }, rivalAlert: true, text: "사병을 묶고 창고를 털었다. 도윤이 가만있지 않을 것이다." }, { harm: 2, text: "사병이 먼저 칼을 뽑았다." }),
+      A("사슬을 몰래 끊는다", "craft", 14, { loot: { food: 8 }, text: "사슬이 끊어졌다. 쌀가마를 둘이나 메고 나왔다." }, { harm: 1, rivalAlert: true, text: "쇳소리에 사병이 깼다. 화살이 날아왔다." }, "crowbar"),
+      A("사병을 덮친다", "force", 14, { loot: { food: 9 }, rivalAlert: true, text: "사병을 묶고 창고를 털었다. 도윤이 가만있지 않을 것이다." }, { harm: 2, text: "사병이 먼저 칼을 뽑았다." }, "knife"),
       A("사병에게 술을 먹여 꾄다", "talk", 13, { loot: { food: 6 }, text: "취한 사병이 문을 열어 줬다." }, { stress: 15, rivalAlert: true, text: "사병이 비웃으며 호루라기를 불었다." }),
     ]),
     S("gr_inside", "granary", "창고 안. 쌀이 산처럼 쌓였다. 도윤은 이걸 쥐고 사람들이 굶는 걸 지켜봤다.", [
@@ -97,7 +104,7 @@
     ]),
     // 배
     S("wr_hold", "wreck", "기울어진 배의 화물칸. 상자들이 물에 떠 있다.", [
-      A("물속으로 잠수한다", "force", 13, { loot: { food: 3, meds: 1, wood: 2 }, text: "상자 몇 개를 건져 올렸다." }, { harm: 1, text: "숨이 막혀 겨우 올라왔다." }),
+      A("물속으로 잠수한다", "force", 13, { loot: { food: 3, meds: 1, wood: 2 }, tool: "lamp", text: "상자 몇 개와 기름 등불을 건져 올렸다." }, { harm: 1, text: "숨이 막혀 겨우 올라왔다." }),
       A("떠 있는 것만 건진다", "wits", 10, { loot: { wood: 3 }, text: "떠 있는 상자를 끌어왔다." }, { text: "쓸 만한 건 없었다." }),
     ]),
     S("wr_radio", "wreck", "선장실에 무전기가 있다. 배터리가 거의 없다.", [
@@ -108,10 +115,30 @@
       A("끌어낸다", "force", 13, { join: true, loot: { hope: 6 }, text: "선원을 구했다. 그는 당신을 따르겠다고 했다." }, { harm: 1, text: "배가 기울며 함께 끼일 뻔했다." }),
       A("두고 간다", "wits", 5, { stress: 20, text: "신음 소리가 멀어졌다. 아무도 그 이야기를 꺼내지 않는다." }, { stress: 20, text: "신음 소리가 멀어졌다." }),
     ]),
+    S("st_cellar", "store", "창고 바닥에 지하실 문이 있다. 물이 반쯤 찼다.", [
+      A("잠수해서 뒤진다", "force", 14, { loot: { food: 6, wood: 2 }, text: "물속에서 소금 절인 생선 단지를 건졌다." }, { harm: 1, stress: 10, text: "숨이 막혀 겨우 올라왔다." }),
+      A("문짝을 뜯어 물을 뺀다", "craft", 14, { loot: { food: 5 }, text: "물이 빠지자 곡식 자루가 드러났다." }, { stress: 10, text: "문짝이 꿈쩍도 안 했다." }, "crowbar"),
+    ]),
+    S("ml_dog", "mill", "목재소 안에서 굶주린 개 떼가 으르렁거린다.", [
+      A("판자를 휘둘러 쫓는다", "force", 13, { loot: { wood: 4 }, text: "개들이 꼬리를 말고 도망쳤다." }, { harm: 1, text: "다리를 물렸다." }, "knife"),
+      A("먹을 걸 던져 주고 지나간다 (식량 1)", "wits", 9, { loot: { wood: 3, food: -1 }, text: "개들이 먹이에 정신 팔린 사이 판자를 챙겼다." }, { loot: { food: -1 }, text: "먹이만 뺏기고 쫓겨났다." }),
+    ]),
+    S("ph_owner", "pharmacy", "약국 주인 노인이 상처를 입고 쓰러져 있다.", [
+      A("치료해 주고 약을 얻는다", "wits", 12, { loot: { meds: 3, hope: 5 }, text: "노인이 숨겨 둔 약상자를 내줬다." }, { stress: 10, text: "노인은 끝내 눈을 감았다." }),
+      A("노인을 두고 약만 챙긴다", "wits", 8, { loot: { meds: 2, hope: -5 }, stress: 15, text: "노인의 눈이 당신을 따라왔다." }, { loot: { meds: 1 }, stress: 15, text: "서두르다 약병을 깨뜨렸다." }),
+    ]),
+    S("wr_crate", "wreck", "갑판 위에 단단히 묶인 상자. 물살에 배가 흔들린다.", [
+      A("밧줄을 끊고 연다", "craft", 13, { loot: { food: 4, meds: 1 }, tool: "knife", text: "통조림과 약, 선원의 칼이 들어 있었다." }, { harm: 1, text: "배가 기울며 상자에 깔렸다." }, "knife"),
+      A("상자째 끌고 온다", "force", 14, { loot: { food: 5 }, text: "무겁지만 끌고 왔다." }, { lose: 0.5, stress: 10, text: "상자가 물에 빠졌다." }),
+    ]),
+    S("gr_dog", "granary", "창고 뒤편에 도윤의 사냥개가 묶여 있다.", [
+      A("조용히 돌아 들어간다", "wits", 14, { loot: { food: 6 }, text: "개가 잠든 사이 쌀을 퍼 왔다." }, { harm: 1, rivalAlert: true, text: "개가 짖었다." }, "lamp"),
+      A("개를 제압한다", "force", 15, { loot: { food: 7 }, text: "개를 묶어 두고 창고를 털었다." }, { harm: 2, text: "개에게 팔을 물어뜯겼다." }, "knife"),
+    ]),
     // 어디서나
     S("any_current", null, "돌아가는 길, 골목이 급류로 변했다.", [
       A("헤엄쳐 건넌다", "force", 12, { text: "무사히 건넜다." }, { harm: 1, lose: 0.5, text: "물살에 휩쓸렸다. 짐 절반을 잃었다." }),
-      A("지붕을 타고 돌아간다", "wits", 12, { text: "지붕 위로 돌아왔다." }, { stress: 10, text: "길을 잃고 새벽까지 헤맸다." }),
+      A("지붕을 타고 돌아간다", "wits", 12, { text: "지붕 위로 돌아왔다." }, { stress: 10, text: "길을 잃고 새벽까지 헤맸다." }, "lamp"),
     ]),
     S("any_body", null, "물 위에 떠 있는 시신. 아는 얼굴이다.", [
       A("건져서 묻어 준다", "talk", 10, { loot: { hope: 4 }, stress: 5, text: "짧은 기도를 했다. 마음이 조금 가라앉았다." }, { stress: 15, text: "손이 떨려 끝내 건지지 못했다." }),
@@ -173,7 +200,7 @@
     riot: { title: "폭동", icon: "🔥", text: "희망이 꺼진 밤, 사람들이 당신을 끌어내렸다." },
     lost: { title: "아무도 남지 않았다", icon: "🌊", text: "물은 모든 것을 삼켰다." },
   };
-  const api = { stats, people, child, jobs, rations, hpNames, places, scenes, events, endings };
+  const api = { stats, people, child, jobs, rations, hpNames, hungerNames, tools, places, scenes, events, endings };
   if (typeof module !== "undefined") module.exports = api;
   root.SurviveData = api;
 })(globalThis);
