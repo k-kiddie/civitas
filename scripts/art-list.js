@@ -10,7 +10,7 @@ const out = [];
 out.push("# 그림 목록 (자동 생성)", "", "`node scripts/art-list.js`로 다시 만든다. ✅는 이미 있는 파일. 없는 그림은 게임이 기본 그림(장소·분위기 그림)으로 대신 보여 주므로 한 장씩 넣어도 된다.", "",
   "- 장면 그림: `assets/scenarios/<재난>/scenes/<이름>.webp` · 가로 16:9 · 1024×576 이상 · 위쪽이 그림의 중심(아래 30%는 글 뒤로 어둡게 스며든다)",
   "- 장비 그림: `assets/gear/<이름>.webp` · 정사각 512×512 · 어두운 배경에 물건 하나",
-  "- 그림체: 지금 있는 유화풍 그대로. 글자·로고 넣지 않기.", "");
+  "- 그림체: 극 빙하기 장면은 극한 추위와 생존 상황이 드러나는 사실적인 실사풍. 장비와 그 외 그림은 기존 유화풍. 글자·로고 넣지 않기.", "");
 const PRIORITY = [
   ["극 빙하기 분위기", ["dawn_quiet", "dawn_storm", "dawn_raid", "dawn_death", "dawn_sick", "dawn_cold", "act1", "act2", "act3"].map((n) => `scenarios/iceage/scenes/${n}.webp`)],
   ["극 빙하기 이야기", ["s_map", "s_sign", "s_sled", "rival_r1", "rival_r2", "rival_r3", "f_cross", "f_wolf_block", "f_train", "ending_missed"].map((n) => `scenarios/iceage/scenes/${n}.webp`)],
