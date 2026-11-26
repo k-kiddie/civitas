@@ -252,3 +252,5 @@ small.why { color: #b98a72 !important; }
 .find > small:last-child { color: var(--mute); font-size: 12px; }
 h3 small { letter-spacing: 0; font-weight: 400; }
 .gicon { float: right; width: 64px; height: 64px; background-size: cover; background-position: center; margin-left: 12px; }
+.bag li { overflow: hidden; }
+.gthumb { float: left; width: 44px; height: 44px; margin: 2px 12px 0 0; background-size: cover; background-position: center; border-radius: 2px; }
