@@ -26,8 +26,8 @@
     const s = state, w = words(), S = E.scen(s), t = E.nextThreat(s);
     const tools = s.gear.map((g) => `<span class="tool" title="${esc(E.N.gear[g.k].desc)}">${esc(E.gearName(g))}</span>`).join("");
     return `<header><div class="top"><span><b>${S.name}</b>  ${s.day}일째</span><span>${btn(`기록${s.memorial.length ? ` · 잃은 이 ${s.memorial.length}` : ""}`, "sheet", 'data-sheet="memorial" class="mini"')} ${btn("새로", "sheet", 'data-sheet="new" class="mini"')}</span></div>
-    <div class="res"><div class="r ${s.food < E.alive(s).length ? "low" : ""}"><small>${w.food}</small><b>${s.food}</b></div><div class="r ${s.wood < 2 ? "low" : ""}"><small>${w.wood}</small><b>${s.wood}</b></div><div class="r ${s.meds === 0 ? "low" : ""}"><small>${w.meds}</small><b>${s.meds}</b></div><div class="r ${s.hope < 25 ? "low" : ""}"><small>희망</small><b>${s.hope}</b><i class="hbar"><i style="width:${s.hope}%"></i></i></div></div>
-    <div class="chips">${E.storyGoal(s) ? `<span class="chip goal">${esc(E.storyGoal(s))}</span>` : `<span class="chip goal">🚩 ${w.goal} ${s.rescueDay - 1}~${s.rescueDay + 1}일</span>`}${t ? `<span class="chip threat ${t.day - s.day <= 1 ? "urgent" : ""}">⚠ ${w.threat} ${t.day - s.day <= 0 ? "오늘 밤" : t.day - s.day + "일 뒤"}${s.flags.braced ? " · 대비함" : ""}</span>` : ""}${tools}</div></header>`;
+    <div class="res"><div class="r ${s.food < E.alive(s).length ? "low" : ""}"><small>${w.food}</small><b>${s.food}</b></div><div class="r ${s.wood < 2 ? "low" : ""}"><small>${w.wood}</small><b>${s.wood}</b></div><div class="r ${s.meds === 0 ? "low" : ""}"><small>${w.meds}</small><b>${s.meds}</b></div><div class="r"><small>부품</small><b>${s.parts || 0}</b></div><div class="r ${s.hope < 25 ? "low" : ""}"><small>희망</small><b>${s.hope}</b><i class="hbar"><i style="width:${s.hope}%"></i></i></div></div>
+    <div class="chips">${E.storyGoal(s) ? `<span class="chip goal">${esc(E.storyGoal(s))}</span>` : `<span class="chip goal">🚩 ${w.goal} ${s.rescueDay - 1}~${s.rescueDay + 1}일</span>`}${t ? `<span class="chip threat ${t.day - s.day <= 1 ? "urgent" : ""}">⚠ ${w.threat} ${t.day - s.day <= 0 ? "오늘 밤" : t.day - s.day + "일 뒤"}${s.flags.braced ? " · 대비함" : ""}</span>` : ""}</div></header>`;
   }
   // ── 저녁: 한 화면에서 다 정한다 ──
   const RL = () => ({ explore: { icon: "🌙", name: "밤 탐색" }, scout: { icon: "👁", name: "정찰" }, ...E.ROLES });
@@ -47,7 +47,7 @@
       guard: guards.length ? `이미 ${guards.map((x) => x.name).join("·")}이(가) 지킨다.` : `${st("force")} — 아무도 지키지 않으면 도둑이 들 수 있다. 습격도 이 사람이 막는다.`,
       nurse: patients.length ? `${patients.map((x) => `${x.name}(${HP[x.hp]})`).join(", ")}을(를) 돌본다.${E.meta(s, id).care ? " 간호 경험이 있어 둘까지 확실히." : ""}` : "돌볼 환자가 없다.",
       forage: `${st("wits")} — 성공하면 ${w.food} 1~2.${s.scenario === "iceage" ? " 밖이라 동상을 입을 수 있다." : ""}`,
-      fix: `${st("craft")} — 성공하면 오늘 밤 ${w.wood}을(를) 쓰지 않는다.`,
+      fix: s.plan?.craft ? `${st("craft")} — 오늘 밤 '${E.recipesFor(s).find((r) => r.id === s.plan.craft)?.name}'을(를) 만든다.` : `${st("craft")} — 성공하면 오늘 밤 ${w.wood}을(를) 쓰지 않는다. 아래 '만들기'에서 고르면 대신 물건을 만든다.`,
       rest: `스트레스 ${p.stress} → 크게 줄어든다.${p.hp === 1 ? " 상처가 아물 수 있다." : ""}`,
     };
     const opts = Object.entries(RL()).map(([k, d]) => {
@@ -76,7 +76,7 @@
         const memo = info.known ? `<span class="memo">📝 ${esc(info.known)}</span>${info.scouted ? `<br><span class="scouted">👁 정찰함: 길을 안다 (첫 판정 +2, 조용히 시작)</span>` : ""}` : "";
         const rumor = info.rumor ? `<span class="rumor">🗣 ${esc(info.rumor)}</span>` : "";
         const hz = info.hazard ? `<span class="hz ${info.guarded ? "ok" : ""}">${info.hazard.icon} ${info.hazard.name}${info.guarded ? " (막을 장비 있음)" : " — 막을 장비 없음"}</span>` : "";
-        return btn(`${A.scene(sc(), k, "thumb")}<b>${pl.name}</b><small>${pl.loot} · 위험 ${["", "낮음", "보통", "높음"][pl.danger]}${hz ? "<br>" + hz : ""}<br>${memo || rumor || '<span class="unknown">??? 가 본 적 없다</span>'}${memo && rumor ? "<br>" + rumor : ""}</small>`, "place", `data-k="${k}" class="place ${plan.place === k ? "on" : ""}"`);
+        return btn(`${A.scene(sc(), k, "thumb")}<b>${pl.name}</b><small>${pl.loot} · 위험 ${["", "낮음", "보통", "높음"][pl.danger]}${info.gearHere.length ? `<br><span class="gearhere">뒤지면 나올 만한 것: ${esc(info.gearHere.join(" · "))}</span>` : ""}${hz ? "<br>" + hz : ""}<br>${memo || rumor || '<span class="unknown">??? 가 본 적 없다</span>'}${memo && rumor ? "<br>" + rumor : ""}</small>`, "place", `data-k="${k}" class="place ${plan.place === k ? "on" : ""}"`);
       }).join("");
       night = plan.send.length
         ? `<h3>어디로 보낼까</h3><div class="places">${places}</div>`
@@ -84,7 +84,11 @@
     }
     const roleSum = !plan || finale ? "" : ["guard", "nurse", "forage", "fix"].map((r) => { const who = E.alive(s).filter((p) => E.roleOf(s, p.id) === r && !p.child); return who.length ? `${E.ROLES[r].icon}${who.map((p) => esc(p.name)).join("·")}` : r === "guard" ? `<b class="warn">🛡 아무도 안 지킴</b>` : ""; }).filter(Boolean).join(" ");
     const go = !plan || finale ? "" : (plan.scout ? `👁 ${esc(E.byId(s, plan.scout).name)} 정찰 · ` : "") + (plan.send.length ? (plan.place ? `${plan.send.map((id) => esc(E.byId(s, id).name)).join("·")} → ${E.scen(s).places[plan.place].name}` : "보낼 곳을 고르세요") : "아무도 나가지 않는다");
-    return `<main><p class="hint">${finale ? "마지막 저녁." : "저녁. 누구를 먹일지, 누구에게 약을 쓸지, 그리고 각자 오늘 밤 무엇을 맡을지 정하세요."}</p><div class="plist">${people}</div>${night}</main>
+    const bag = s.gear.length ? s.gear.map((g) => { const d = E.N.gear[g.k], who = plan?.carry?.[g.uid] && plan.send.includes(plan.carry[g.uid]) ? E.byId(s, plan.carry[g.uid]).name : ""; return `<li><b>${esc(d.name)}</b>${d.uses ? ` <small>${g.u}회 남음</small>` : ""}${who ? ` <small class="who">— ${esc(who)}이(가) 든다</small>` : ""}<br><small>${esc(d.desc)}</small></li>`; }).join("") : `<li class="muted">가진 장비가 없다. 밤에 나가 주변을 뒤지거나, 부품으로 만들 수 있다.</li>`;
+    const recs = plan && !finale ? E.recipesFor(s).map((r) => { const ok = E.recipeOk(s, r.id), on = plan.craft === r.id; return btn(`<span>${esc(r.name)}${on ? " ✔" : ""}</span><small>부품 ${r.parts}${r.wood ? ` · ${w.wood} ${r.wood}` : ""} — ${esc(r.desc)}</small>`, "craft", `data-r="${r.id}" class="ropt ${on ? "on" : ""}" ${ok || on ? "" : "disabled"}`); }).join("") : "";
+    const crafter = E.alive(s).find((p) => E.roleOf(s, p.id) === "fix");
+    const gearSec = `<h3>가진 것</h3><ul class="bag">${bag}</ul>${recs ? `<h3>만들기 <small>부품 ${s.parts || 0}개${plan.craft ? ` · ${crafter ? esc(crafter.name) + "이(가) 밤새 만든다" : "수리·만들기를 맡을 사람이 없다"}` : ""}</small></h3><div class="ropts">${recs}</div>` : ""}`;
+    return `<main><p class="hint">${finale ? "마지막 저녁." : "저녁. 누구를 먹일지, 누구에게 약을 쓸지, 그리고 각자 오늘 밤 무엇을 맡을지 정하세요."}</p><div class="plist">${people}</div>${night}${gearSec}</main>
     <section class="bar"><div class="fc">오늘 밤: ${w.food} −${f ? f.fed : 0}${f && f.hungry ? ` (${f.hungry}명 굶음)` : ""} · ${w.wood} −1 · ${roleSum}${go ? " · " + go : ""}</div>${btn(finale ? "선로로 떠난다" : "밤이 된다", "night", 'class="primary"')}</section>`;
   }
   function personSheet(id) {
@@ -110,9 +114,9 @@
       const canDeeper = anyAlive && e.step < E.MAX_STEP && !e.isChase && !e.chaseNext;
       const dice = r.auto ? "" : `<div class="roll-line"><span class="d20 ${r.crit ? "crit" : r.fumble ? "fumble" : ""}">${r.roll}</span><span class="calc">${r.parts.map(([n, v]) => ` ${v >= 0 ? "+" : "−"} ${esc(n)} ${Math.abs(v)}`).join("")} = <b>${r.total}</b> <small>vs ${r.dc}</small></span></div><div class="verdict">${r.crit ? "대성공" : r.fumble ? "대실패" : r.success ? "성공" : "실패"}</div>`;
       const deeper = canDeeper ? (refuser && refuser.alive ? btn(`더 들어간다 <small>${esc(refuser.name)}: “난 더 못 가…” — 강행하면 원망을 산다</small>`, "deeper", 'class="secondary warn"') : btn("더 들어간다 <small>더 많이, 더 위험하게, 더 시끄럽게</small>", "deeper", 'class="secondary"')) : "";
-      const rum = anyAlive && !r.rummaged && !e.isChase && !e.finale ? btn(`🔦 주변을 더 뒤진다 <small>장비나 물자가 있을지도 · 소리가 난다</small>`, "rummage", 'class="secondary"') : "";
+      const rum = anyAlive && !r.rummaged && !e.isChase && !e.finale ? btn(`주변을 더 뒤진다 <small>부품이나 장비가 나올 수 있다${(E.N.placeGear[s.scenario]?.[e.loc] || []).length ? ` (여기선 ${(E.N.placeGear[s.scenario][e.loc]).map((k) => E.N.gear[k].name).join("·")})` : ""} · 소리가 난다</small>`, "rummage", 'class="secondary"') : "";
       const homeLabel = !anyAlive ? "…" : e.chaseNext ? "돌아간다… <small>뒤에서 무언가 온다</small>" : "돌아간다";
-      return `<div class="veil night"><section class="modal result ${r.success ? "win" : "lose"} ${r.crit ? "crit" : ""} ${r.success ? "" : "flash"}" role="dialog" aria-modal="true">${head}<p class="picked">“${esc(r.approach)}” — ${esc(r.roller)}</p>${dice}${prose([r.text])}${r.notes.map((n) => `<p class="note">${esc(n)}</p>`).join("")}${rum}${e.finale ? btn(e.queue.length && anyAlive ? "계속 간다" : "…", "home", 'class="primary"') : deeper + btn(homeLabel, "home", 'class="primary"')}</section></div>`;
+      return `<div class="veil night"><section class="modal result ${r.success ? "win" : "lose"} ${r.crit ? "crit" : ""} ${r.success ? "" : "flash"}" role="dialog" aria-modal="true">${head}<p class="picked">“${esc(r.approach)}” — ${esc(r.roller)}</p>${dice}${prose([r.text])}${r.find ? `<div class="find"><small>찾았다</small><b>${esc(E.N.gear[r.find.k].name)}</b><p>${esc(r.find.text)}</p><small>${esc(E.N.gear[r.find.k].desc)}</small></div>` : ""}${r.notes.map((n) => `<p class="note">${esc(n)}</p>`).join("")}${rum}${e.finale ? btn(e.queue.length && anyAlive ? "계속 간다" : "…", "home", 'class="primary"') : deeper + btn(homeLabel, "home", 'class="primary"')}</section></div>`;
     }
     const FEEL = { "확실하다": "sure", "해볼 만하다": "good", "반반이다": "mid", "위험하다": "bad", "무모하다": "awful" };
     const choices = v.approaches.map((a) => btn(`${a.tag ? `<em class="req ${a.locked ? "no" : "ok"}">[${esc(a.tag)}]</em> ` : ""}<span>${esc(a.label)}</span>${a.locked ? `<small class="why">${esc(a.locked)}</small>` : `<small><b class="feel f-${FEEL[a.feel]}">${a.feel}</b>${a.auto ? "" : ` · ${D.stats[a.stat].icon} ${esc(a.rollerName)}`}${a.tool ? ` · <span class="${a.hasTool ? "has" : "no"}">${E.N.gear[a.tool]?.icon || ""} ${a.hasTool ? "도구 있음" : "도구가 있으면 나을 텐데"}</span>` : ""}${a.hint ? `<br><i class="whisper">${esc(v.hinter)}: ${esc(a.hint)}</i>` : ""}</small>`}`, "approach", `data-i="${a.i}" ${a.locked ? "disabled" : ""} class="${a.locked ? "locked" : a.tag ? "special" : ""}"`)).join("");
@@ -219,6 +223,7 @@
     else if (k === "scout") commit(E.toggleScout(state, a.dataset.id));
     else if (k === "role") { if (commit(E.setRole(state, a.dataset.id, a.dataset.r))) { sheet = null; render(); } }
     else if (k === "rummage") commit(E.rummage(state));
+    else if (k === "craft") commit(E.setCraft(state, a.dataset.r));
     else if (k === "carry") commit(E.toggleCarry(state, a.dataset.uid, a.dataset.id));
     else if (k === "place") commit(E.setPlace(state, a.dataset.k));
     else if (k === "rec") {

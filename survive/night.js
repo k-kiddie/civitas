@@ -22,7 +22,26 @@
     boat: { name: "고무보트", icon: "🛶", desc: "물길 위험을 막는다 · 가져오는 양 ×1.3", guard: "water", carry: 1.3, scen: "flood" },
     boots: { name: "고무장화", icon: "👢", desc: "함정(감전·급류) 장면 +2", tag: "trap", scen: "flood" },
     torch: { name: "방수 손전등", icon: "🔦", desc: "살피기 +1 · 어둠 판정 +2 · 닳지 않는다", wits: 1, alias: "lamp", scen: "flood" },
+    trap: { name: "덫", icon: "🪤", desc: "집에서 먹을 것 구하기 +3", forage: 3 },
   };
+  // 장소마다 뒤지면 나올 만한 장비 (장소 카드에도 보여 준다)
+  const placeGear = {
+    nuclear: { mart: ["pack", "knife"], tunnel: ["lamp", "rope"], hospital: ["medkit", "gasmask"], depot: ["pistol", "crowbar", "geiger"], raider: ["pistol", "knife", "pack"] },
+    iceage: { village: ["rope", "furcoat", "trap"], cave: ["lamp", "crowbar"], plane: ["medkit", "crowbar", "pack"], station: ["snowshoe", "lamp", "medkit"], camp: ["rifle", "knife", "trap"] },
+    flood: { store: ["boots", "pack"], pharmacy: ["medkit", "torch"], mill: ["rope", "crowbar"], granary: ["knife", "pack"], wreck: ["boat", "rope"] },
+  };
+  // 부품으로 만들기 (저녁에 '수리·만들기'를 맡은 사람이 밤새 만든다)
+  const recipes = [
+    { id: "bandage", name: "붕대 감기", parts: 3, desc: "약 1 대신. 다친 사람 하나를 한 단계 낫게 한다.", make: { meds: 1 } },
+    { id: "rope", name: "밧줄 꼬기", parts: 2, desc: "밧줄 하나.", make: { gear: "rope" } },
+    { id: "knife", name: "칼 갈기", parts: 2, desc: "칼 하나.", make: { gear: "knife" } },
+    { id: "trap", name: "덫 만들기", parts: 3, desc: "덫 하나. 집에서 먹을 것 구하기 +3.", make: { gear: "trap" } },
+    { id: "oil", name: "등불 기름 채우기", parts: 1, wood: 1, desc: "등불 기름 +3.", make: { refill: "lamp" } },
+    { id: "snowshoe", name: "설피 엮기", parts: 3, scen: "iceage", desc: "설피 하나.", make: { gear: "snowshoe" } },
+    { id: "sled", name: "썰매 짜기", parts: 6, scen: "iceage", desc: "썰매. 걷지 못하는 사람도 데려갈 수 있다.", make: { prog: "sled" } },
+    { id: "mask", name: "방독면 필터 갈기", parts: 3, scen: "nuclear", desc: "방독면 하나.", make: { gear: "gasmask" } },
+    { id: "boots", name: "고무장화 때우기", parts: 2, scen: "flood", desc: "고무장화 하나.", make: { gear: "boots" } },
+  ];
   const startGear = { nuclear: ["crowbar", "knife", "lamp", "rope", "gasmask"], iceage: ["crowbar", "knife", "lamp", "rope", "snowshoe"], flood: ["crowbar", "knife", "lamp", "rope", "boots"] };
   // 장소 위험: 막는 장비가 없으면 장면마다 누군가 다칠 수 있다
   const hazards = {
@@ -258,7 +277,7 @@
       ]),
     ],
   };
-  const api = { KINDS, gear, startGear, hazards, placeHazard, common, chase, revisit, extra };
+  const api = { KINDS, gear, startGear, hazards, placeHazard, placeGear, recipes, common, chase, revisit, extra };
   root.SurviveNight = api;
   if (typeof module !== "undefined") module.exports = api;
 })(globalThis);

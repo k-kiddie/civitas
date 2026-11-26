@@ -189,7 +189,7 @@
 
   // ── ❄ 극 빙하기 ──
   const iceage = {
-    id: "iceage", name: "극 빙하기", icon: "❄", level: "어려움", start: { food: 11, wood: 7, meds: 2 }, tagline: "영하 60도, 눈에 묻힌 연구 기지",
+    id: "iceage", name: "극 빙하기", icon: "❄", level: "어려움", start: { food: 10, wood: 7, meds: 1 }, tagline: "영하 60도, 눈에 묻힌 연구 기지",
     words: { food: "식량", wood: "연료", meds: "의약품", threat: "눈보라", goal: "남행 열차", rival: "늑대단", shelter: "연구 기지" },
     intro: [
       "태양이 흐려진 지 세 해. 북반구는 얼음에 덮였다.",
@@ -244,7 +244,7 @@
   };
   // ── 🌊 대홍수 (기존 콘텐츠를 4인 구조로) ──
   const flood = {
-    id: "flood", name: "대홍수", icon: "🌊", level: "보통", start: { food: 8, wood: 5, meds: 1 }, tagline: "강둑이 터진 항구, 물에 잠긴 창고 2층",
+    id: "flood", name: "대홍수", icon: "🌊", level: "보통", start: { food: 7, wood: 5, meds: 1 }, tagline: "강둑이 터진 항구, 물에 잠긴 창고 2층",
     words: { food: "식량", wood: "땔감", meds: "약", threat: "폭우", goal: "구조선", rival: "선주 도윤", shelter: "창고 2층" },
     intro: [
       "강둑이 터졌다. 항구가 하룻밤 새 물에 잠겼다.",
