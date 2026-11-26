@@ -57,8 +57,8 @@ function bot(strategy, seed, scenario = "random") {
     }
     if (s.phase === "exp") {
       if (!s.exp.result) {
-        const v = E.sceneView(s);
-        const a = strategy === "random" ? v.approaches[r(v.approaches.length)] : v.approaches.slice().sort((x, y) => y.p - x.p)[0];
+        const v = E.sceneView(s), open = v.approaches.filter((x) => !x.locked);
+        const a = strategy === "random" ? open[r(open.length)] : open.slice().sort((x, y) => y.p - x.p)[0];
         s = E.choose(s, a.i).state;
       } else s = E.proceed(s, strategy === "random" ? r(2) === 0 : s.exp.result.success && s.exp.step < 1).state;
       continue;

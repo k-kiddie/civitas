@@ -25,7 +25,7 @@ const URL = process.env.CIVITAS_TEST_URL || "http://127.0.0.1:8080/civitas/survi
         if (await has(".roll")) { await page.waitForTimeout(1300); continue; }
         if (await has("[data-action=dismiss]")) { if (await has(".report")) await shot("report"); await page.click("[data-action=dismiss]"); continue; }
         if (await has("[data-action=event]:not(:disabled)")) { await shot("event"); await page.locator("[data-action=event]:not(:disabled)").first().click(); continue; }
-        if (await has("[data-action=approach]")) { await shot("scene"); await page.locator("[data-action=approach]").first().click(); continue; }
+        if (await has("[data-action=approach]:not(:disabled)")) { await shot("scene"); await page.locator("[data-action=approach]:not(:disabled)").first().click(); continue; }
         if (await has("[data-action=home]")) { await shot("result"); await page.click("[data-action=home]"); continue; }
         if (await has("[data-action=night]")) {
           await shot("evening");

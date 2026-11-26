@@ -218,75 +218,7 @@
         AUTO("돌아선다", { stress: 10, text: "그들 중 하나는 어제 본 얼굴이었다." }),
       ]),
     ],
-    iceage: [
-      S("i_cellar", "village", "trap", "지하 저장고 문. 계단이 얼음으로 덮여 미끄럽다. 아래는 깜깜하다.", [
-        A("밧줄을 매고 내려간다", "craft", 12, { loot: { food: 5 }, text: "얼어붙은 감자 자루. 이 정도면 며칠은 간다." }, { harm: 1, text: "밧줄이 끊어졌다." }, "rope"),
-        A("미끄러지듯 뛰어내린다", "force", 13, { loot: { food: 4 }, text: "엉덩이로 미끄러져 내려갔다. 자루를 던져 올렸다." }, { harm: 1, stress: 10, text: "얼음 계단에 머리를 박았다." }),
-      ]),
-      S("i_coats", "village", "search", "옷장 안에 두꺼운 털옷이 걸려 있다. 옷장 앞에는 얼어붙은 주인이 앉아 있다.", [
-        A("털옷을 벗겨 낸다", "wits", 10, { gear: "furcoat", stress: 10, text: "옷은 따뜻했다. 주인은 이제 필요 없다." }, { stress: 20, text: "주인의 팔이 부러지는 소리. 손을 놓았다." }),
-        A("주인과 함께 묻어 주고 옷을 받는다", "talk", 13, { gear: "furcoat", loot: { hope: 4 }, text: "짧게 기도했다. 털옷을 걸쳤다." }, { stress: 10, text: "땅이 얼어 묻을 수 없었다. 옷도 두고 왔다." }),
-      ]),
-      M("i_smoke", "village", "meet", "마을 끝 집 굴뚝에서 연기가 오른다. 누군가 살아 있다.", [
-        A("문을 두드린다", "talk", 12, null, null, null, { noise: 2 }),
-        A("창문으로 몰래 들여다본다", "wits", 12, null, null, "lamp", { noise: 0 }),
-        AUTO("다가가지 않는다", { text: "연기는 밤새 피어올랐다." }),
-      ], [
-        { reveal: "젊은 엄마와 아기. 장작이 다 떨어져 간다.", by: [
-          { win: { join: true, loot: { hope: 5 }, text: "엄마가 아기를 안고 따라나섰다. 입이 둘 늘었다." }, lose: { stress: 10, text: "“가요. 제발.” 문은 열리지 않았다." } },
-          { win: { loot: { hope: -3 }, stress: 15, text: "아기를 안고 불 앞에서 졸고 있다. 장작 몇 개가 보였지만 가져오지 못했다." }, lose: { stress: 10, text: "아기가 울었다. 엄마가 칼을 들고 창가로 왔다." } },
-        ] },
-        { reveal: "늑대단의 전초였다. 개 짖는 소리.", by: [
-          { win: { rivalAlert: true, text: "문이 열리기 전에 눈치챘다. 뛰었다." }, lose: { harm: 1, rivalAlert: true, text: "문이 열리고 개가 먼저 나왔다." } },
-          { win: { loot: { food: 4 }, text: "모두 잠들어 있었다. 문가의 식량 자루만 들고 나왔다." }, lose: { harm: 1, text: "개가 창문을 향해 뛰어올랐다." } },
-        ] },
-      ]),
-      S("i_crevasse", "cave", "trap", "동굴 바닥에 갈라진 틈. 건너편에 연료통이 보인다. 틈 아래로는 바닥이 보이지 않는다.", [
-        A("뛰어 건넌다", "force", 13, { loot: { wood: 4 }, text: "건넜다. 돌아올 때가 더 무서웠다." }, { harm: 2, text: "발끝이 미끄러졌다. 겨우 가장자리를 잡았다." }),
-        A("밧줄로 다리를 놓는다", "craft", 12, { loot: { wood: 5 }, text: "밧줄을 타고 연료통 둘을 옮겼다." }, { stress: 15, text: "밧줄이 풀려 연료통이 틈으로 떨어졌다." }, "rope"),
-      ]),
-      M("i_echo", "cave", "meet", "동굴 안쪽에서 누군가 이름을 부른다. 당신이 아는 목소리다. 죽은 사람의 목소리.", [
-        A("목소리를 따라간다", "wits", 13, null, null, "lamp", { noise: 1 }),
-        AUTO("귀를 막고 돌아간다", { stress: 15, text: "목소리는 동굴 입구까지 따라왔다." }),
-      ], [
-        { reveal: "얼음 틈을 지나는 바람이었다. 그 끝에 옛 연료 저장고가 있다.", by: [
-          { win: { loot: { wood: 5 }, stress: 5, text: "바람 소리였다. 그래도 한참 떨렸다. 연료통이 줄지어 있었다." }, lose: { stress: 20, text: "끝까지 따라가지 못했다. 목소리는 계속 불렀다." } },
-          null,
-        ] },
-        { reveal: "굶주린 생존자가 흉내 내고 있었다. 사람을 끌어들이려고.", by: [
-          { win: { text: "목소리가 흉내라는 걸 알아챘다. 그림자가 물러났다." }, lose: { harm: 2, stress: 15, text: "어둠 속에서 무언가 뛰어들었다. 이빨이 있었다." } },
-          null,
-        ] },
-      ]),
-      S("i_ration", "cave", "tempt", "얼음 속에 사람이 갇혀 있다. 그 손에 쥔 깡통 꾸러미. 얼음을 깨면 꺼낼 수 있다. 사람도.", [
-        A("얼음을 깨고 꾸러미만 꺼낸다", "force", 11, { loot: { food: 4 }, stress: 15, text: "꾸러미를 빼내자 손가락이 같이 부러졌다." }, { harm: 1, text: "얼음 파편이 얼굴을 그었다." }, "crowbar", { noise: 3 }),
-        AUTO("그대로 둔다", { text: "그 얼굴이 자꾸 생각난다." }),
-      ]),
-      S("i_tail", "plane", "trap", "수송기 꼬리가 낭떠러지에 걸려 흔들린다. 그 안에 의약품 상자.", [
-        A("살금살금 기어 들어간다", "wits", 14, { loot: { meds: 3 }, text: "동체가 한 번 크게 기울었다. 상자를 안고 기어 나왔다." }, { harm: 1, lose: 0.3, text: "동체가 미끄러졌다. 겨우 뛰어내렸다." }),
-        A("밧줄로 동체를 묶고 들어간다", "craft", 12, { loot: { meds: 3 }, text: "밧줄이 팽팽하게 버텼다." }, { stress: 15, text: "밧줄이 끊어졌다. 동체째 사라졌다. 상자도." }, "rope"),
-      ]),
-      S("i_survivor", "plane", "meet", "화물칸 구석에 조종복 입은 사람이 웅크려 있다. 다리가 이상한 방향으로 꺾였다. 권총을 겨눈다.", [
-        A("총을 내리라고 설득한다", "talk", 13, { join: true, gear: "rifle", text: "그는 총을 내렸다. 사냥총과 함께 그도 데려왔다." }, { harm: 1, text: "총성. 귀가 먹먹하다." }),
-        A("총을 빼앗는다", "force", 14, { gear: "rifle", stress: 15, text: "총을 빼앗았다. 그는 아무 말 없이 우리를 봤다. 우리는 그를 두고 나왔다." }, { harm: 2, text: "그가 먼저 쐈다." }, "knife", { noise: 4 }),
-      ]),
-      S("i_wires", "station", "trap", "관측소 발전기실. 바닥에 물이 얼었다 녹았다 한다. 끊어진 전선이 불꽃을 튀긴다.", [
-        A("발전기를 끄고 들어간다", "craft", 13, { loot: { wood: 3, meds: 1 }, text: "발전기 연료와 비상 구급함." }, { harm: 1, text: "감전됐다. 손이 한참 떨렸다." }),
-        A("전선을 피해 뛰어 지나간다", "wits", 13, { loot: { wood: 2 }, text: "불꽃 사이를 빠져나갔다." }, { harm: 1, text: "발이 미끄러졌다." }),
-      ]),
-      S("i_shoes", "station", "search", "대원 숙소. 벽에 설피 한 켤레가 걸려 있다. 침대 아래에서 긁는 소리가 난다.", [
-        A("설피만 재빨리 챙긴다", "wits", 11, { gear: "snowshoe", text: "설피를 챙겼다. 침대 아래는 보지 않았다." }, { harm: 1, text: "침대 밑에서 굶주린 여우가 튀어나와 물었다." }),
-        A("침대를 들춘다", "force", 12, { gear: "snowshoe", loot: { food: 2 }, text: "여우였다. 오늘 밤 고기가 생겼다." }, { harm: 1, text: "여우가 팔을 물고 달아났다." }, "knife", { noise: 3 }),
-      ]),
-      S("i_dogs", "camp", "meet", "캠프 개 우리. 썰매개들이 조용히 당신을 본다. 짖으면 끝이다.", [
-        A("고기를 던져 준다 (식량 1)", "talk", 11, { loot: { food: 4 }, text: "개들이 먹는 사이 창고 텐트에 들어갔다." }, { rivalAlert: true, stress: 10, text: "한 마리가 짖었다. 모두가 짖었다." }),
-        A("우리를 열어 풀어 준다", "craft", 13, { rivalAlert: true, loot: { hope: 4 }, text: "개들이 눈밭으로 흩어졌다. 늑대단은 밤새 개를 쫓았다." }, { harm: 1, text: "개가 손을 물었다." }, null, { noise: 3 }),
-      ]),
-      S("i_trial", "camp", "tempt", "늑대단이 누군가를 눈밭에 무릎 꿇렸다. “도둑질하면 이렇게 된다.” 다들 그쪽을 보느라 창고가 비었다.", [
-        A("그 틈에 창고를 턴다", "wits", 11, { loot: { food: 6 }, stress: 20, text: "창고를 털었다. 등 뒤에서 총성이 한 번 울렸다." }, { harm: 1, rivalAlert: true, text: "들켰다." }),
-        A("소리를 질러 시선을 끈다", "talk", 14, { join: true, rivalAlert: true, text: "혼란 속에 무릎 꿇은 사람이 달아났다. 우리를 따라왔다." }, { harm: 2, rivalAlert: true, text: "총구가 이쪽을 향했다." }, null, { noise: 5 }),
-      ]),
-    ],
+    iceage: [], // 빙하기 장면은 iceage.js에 소설체로 모았다
     flood: [
       S("f_wire", "store", "trap", "물에 잠긴 창고 바닥. 끊어진 전선이 물속에서 지지직거린다. 쌀자루가 건너편에 있다.", [
         A("장화를 믿고 건넌다", "wits", 12, { loot: { food: 4 }, text: "물이 장화 목까지 찼다. 쌀자루를 메고 건넜다." }, { harm: 2, text: "감전. 다리에 힘이 빠져 물에 쓰러졌다." }, "boots"),
