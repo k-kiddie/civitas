@@ -2,6 +2,7 @@
 // 시나리오 3종. 같은 뼈대(4인 파티·저녁 결정·밤 탐색·아침 사건) 위에 세계·자원·위협·장소·사건·결말을 바꾼다.
 (function (root) {
   const D = typeof module !== "undefined" ? require("./data") : root.SurviveData;
+  const ICE = typeof module !== "undefined" ? require("./iceage") : root.SurviveIceage;
   const S = (id, loc, text, approaches) => ({ id, loc, text, approaches });
   const A = (label, stat, dc, win, lose, tool) => ({ label, stat, dc, win, lose, tool });
 
@@ -214,58 +215,7 @@
       station: { name: "버려진 관측소", danger: 2, loot: "무엇이든", desc: "얼어붙은 안테나와 계기판" },
       camp: { name: "늑대단 캠프", danger: 3, loot: "식량 많이", desc: "무장한 생존자들의 텐트" },
     },
-    scenes: [
-      S("i_roof", "village", "굴뚝만 삐죽 나온 집. 눈을 파고 들어가야 한다.", [
-        A("굴을 파고 들어간다", "force", 12, { loot: { food: 4 }, text: "얼어붙은 부엌에서 곡식 자루를 찾았다." }, { harm: 1, text: "눈더미가 무너져 깔렸다." }),
-        A("창문으로 들어갈 길을 찾는다", "wits", 13, { loot: { food: 3 }, tool: "lamp", text: "석유 등잔과 말린 고기를 챙겼다." }, { stress: 10, text: "길을 잃고 손가락이 얼었다." }),
-      ]),
-      S("i_family", "village", "한 집에 불빛이 있다. 노부부가 마지막 장작을 태우고 있다.", [
-        A("함께 가자고 설득한다", "talk", 14, { join: true, loot: { hope: 6 }, text: "할아버지가 따라나섰다. 할머니는 남았다." }, { stress: 10, text: "“우린 여기서 죽겠네.” 문이 닫혔다." }),
-        A("식량을 나눠 받는다", "talk", 12, { loot: { food: 2, hope: 3 }, text: "노부부가 말린 생선을 내줬다." }, { stress: 5, text: "그들도 줄 게 없었다." }),
-        A("빼앗는다", "force", 10, { loot: { food: 5, hope: -10 }, stress: 25, text: "돌아오는 길 내내 아무도 말하지 않았다." }, { harm: 1, text: "할아버지가 엽총을 들었다." }, "knife"),
-      ]),
-      S("i_fuel", "cave", "동굴 깊은 곳, 얼음 속에 연료 드럼이 박혀 있다.", [
-        A("얼음을 깨고 꺼낸다", "force", 13, { loot: { wood: 5 }, text: "드럼 하나를 통째로 꺼냈다." }, { harm: 1, text: "얼음 파편이 눈을 스쳤다." }, "crowbar"),
-        A("불을 피워 얼음을 녹인다 (연료 1)", "craft", 11, { loot: { wood: 4 }, text: "녹은 얼음 사이로 드럼이 빠져나왔다." }, { loot: { wood: -1 }, text: "천장이 녹아 무너질 뻔했다." }),
-      ]),
-      S("i_bear", "cave", "동굴 안쪽에서 거친 숨소리. 굶주린 곰이다.", [
-        A("횃불로 쫓는다", "force", 15, { loot: { wood: 3, food: 3 }, text: "곰이 물러났다. 곰이 지키던 사냥감까지 챙겼다." }, { harm: 2, text: "앞발에 맞아 날아갔다." }, "knife"),
-        A("숨죽여 물러난다", "wits", 12, { loot: { wood: 1 }, text: "들키지 않고 빠져나왔다." }, { harm: 1, stress: 15, text: "곰이 쫓아왔다." }, "lamp"),
-      ]),
-      S("i_cargo", "plane", "수송기 화물칸에 의료 상자가 흩어져 있다. 동체가 삐걱인다.", [
-        A("상자를 끌어 낸다", "force", 12, { loot: { meds: 2, food: 2 }, text: "의약품과 비상식량을 건졌다." }, { harm: 1, text: "동체가 기울며 깔렸다." }),
-        A("조종석 비상 키트를 찾는다", "craft", 13, { loot: { meds: 3 }, tool: "crowbar", text: "비상 키트와 착륙 도구함을 챙겼다." }, { stress: 10, text: "조종석 안의 시신과 눈이 마주쳤다." }),
-      ]),
-      S("i_pilot", "plane", "수송기 꼬리 쪽에서 무전 신호음이 들린다. 블랙박스다.", [
-        A("신호기를 고쳐 기지로 가져간다", "craft", 15, { radio: true, loot: { hope: 12 }, text: "열차 통제소와 연결됐다! 열차가 하루 일찍 온다." }, { stress: 10, text: "회로가 타 버렸다." }),
-        A("배터리만 떼어 간다", "craft", 9, { loot: { hope: 4 }, text: "기지에 작은 불빛이 생겼다." }, { text: "배터리가 얼어 있었다." }),
-      ]),
-      S("i_instr", "station", "관측소 안에 얼어붙은 계기판과 사물함.", [
-        A("사물함을 비튼다", "force", 12, { loot: { meds: 1, food: 2 }, text: "구급함과 초콜릿 상자가 나왔다." }, { harm: 1, text: "손가락이 얼어 붙었다." }, "crowbar"),
-        A("기상 기록을 읽는다", "wits", 13, { loot: { hope: 6 }, forecast: true, text: "다음 눈보라가 언제 올지 알 것 같다. (위협 하루 늦춤)" }, { stress: 5, text: "글자가 성에에 지워졌다." }),
-      ]),
-      S("i_ghost", "station", "관측소 침대에 대원이 누워 있다. 얼어 죽은 지 오래다.", [
-        A("장비를 챙긴다", "wits", 9, { tool: "knife", loot: { wood: 2 }, stress: 5, text: "사냥칼과 연료통을 챙겼다." }, { stress: 15, text: "도저히 손을 댈 수 없었다." }),
-        A("일기를 읽는다", "talk", 10, { loot: { hope: 5 }, text: "“누군가 이걸 읽는다면, 남쪽은 따뜻하다.”" }, { stress: 10, text: "마지막 장은 비어 있었다." }),
-      ]),
-      S("i_wolfguard", "camp", "늑대단 캠프. 모닥불가에 보초 둘.", [
-        A("눈보라에 숨어 창고 텐트로", "wits", 14, { loot: { food: 6 }, text: "식량 자루를 메고 빠져나왔다." }, { harm: 1, rivalAlert: true, text: "개가 짖었다. 화살이 날아왔다." }, "lamp"),
-        A("보초를 덮친다", "force", 15, { loot: { food: 7 }, rivalAlert: true, text: "보초를 쓰러뜨리고 털었다. 늑대단이 이 일을 잊지 않을 것이다." }, { harm: 2, text: "보초가 먼저 칼을 뽑았다." }, "knife"),
-        A("거래하러 왔다고 말한다", "talk", 14, { loot: { food: 3 }, text: "연료 이야기에 늑대단이 식량을 내줬다." }, { stress: 15, rivalAlert: true, text: "비웃음과 함께 쫓겨났다." }),
-      ]),
-      S("i_slave", "camp", "캠프 구석, 쇠사슬에 묶인 소년이 있다.", [
-        A("사슬을 끊는다", "craft", 14, { join: true, loot: { hope: 6 }, rivalAlert: true, text: "소년을 업고 설원을 달렸다." }, { harm: 1, text: "사슬 소리에 들켰다." }, "crowbar"),
-        A("못 본 척한다", "wits", 5, { stress: 20, text: "소년의 눈빛이 등에 박혔다." }, { stress: 20, text: "소년의 눈빛이 등에 박혔다." }),
-      ]),
-      S("i_storm", null, "돌아오는 길, 시야가 하얗게 사라진다. 화이트아웃이다.", [
-        A("밧줄로 서로를 묶고 걷는다", "force", 12, { text: "서로를 놓지 않고 돌아왔다." }, { harm: 1, lose: 0.5, text: "동상에 걸렸다. 짐 절반을 버렸다." }),
-        A("눈굴을 파고 기다린다", "craft", 12, { text: "눈굴 안에서 밤을 넘겼다." }, { harm: 1, text: "새벽 추위에 발가락이 얼었다." }, "lamp"),
-      ]),
-      S("i_ice", null, "얼어붙은 호수를 건너야 한다. 얼음이 운다.", [
-        A("엎드려 기어 건넌다", "wits", 12, { text: "숨을 참고 건넜다." }, { harm: 1, stress: 10, text: "얼음이 깨져 물에 빠졌다." }),
-        A("돌아간다", "force", 10, { stress: 5, text: "두 시간을 더 걸었다." }, { stress: 10, text: "길이 끊겨 있었다." }),
-      ]),
-    ],
+    scenes: ICE.scenes,
     events: [
       { id: "forecast", text: "은서가 기압계를 두드린다. “사흘 뒤가 아니라 내일이에요. 큰 게 와요.”", need: "meteorologist",
         choices: [

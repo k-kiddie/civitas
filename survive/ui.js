@@ -15,6 +15,8 @@
   const HP = D.hpNames, HU = D.hungerNames;
   const sc = () => state.scenario, words = () => E.scen(state).words;
   const face = (p, size) => A.portrait(sc(), p, size);
+  // 소설 문단: 한 문단씩 떠오르고, 화면을 누르면 다 보인다
+  const prose = (list, cls = "") => `<div class="prose ${cls}">${list.filter(Boolean).map((t, i) => `<p style="--i:${i}">${esc(t)}</p>`).join("")}</div>`;
   function commit(res) {
     if (res.error) { toast = res.error; render(); return false; }
     state = res.state; toast = ""; store.set(state); render(); return true;
@@ -71,7 +73,7 @@
       const rec = E.recommend(s);
       const places = Object.entries(E.scen(s).places).map(([k, pl]) => {
         const info = E.placeInfo(s, k);
-        const memo = info.known ? `<span class="memo">📝 ${esc(info.known)}</span>` : "";
+        const memo = info.known ? `<span class="memo">📝 ${esc(info.known)}</span>${info.scouted ? `<br><span class="scouted">👁 정찰함: 길을 안다 (첫 판정 +2, 조용히 시작)</span>` : ""}` : "";
         const rumor = info.rumor ? `<span class="rumor">🗣 ${esc(info.rumor)}</span>` : "";
         const hz = info.hazard ? `<span class="hz ${info.guarded ? "ok" : ""}">${info.hazard.icon} ${info.hazard.name}${info.guarded ? " (막을 장비 있음)" : " — 막을 장비 없음"}</span>` : "";
         return btn(`${A.scene(sc(), k, "thumb")}<b>${pl.name}</b><small>${pl.loot} · 위험 ${["", "낮음", "보통", "높음"][pl.danger]}${hz ? "<br>" + hz : ""}<br>${memo || rumor || '<span class="unknown">??? 가 본 적 없다</span>'}${memo && rumor ? "<br>" + rumor : ""}</small>`, "place", `data-k="${k}" class="place ${plan.place === k ? "on" : ""}"`);
@@ -110,11 +112,11 @@
       const deeper = canDeeper ? (refuser && refuser.alive ? btn(`더 들어간다 <small>${esc(refuser.name)}: “난 더 못 가…” — 강행하면 원망을 산다</small>`, "deeper", 'class="secondary warn"') : btn("더 들어간다 <small>더 많이, 더 위험하게, 더 시끄럽게</small>", "deeper", 'class="secondary"')) : "";
       const rum = anyAlive && !r.rummaged && !e.isChase && !e.finale ? btn(`🔦 주변을 더 뒤진다 <small>장비나 물자가 있을지도 · 소리가 난다</small>`, "rummage", 'class="secondary"') : "";
       const homeLabel = !anyAlive ? "…" : e.chaseNext ? "돌아간다… <small>뒤에서 무언가 온다</small>" : "돌아간다";
-      return `<div class="veil night"><section class="modal result ${r.success ? "win" : "lose"} ${r.crit ? "crit" : ""} ${r.success ? "" : "flash"}" role="dialog" aria-modal="true">${head}<p class="picked">“${esc(r.approach)}” — ${esc(r.roller)}</p>${dice}<p class="story">${esc(r.text)}</p>${r.notes.map((n) => `<p class="note">${esc(n)}</p>`).join("")}${rum}${e.finale ? btn(e.queue.length && anyAlive ? "계속 간다" : "…", "home", 'class="primary"') : deeper + btn(homeLabel, "home", 'class="primary"')}</section></div>`;
+      return `<div class="veil night"><section class="modal result ${r.success ? "win" : "lose"} ${r.crit ? "crit" : ""} ${r.success ? "" : "flash"}" role="dialog" aria-modal="true">${head}<p class="picked">“${esc(r.approach)}” — ${esc(r.roller)}</p>${dice}${prose([r.text])}${r.notes.map((n) => `<p class="note">${esc(n)}</p>`).join("")}${rum}${e.finale ? btn(e.queue.length && anyAlive ? "계속 간다" : "…", "home", 'class="primary"') : deeper + btn(homeLabel, "home", 'class="primary"')}</section></div>`;
     }
     const FEEL = { "확실하다": "sure", "해볼 만하다": "good", "반반이다": "mid", "위험하다": "bad", "무모하다": "awful" };
-    const choices = v.approaches.map((a) => btn(`<span>${esc(a.label)}</span><small><b class="feel f-${FEEL[a.feel]}">${a.feel}</b>${a.auto ? "" : ` · ${D.stats[a.stat].icon} ${esc(a.rollerName)}`}${a.tool ? ` · <span class="${a.hasTool ? "has" : "no"}">${E.N.gear[a.tool]?.icon || ""} ${a.hasTool ? "도구 있음" : "도구가 있으면 나을 텐데"}</span>` : ""}${a.hint ? `<br><i class="whisper">${esc(v.hinter)}: ${esc(a.hint)}</i>` : ""}</small>`, "approach", `data-i="${a.i}"`)).join("");
-    return `<div class="veil night"><section class="modal scene ${v.chase ? "chase" : ""}" role="dialog" aria-modal="true">${head}${v.hazard ? `<p class="note hz">${v.hazard.icon} ${esc(v.hazard.text)}</p>` : ""}<p class="story big">${esc(v.text)}</p><div class="choices">${choices}</div></section></div>`;
+    const choices = v.approaches.map((a) => btn(`${a.tag ? `<em class="req ${a.locked ? "no" : "ok"}">[${esc(a.tag)}]</em> ` : ""}<span>${esc(a.label)}</span>${a.locked ? `<small class="why">${esc(a.locked)}</small>` : `<small><b class="feel f-${FEEL[a.feel]}">${a.feel}</b>${a.auto ? "" : ` · ${D.stats[a.stat].icon} ${esc(a.rollerName)}`}${a.tool ? ` · <span class="${a.hasTool ? "has" : "no"}">${E.N.gear[a.tool]?.icon || ""} ${a.hasTool ? "도구 있음" : "도구가 있으면 나을 텐데"}</span>` : ""}${a.hint ? `<br><i class="whisper">${esc(v.hinter)}: ${esc(a.hint)}</i>` : ""}</small>`}`, "approach", `data-i="${a.i}" ${a.locked ? "disabled" : ""} class="${a.locked ? "locked" : a.tag ? "special" : ""}"`)).join("");
+    return `<div class="veil night"><section class="modal scene ${v.chase ? "chase" : ""}" role="dialog" aria-modal="true">${head}${v.hazard ? `<p class="note hz">${v.hazard.icon} ${esc(v.hazard.text)}</p>` : ""}${prose([v.text], "big")}${v.say ? `<p class="say">${face(E.byId(s, v.say.id), 28)} <b>${esc(v.say.name)}</b> ${esc(v.say.text)}</p>` : ""}<div class="choices">${choices}</div></section></div>`;
   }
   function rollModal() {
     return `<div class="veil night"><section class="modal roll" role="dialog" aria-modal="true"><p class="picked">“${esc(rolling.label)}”</p><p class="roll-head">${D.stats[rolling.stat].icon} ${esc(rolling.who)}</p><div class="dice">🎲</div><p class="muted heartbeat">숨을 참는다…</p></section></div>`;
@@ -123,16 +125,18 @@
   function reportModal() {
     const r = state.report;
     const key = state.day === 1 && !state.memorial.length && r.lines.length && !/아침/.test(r.title) ? "title" : r.lines.some((l) => /⛈/.test(l) && /버텼|지나갔|멈췄/.test(l)) ? "threat_held" : r.lines.some((l) => /⛈|습격/.test(l)) ? "threat_hit" : "dawn";
-    return `<div class="veil"><section class="modal report" role="dialog" aria-modal="true">${A.scene(sc(), key)}<div class="eyebrow">🌅 ${esc(r.title)}</div>${r.lines.map((l) => `<p class="line ${/🕯|죽었다/.test(l) ? "death" : /⛈|🥶|습격|🤒|도둑|굶/.test(l) ? "bad" : ""}">${esc(l)}</p>`).join("")}${btn(state.ending ? "결말" : "계속", "dismiss", 'class="primary"')}</section></div>`;
+    const lines = r.lines.map((l) => `<p class="line ${/🕯|죽었다/.test(l) ? "death" : /⛈|🥶|습격|🤒|도둑|굶/.test(l) ? "bad" : ""}">${esc(l)}</p>`).join("");
+    const body = r.prose && r.prose.length ? `${prose(r.prose)}<details class="changes"><summary>변화 보기</summary>${lines}</details>` : lines;
+    return `<div class="veil"><section class="modal report" role="dialog" aria-modal="true">${A.scene(sc(), key)}<h2 class="chapter">${esc(r.chapter || r.title)}</h2>${body}${btn(state.ending ? "결말" : "계속", "dismiss", 'class="primary"')}</section></div>`;
   }
   function eventModal() {
     const v = E.eventView(state);
     const cast = v.cast ? E.byId(state, v.cast) : v.need ? E.byId(state, v.need) : null, cast2 = v.cast2 ? E.byId(state, v.cast2) : null;
-    return `<div class="veil"><section class="modal event" role="dialog" aria-modal="true"><div class="scene-art">${A.scene(sc(), "ev:" + v.id)}${cast ? `<div class="cast">${face(cast, 76)}${cast2 ? face(cast2, 76) : ""}</div>` : ""}</div><p class="story big">${esc(v.text)}</p><div class="choices">${v.choices.map((c) => btn(`<span>${esc(c.label)}</span>${c.reason ? `<em>${esc(c.reason)}</em>` : ""}`, "event", `data-i="${c.i}" ${c.reason ? "disabled" : ""}`)).join("")}</div></section></div>`;
+    return `<div class="veil"><section class="modal event" role="dialog" aria-modal="true"><div class="scene-art">${A.scene(sc(), "ev:" + v.id)}${cast ? `<div class="cast">${face(cast, 76)}${cast2 ? face(cast2, 76) : ""}</div>` : ""}</div>${prose([v.text], "big")}<div class="choices">${v.choices.map((c) => btn(`${c.tag ? `<em class="req ${c.reason ? "no" : "ok"}">[${esc(c.tag)}]</em> ` : ""}<span>${esc(c.label)}</span>${c.reason ? `<small class="why">${esc(c.reason)}</small>` : ""}`, "event", `data-i="${c.i}" ${c.reason ? "disabled" : ""}`)).join("")}</div></section></div>`;
   }
   function eventResultModal() {
     const r = state.eventResult;
-    return `<div class="veil"><section class="modal" role="dialog" aria-modal="true"><p class="story">${esc(r.text)}</p>${r.notes.map((n) => `<p class="note">${esc(n)}</p>`).join("")}${btn("계속", "dismiss", 'class="primary"')}</section></div>`;
+    return `<div class="veil"><section class="modal" role="dialog" aria-modal="true">${prose([r.text])}${r.notes.map((n) => `<p class="note">${esc(n)}</p>`).join("")}${btn("계속", "dismiss", 'class="primary"')}</section></div>`;
   }
   function cardModal() {
     const c = state.card;
@@ -149,10 +153,14 @@
     const s = state, base = D.endings[s.ending], text = (s.ending === "missed" && E.N && SurviveStory[s.scenario]?.endings.missed) || E.scen(s).endings[s.ending] || base.text;
     const moments = s.story ? s.story.journal.slice().sort((a, b) => b.w - a.w || a.day - b.day).slice(0, 5).sort((a, b) => a.day - b.day) : [];
     const good = ["all", "most"].includes(s.ending);
-    return `<div class="veil"><section class="modal ending" role="dialog" aria-modal="true">${A.scene(sc(), good ? "ending_good" : "ending_bad")}<h2>${base.icon} ${base.title}</h2><p class="story">${esc(text)}</p><p class="muted">${s.day - 1}일을 버텼다 · ${E.alive(s).length}/${s.total}명 생존</p><div class="living">${E.alive(s).map((p) => `<span>${face(p, 34)} ${esc(p.name)}</span>`).join("")}</div>${moments.length ? `<h3>📖 그 겨울의 결정들</h3><ul class="wall moments">${moments.map((m) => `<li><small>${m.day}일</small> ${esc(m.text)}</li>`).join("")}</ul>` : ""}${s.memorial.length ? `<h3>🕯 벽에 새긴 이름</h3><ul class="wall">${wallList()}</ul>` : ""}${btn("다른 재난으로 다시", "restart", 'class="primary"')}</section></div>`;
+    return `<div class="veil"><section class="modal ending" role="dialog" aria-modal="true">${A.scene(sc(), good ? "ending_good" : "ending_bad")}<h2>${base.icon} ${base.title}</h2><p class="story">${esc(text)}</p><p class="muted">${s.day - 1}일을 버텼다 · ${E.alive(s).length}/${s.total}명 생존</p><div class="living">${E.alive(s).map((p) => `<span>${face(p, 34)} ${esc(p.name)}</span>`).join("")}</div>${moments.length ? `<h3>📖 그 겨울의 결정들</h3><ul class="wall moments">${moments.map((m) => `<li><small>${m.day}일</small> ${esc(m.text)}</li>`).join("")}</ul>` : ""}${s.memorial.length ? `<h3>🕯 벽에 새긴 이름</h3><ul class="wall">${wallList()}</ul>` : ""}${state.chronicle?.length ? btn("📖 이번 판의 기록을 처음부터 읽기", "sheet", 'data-sheet="chron" class="secondary"') : ""}${btn("다른 재난으로 다시", "restart", 'class="primary"')}</section></div>`;
+  }
+  function chronicleSheet() {
+    const c = state.chronicle || [];
+    return `<div class="veil bottom"><section class="sheet chron" role="dialog" aria-modal="true"><h2>📖 ${esc(E.scen(state).name)}의 기록</h2>${c.length ? c.map((x) => `<article><h3><small>${x.day}일</small> ${esc(x.title)}</h3>${x.paras.map((t) => `<p>${esc(t)}</p>`).join("")}</article>`).join("") : "<p class='muted'>아직 남은 기록이 없다.</p>"}${btn("닫기", "close", 'class="secondary"')}</section></div>`;
   }
   function memorialSheet() {
-    return `<div class="veil bottom"><section class="sheet" role="dialog" aria-modal="true"><h2>🕯 벽에 새긴 이름</h2><ul class="wall">${wallList() || "<li class='muted'>아직 아무도 잃지 않았다.</li>"}</ul>${state.story?.journal.length ? `<h3>📖 일기</h3><ul class="wall moments">${state.story.journal.map((m) => `<li><small>${m.day}일</small> ${esc(m.text)}</li>`).join("")}</ul>` : ""}<h3>기록</h3><ul class="wall">${state.log.slice().reverse().map((l) => `<li><small>${l.day}일</small> ${esc(l.text)}</li>`).join("")}</ul>${btn("닫기", "close", 'class="secondary"')}</section></div>`;
+    return `<div class="veil bottom"><section class="sheet" role="dialog" aria-modal="true"><h2>🕯 벽에 새긴 이름</h2>${state.chronicle?.length ? btn("📖 지금까지의 기록 읽기", "sheet", 'data-sheet="chron" class="mini"') : ""}<ul class="wall">${wallList() || "<li class='muted'>아직 아무도 잃지 않았다.</li>"}</ul>${state.story?.journal.length ? `<h3>📖 일기</h3><ul class="wall moments">${state.story.journal.map((m) => `<li><small>${m.day}일</small> ${esc(m.text)}</li>`).join("")}</ul>` : ""}<h3>기록</h3><ul class="wall">${state.log.slice().reverse().map((l) => `<li><small>${l.day}일</small> ${esc(l.text)}</li>`).join("")}</ul>${btn("닫기", "close", 'class="secondary"')}</section></div>`;
   }
   function confirmNew() {
     return `<div class="veil"><section class="modal" role="dialog" aria-modal="true"><h2>처음부터 다시 할까요?</h2><p class="story">지금 이야기는 사라집니다.</p>${btn("새로 시작", "restart", 'class="primary"')}${btn("취소", "close", 'class="secondary"')}</section></div>`;
@@ -180,8 +188,10 @@
     else if (s.eventResult) modal = eventResultModal();
     else if (s.deaths && s.deaths.length) modal = deathModal();
     else if (s.event) modal = eventModal();
+    else if (s.ending && sheet === "chron") modal = chronicleSheet();
     else if (s.ending) modal = endingModal();
     else if (sheet === "memorial") modal = memorialSheet();
+    else if (sheet === "chron") modal = chronicleSheet();
     else if (sheet === "new") modal = confirmNew();
     else if (sheet && sheet.startsWith("role:")) modal = roleSheet(sheet.slice(5));
     else if (sheet) modal = personSheet(sheet);
@@ -231,6 +241,7 @@
     else if (k === "toast") { toast = ""; render(); }
   }
   let down = null;
+  app.addEventListener("pointerdown", (e) => { const v = e.target.closest(".veil"); if (v) v.classList.add("shown"); }, true);
   app.addEventListener("pointerdown", (e) => { down = { x: e.clientX, y: e.clientY }; });
   app.addEventListener("pointerup", (e) => {
     const a = e.target.closest("button[data-action]");

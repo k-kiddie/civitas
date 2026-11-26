@@ -32,17 +32,19 @@
     },
     // 이야기 장면: 해당 장소의 첫 장면으로 먼저 나온다
     scenes: [
-      { id: "s_map", loc: "station", kind: "search", story: true, text: "관측소 측량실. 벽 한 면을 덮은 남행선 노선도가 얼음에 반쯤 묻혀 있다.", approaches: [
+      { id: "s_map", loc: "station", kind: "search", story: true, text: "관측소 맨 안쪽, 측량실. 문을 열자 숨이 멎는다. 벽 한 면 전체가 남행선 노선도다. 손으로 그린 선 위에 대원들이 연필로 적은 메모가 빼곡하다. 그 절반이 얼음에 덮여 있다. 이 종이 한 장이 우리를 살릴 수도 있다.", approaches: [
         { label: "얼음을 녹여 통째로 떼어 낸다", stat: "craft", dc: 12, noise: 1, win: { clue: 2, loot: { meds: 1, wood: 2 }, text: "노선도를 말아 품에 넣었다. 기지에서 남쪽으로 반나절. 선로가 거기 있다.", jr: "관측소에서 남행선 노선도를 찾았다." }, lose: { clue: 1, harm: 1, text: "종이가 찢어졌다. 절반만 건졌다. 손끝이 얼었다." } },
-        { label: "보이는 만큼 외운다", stat: "wits", dc: 12, noise: 0, win: { clue: 1, loot: { wood: 2 }, text: "선로가 남동쪽으로 휘는 것까지 외웠다." }, lose: { stress: 10, text: "성에가 끼어 읽을 수가 없었다." } },
+        { label: "보이는 만큼 외운다", stat: "wits", dc: 12, noise: 0, win: { clue: 1, loot: { wood: 2 }, text: "{who}이(가) 입술을 달싹이며 외웠다. 기지에서 남동쪽. 개울 두 개를 건너고 송전탑을 따라간다." }, lose: { stress: 10, text: "성에가 끼어 읽을 수가 없었다. {who}은(는) 손바닥으로 얼음을 문지르다 포기했다." } },
+        { label: "[은서와 함께] 은서가 메모까지 해독한다", stat: "wits", dc: 7, req: { with: "meteorologist" }, noise: 0, win: { clue: 2, loot: { wood: 2 }, text: "은서가 연필 메모를 손가락으로 짚었다. “‘3월, 하얀나루역까지 4시간. 개울 얼음 두께 확인.’ 이 사람들, 직접 걸어갔어요.” 노선도를 통째로 머릿속에 넣었다.", jr: "은서가 관측소 노선도를 해독했다." }, lose: { clue: 1, text: "은서가 반쯤 읽다 고개를 저었다. 나머지는 얼음 밑이었다." } },
       ] },
-      { id: "s_sign", loc: "village", kind: "search", story: true, text: "마을 끝 정류장. 눈에 묻힌 표지판 귀퉁이에 화살표가 보인다.", approaches: [
+      { id: "s_sign", loc: "village", kind: "search", story: true, text: "마을 끝 버스 정류장. 지붕은 무너지고 의자만 남았다. 눈 더미 사이로 녹슨 표지판 귀퉁이가 삐죽 나와 있다. 화살표 끝이 보인다. 어딘가를 가리키고 있다.", approaches: [
         { label: "눈을 파서 표지판을 드러낸다", stat: "force", dc: 11, noise: 2, win: { clue: 1, loot: { food: 2 }, text: "‘남행선 하얀나루역 4km →’ 방향을 알았다." }, lose: { harm: 1, text: "표지판이 쓰러지며 정강이를 쳤다." } },
         { label: "근처 집에서 지도를 찾는다", stat: "wits", dc: 13, noise: 1, win: { clue: 1, loot: { food: 3 }, text: "냉장고 문에 붙은 관광 지도. 역에 동그라미가 쳐져 있다." }, lose: { stress: 10, text: "빈집마다 같은 냄새가 났다." } },
       ] },
-      { id: "s_sled", loc: "plane", kind: "search", story: true, text: "화물칸 뒤쪽, 극지용 스키 썰매가 끈에 묶여 있다. 동체가 바람에 삐걱인다.", approaches: [
+      { id: "s_sled", loc: "plane", kind: "search", story: true, text: "화물칸 맨 뒤. 방수포를 들추자 극지용 스키 썰매가 나온다. 주황색 페인트가 아직 선명하다. 화물 끈 여섯 개가 썰매를 바닥에 붙들어 매고 있고, 끈마다 얼음이 돌처럼 엉겨 붙었다. 머리 위에서 동체가 바람에 신음한다.", approaches: [
         { label: "끈을 끊고 끌어낸다", stat: "force", dc: 13, noise: 3, tool: "knife", win: { prog: "sled", loot: { meds: 2 }, text: "썰매를 끌어냈다. 썰매 가방엔 구급약도 있었다. 이제 걷지 못하는 사람도 데려갈 수 있다.", jr: "수송기에서 썰매를 끌어냈다." }, lose: { harm: 1, text: "동체가 기울며 썰매가 깔렸다. 다음에 다시 와야 한다." } },
-        { label: "고정 장치를 풀어 조심히 뺀다", stat: "craft", dc: 13, noise: 1, tool: "crowbar", win: { prog: "sled", loot: { meds: 2 }, text: "썰매를 무사히 빼냈다.", jr: "수송기에서 썰매를 끌어냈다." }, lose: { stress: 10, text: "장치가 얼어 꿈쩍도 하지 않았다." } },
+        { label: "고정 장치를 풀어 조심히 뺀다", stat: "craft", dc: 13, noise: 1, tool: "crowbar", win: { prog: "sled", loot: { meds: 2 }, text: "{who}이(가) 걸쇠를 하나씩 녹이며 풀었다. 썰매가 스르륵 미끄러져 나왔다.", jr: "수송기에서 썰매를 끌어냈다." }, lose: { stress: 10, text: "장치가 얼어 꿈쩍도 하지 않았다." } },
+        { label: "[석구와 함께] 석구가 화물 고정 장치를 단번에 푼다", stat: "craft", dc: 7, req: { with: "mechanic" }, noise: 1, win: { prog: "sled", loot: { meds: 2 }, text: "석구가 혀를 찼다. “이건 군용 래칫이야. 이렇게, 이렇게.” 여섯 개가 차례로 풀렸다.", jr: "석구가 수송기에서 썰매를 풀어냈다." }, lose: { stress: 5, text: "석구가 욕을 했다. 래칫 하나가 부러졌다." } },
       ] },
     ],
     // 라이벌 백곰: 거래 → 요구 → 결판
@@ -210,7 +212,7 @@
         { label: "걷지 못하는 사람은 두고 간다", fx: { leaveWeak: true }, text: "", jr: "걷지 못하는 사람을 기지에 두고 떠났다." },
       ] },
       scenes: [
-        { id: "f_cross", kind: "trap", text: "설원. 바람이 칼날 같다. {route}", approaches: [
+        { id: "f_cross", kind: "trap", text: "기지 문을 닫았다. 누구도 돌아보지 않았다. 설원은 끝없이 하얗고, 바람은 칼날처럼 얼굴을 긋는다. 발밑에서 눈이 뽀드득 운다. {route}", approaches: [
           { label: "밧줄로 서로를 묶고 걷는다", stat: "force", dc: 12, tool: "rope", win: { text: "누구도 놓치지 않고 걸었다." }, lose: { harm: 1, text: "누군가 쓰러졌다. 일으켜 세우는 데 한참 걸렸다." } },
           { label: "별과 바람을 읽으며 간다", stat: "wits", dc: 12, tool: "snowshoe", win: { text: "남동쪽. 발이 기억하는 듯 길이 열렸다." }, lose: { harm: 1, lost: true, text: "길을 잃었다. 한 시간을 헤맸다." } },
         ] },
@@ -220,12 +222,12 @@
         { id: "f_wolf_pass", kind: "meet", text: "선로 앞을 늑대단이 막고 섰다. 백곰이 팔짱을 낀다. “연료는 받았지. 지나가.”", approaches: [
           { label: "고개를 숙이고 지나간다", stat: "talk", dc: 0, auto: true, win: { text: "늑대단이 길을 비켰다. 백곰은 약속을 지켰다." } },
         ] },
-        { id: "f_wolf_block", kind: "meet", text: "선로 앞을 늑대단이 막고 섰다. 백곰이 웃는다. “자리는 정해져 있어. 너희 자리는 없어.” {boy}", approaches: [
+        { id: "f_wolf_block", kind: "meet", text: "송전탑 아래, 선로가 보인다. 그리고 그 앞에 늑대단의 썰매 다섯 대. 모닥불 너머로 흰 털옷이 일어선다. 백곰이 웃는다. “자리는 정해져 있어. 너희 자리는 없어.” {boy}", approaches: [
           { label: "자리를 나누자고 설득한다", stat: "talk", dc: 14, win: { text: "백곰이 한참 노려보다 길을 비켰다. “열차에서 보자.”" }, lose: { harm: 2, text: "설득은 통하지 않았다. 몸싸움 끝에 겨우 빠져나갔다." } },
           { label: "어둠을 틈타 돌아간다", stat: "wits", dc: 14, tool: "snowshoe", win: { text: "늑대단 뒤로 크게 돌아 선로에 닿았다." }, lose: { harm: 1, lost: true, text: "들켰다. 쫓기다 시간을 잃었다." } },
           { label: "정면으로 뚫는다", stat: "force", dc: 15, tool: "knife", win: { text: "피투성이로 선로에 닿았다." }, lose: { harm: 2, text: "백곰의 주먹이 먼저였다." } },
         ] },
-        { id: "f_train", kind: "chase", text: "멀리서 기적 소리. 불빛이 다가온다. 열차는 서지 않는다. 속도만 늦춘다. 뛰어올라야 한다.", approaches: [
+        { id: "f_train", kind: "chase", text: "멀리서 기적 소리. 지평선 끝에 불빛 하나. 점점 커진다. 땅이 떨린다. 열차는 서지 않는다. 속도만 늦춘다. 문이 열린 화물칸 하나가 다가온다. 손을 뻗은 사람들이 보인다. 뛰어야 한다. 지금.", approaches: [
           { label: "약한 사람부터 밀어 올린다", stat: "force", dc: 12, win: { text: "한 사람씩, 손이 손을 잡아 올렸다. 마지막으로 당신이 뛰었다." }, lose: { harm: 2, text: "누군가 발을 헛디뎠다. 바퀴 소리가 비명을 덮었다." } },
           { label: "짐을 다 버리고 같이 뛴다", stat: "force", dc: 0, auto: true, win: { text: "모든 걸 버렸다. 사람만 남았다. 다 같이 뛰었다." } },
         ] },
