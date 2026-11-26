@@ -37,7 +37,7 @@
   function newGame({ name = "대표", seed = 1, scenario = "random" } = {}) {
     const s = {
       v: 3, scenario: "flood", rng: seed >>> 0, day: 1, rescueDay: 13, phase: "dawn",
-      food: 8, wood: 5, meds: 1, hope: 60, gear: [], uid: 1, people: [], plan: null, threats: [],
+      food: 8, wood: 5, meds: 1, hope: 60, parts: 1, gear: [], uid: 1, people: [], plan: null, threats: [],
       stock: {}, known: {}, rumors: [], used: {},
       rivalAlert: 0, exp: null, event: null, eventResult: null, report: null, log: [], memorial: [], seen: {}, total: 0, dayLines: [], flags: {},
       deaths: [],
@@ -130,11 +130,12 @@
   function placeInfo(s, loc) {
     const k = s.known[loc], r = s.rumors.filter((x) => x.loc === loc).at(-1);
     const hz = N.placeHazard[s.scenario]?.[loc];
-    return { known: k ? `${k.day}일에 봤을 때: ${k.lvl}${k.sign ? ` · ${k.sign}` : ""}` : null, scouted: s.scouted && s.day - (s.scouted[loc] ?? -9) <= 2, rumor: !k || (r && r.day > k.day) ? r?.text || null : null, hazard: hz ? N.hazards[hz] : null, guarded: hz ? s.gear.some((g) => G(g.k).guard === hz) : true };
+    const gearHere = (N.placeGear[s.scenario]?.[loc] || []).map((g) => G(g).name);
+    return { gearHere, known: k ? `${k.day}일에 봤을 때: ${k.lvl}${k.sign ? ` · ${k.sign}` : ""}` : null, scouted: s.scouted && s.day - (s.scouted[loc] ?? -9) <= 2, rumor: !k || (r && r.day > k.day) ? r?.text || null : null, hazard: hz ? N.hazards[hz] : null, guarded: hz ? s.gear.some((g) => G(g.k).guard === hz) : true };
   }
   // 저녁 기본안: 식량이 되는 만큼 먹이고, 중상 이상은 약
   function defaultPlan(s) {
-    const plan = { feed: {}, med: {}, send: [], place: null, carry: {}, scout: null, role: {} };
+    const plan = { feed: {}, med: {}, send: [], place: null, carry: {}, scout: null, role: {}, craft: null };
     let food = s.food;
     const order = alive(s).filter((p) => home(s, p)).sort((a, b) => (b.child ? 1 : 0) - (a.child ? 1 : 0) || b.hunger - a.hunger);
     for (const p of order) if (food > 0) { plan.feed[p.id] = true; food--; }
@@ -243,6 +244,28 @@
     if (p.broken && role !== "rest") return { state, error: `${p.name}은(는) 무너져 아무것도 못 한다.` };
     return evening(st, (s) => { s.plan.role[id] = role; });
   }
+  const recipesFor = (s) => N.recipes.filter((r) => !r.scen || r.scen === s.scenario).filter((r) => !(r.make.prog && (!s.story || s.story.prog[r.make.prog])));
+  function recipeOk(s, id) {
+    const r = recipesFor(s).find((x) => x.id === id);
+    return !!r && (s.parts || 0) >= r.parts && (!r.wood || s.wood >= r.wood) && (!r.make.refill || true);
+  }
+  const setCraft = (state, id) => evening(state, (s) => {
+    if (s.plan.craft === id) { s.plan.craft = null; return; }
+    const r = recipesFor(s).find((x) => x.id === id);
+    if (!r) return "만들 수 없는 것입니다.";
+    if (!recipeOk(s, id)) return `부품이 모자랍니다 (${r.parts}개 필요).`;
+    s.plan.craft = id;
+    if (!alive(s).some((p) => roleOf(s, p.id) === "fix")) {
+      const c = alive(s).filter((p) => home(s, p) && !p.child && !p.broken && !s.plan.send.includes(p.id) && s.plan.scout !== p.id && s.plan.role[p.id] !== "guard").sort((a, b) => b.stats.craft - a.stats.craft)[0];
+      if (c) s.plan.role[c.id] = "fix";
+    }
+  });
+  // 장비가 어디서 나오는지
+  function gearWhere(s, k) {
+    const where = Object.entries(N.placeGear[s.scenario] || {}).filter(([, ks]) => ks.includes(k)).map(([loc]) => scen(s).places[loc]?.name).filter(Boolean);
+    const r = recipesFor(s).find((x) => x.make.gear === k);
+    return [where.length ? `${where.join("·")}에서 나온다` : "", r ? `부품 ${r.parts}개로 만들 수 있다` : ""].filter(Boolean).join(" · ");
+  }
   const roleOf = (s, id) => (!s.plan ? null : s.plan.send.includes(id) ? "explore" : s.plan.scout === id ? "scout" : s.plan.role[id] || "rest");
   const setPlace = (state, loc) => evening(state, (s) => {
     if (!scen(s).places[loc]) return "알 수 없는 장소입니다.";
@@ -280,6 +303,7 @@
       const rest = R(p) === "rest";
       p.stress = clamp(p.stress - (rest ? 22 : 10), 0, 100);
       if (p.hp === 1 && !p.medToday && rnd(s) < (rest ? 0.55 : 0.3)) { p.hp = 0; lines.push(`${p.name}의 상처가 아물었다.`); }
+      else if (p.hp === 2 && !p.medToday && rest && rnd(s) < 0.25) { p.hp = 1; p.medToday = true; lines.push(`${p.name}이(가) 푹 쉬고 나서 한결 나아졌다.`); }
     }
     // 간호: 맡은 사람이 환자 하나를 돌본다(간호 경험자는 확실히)
     const patients = () => alive(s).filter((p) => p.hp >= 1 && !p.medToday && !(p.isolated > 0)).sort((a, b) => b.hp - a.hp);
@@ -301,7 +325,8 @@
       if (pt && rnd(s) < 0.25) { pt.hp -= 1; pt.medToday = true; lines.push(`${c.name}이(가) 쉬다 말고 ${pt.name}을(를) 돌봤다 (${D.hpNames[pt.hp]}).`); }
     }
     for (const f of by("forage")) {
-      const r = d20(s) + f.stats.wits;
+      const trap = s.gear.some((g) => G(g.k).forage && !plan.send.includes(plan.carry[g.uid]));
+      const r = d20(s) + f.stats.wits + (trap ? 3 : 0);
       if (r >= 11) { const n = r >= 17 ? 2 : 1; s.food += n; lines.push(`🎣 ${f.name}이(가) ${scen(s).homeFind}. (${w.food} +${n})`); }
       else { f.stress = clamp(f.stress + 5, 0, 100); lines.push(`🎣 ${f.name}은(는) 밤새 허탕을 쳤다.`); }
       if (s.scenario === "iceage" && !s.gear.some((g) => G(g.k).warm && !plan.send.includes(plan.carry[g.uid])) && rnd(s) < 0.2) hurt(s, f, 1, "동상", notes);
@@ -312,7 +337,20 @@
       lines.push(`🕳 아무도 지키지 않은 ${w.shelter}에 도둑이 들었다. ${w.food} −${lost}.`);
     }
     let need = s.flags.stove && s.day % 2 === 0 ? 0 : 1;
-    for (const f of by("fix")) if (need && d20(s) + f.stats.craft >= 10) { need = 0; lines.push(`🔧 ${f.name}이(가) 난로와 틈을 손봐 오늘 밤 ${w.wood}을(를) 아꼈다.`); }
+    const rec = plan.craft && recipeOk(s, plan.craft);
+    const crafter = by("fix").sort((a, b) => b.stats.craft - a.stats.craft)[0];
+    if (rec && crafter) {
+      const R = N.recipes.find((x) => x.id === plan.craft);
+      if (d20(s) + crafter.stats.craft >= 8) {
+        s.parts -= R.parts; if (R.wood) s.wood -= R.wood;
+        if (R.make.meds) s.meds += R.make.meds;
+        if (R.make.gear) addGear(s, R.make.gear);
+        if (R.make.refill) { const l = s.gear.find((g) => g.k === R.make.refill); if (l) l.u += 3; else addGear(s, R.make.refill); }
+        if (R.make.prog) storyOutcome(s, { prog: R.make.prog, jr: `${crafter.name}이(가) 부품을 모아 썰매를 짰다.` }, notes);
+        lines.push(`🛠 ${crafter.name}이(가) 밤새 ${R.name}에 매달렸다. 완성했다.`);
+      } else { s.parts -= Math.ceil(R.parts / 2); lines.push(`🛠 ${crafter.name}이(가) ${R.name}을(를) 하다 부품을 망가뜨렸다.`); }
+      plan.craft = null;
+    } else for (const f of by("fix")) if (need && d20(s) + f.stats.craft >= 10) { need = 0; lines.push(`🔧 ${f.name}이(가) 난로와 틈을 손봐 오늘 밤 ${w.wood}을(를) 아꼈다.`); }
     for (const p of alive(s)) p.busy = false;
     if (!need) {}
     else if (s.wood > 0) { s.wood -= 1; lines.push(`${w.wood} −1 (밤의 온기)`); }
@@ -329,7 +367,7 @@
     for (const g of s.gear) g.with = plan.send.includes(plan.carry[g.uid]) ? plan.carry[g.uid] : null;
     if (plan.send.length) {
       const pl = scen(s).places[plan.place];
-      s.exp = { loc: plan.place, party: plan.send.slice(), step: 0, loot: { food: 0, wood: 0, meds: 0, hope: 0 }, scene: null, result: null, story: [], noise: pl.danger - 1, chased: false, chaseNext: false, isChase: false, truth: null, p1: null, refuse: null, scan: null };
+      s.exp = { loc: plan.place, party: plan.send.slice(), step: 0, loot: { food: 0, wood: 0, meds: 0, hope: 0, parts: 0 }, scene: null, result: null, story: [], noise: pl.danger - 1, chased: false, chaseNext: false, isChase: false, truth: null, p1: null, refuse: null, scan: null };
       if (s.scouted && s.day - (s.scouted[plan.place] ?? -9) <= 2) { s.exp.knowWay = true; s.exp.noise = 0; }
       const gg = findGear(s, (d) => d.scan);
       if (gg) s.exp.scan = `${G(gg.k).icon} 계수기가 가리킨다: 남은 것 ${lvl(s.stock[plan.place])}`;
@@ -404,7 +442,7 @@
   function reqState(s, req) {
     if (!req) return { ok: true, tag: "" };
     const party = s.exp ? s.exp.party.map((id) => byId(s, id)).filter((p) => p.alive) : [];
-    if (req.gear) return { ok: hasTool(s, req.gear), tag: G(req.gear).name, why: `${G(req.gear).name}이(가) 없다` };
+    if (req.gear) { const wh = gearWhere(s, req.gear); return { ok: hasTool(s, req.gear), tag: G(req.gear).name, why: `${G(req.gear).name}이(가) 없다${wh ? ` — ${wh}` : ""}` }; }
     if (req.with) { const m = meta(s, req.with); return { ok: party.some((p) => p.id === req.with), tag: `${m.name || req.with}와(과) 함께`, why: `${m.name || "그 사람"}이(가) 함께 오지 않았다` }; }
     if (req.stat) return { ok: party.some((p) => p.stats[req.stat] >= req.min), tag: `${D.stats[req.stat].name} ${req.min}`, why: `${D.stats[req.stat].name} ${req.min} 이상인 사람이 없다` };
     return { ok: true, tag: "" };
@@ -584,18 +622,23 @@
     e.noise += 2;
     const st = s.stock[e.loc];
     const res = st ? RES.filter((k) => st[k] > 0) : [];
-    if (r >= 13 && rnd(s) < 0.5) {
-      const ks = Object.keys(N.gear).filter((k) => (!G(k).scen || G(k).scen === s.scenario) && s.gear.filter((g) => g.k === k).length < 1);
-      const k = pick(s, ks.length ? ks : Object.keys(N.gear).filter((x) => !G(x).scen || G(x).scen === s.scenario));
+    const table = (N.placeGear[s.scenario]?.[e.loc] || []).filter((k) => s.gear.filter((g) => g.k === k).length < 1);
+    e.foundHere = e.foundHere || 0;
+    if (r >= 14 && table.length && e.foundHere < 1 && rnd(s) < 0.65) {
+      const k = pick(s, table);
+      e.foundHere += 1;
       s.gear.push({ uid: s.uid++, k, u: G(k).uses || 0, with: f.id });
-      notes.push(`🔦 ${f.name}이(가) 구석에서 ${G(k).icon} ${G(k).name}을(를) 찾아 챙겼다.`);
-    } else if (r >= 8 && res.length) {
-      const k = pick(s, res), got = Math.min(st[k], r >= 13 ? 2 : 1);
-      st[k] -= got; e.loot[k] += got;
-      notes.push(`🔦 ${f.name}이(가) 잔해 밑에서 ${W(s)[k]} ${got}을(를) 더 찾았다.`);
+      e.result.find = { k, who: f.name, text: pick(s, [`얼어붙은 손으로 무언가를 당겨 냈다. ${G(k).name}이다.`, `잔해 밑, 천에 싸인 꾸러미. 풀어 보니 ${G(k).name}.`, `누군가 숨겨 둔 자리였다. ${G(k).name}이(가) 그대로 있었다.`]) };
+      notes.push(`${f.name}이(가) ${G(k).name}을(를) 찾아 챙겼다.`);
+    } else if (r >= 8) {
+      const p = r >= 14 ? 2 : 1;
+      e.loot.parts += p;
+      let extra = "";
+      if (res.length && rnd(s) < 0.5) { const k = pick(s, res), got = Math.min(st[k], 1); st[k] -= got; e.loot[k] += got; extra = ` ${W(s)[k]} ${got}도.`; }
+      notes.push(`${f.name}이(가) 잔해 사이에서 쓸 만한 부품 ${p}개를 챙겼다.${extra}`);
     } else {
-      notes.push(`🔦 ${f.name}이(가) 뒤졌지만 아무것도 없었다.`);
-      if (r < 8 && rnd(s) < 0.35) hurt(s, f, 1, "어둠 속을 뒤지다", notes);
+      notes.push(`${f.name}이(가) 어둠 속을 더듬었지만 아무것도 없었다.`);
+      if (rnd(s) < 0.3) hurt(s, f, 1, "어둠 속을 뒤지다", notes);
     }
     if (e.noise >= NOISE_MAX && !e.chased) { e.chaseNext = true; notes.push("🔊 너무 시끄러웠다. 어딘가에서 무언가가 고개를 든다."); }
     return { state: s };
@@ -621,7 +664,8 @@
         e.loot[k] += got;
       } else e.loot[k] += v;
     }
-    if (o.lose) for (const k of RES) e.loot[k] = Math.floor(e.loot[k] * (1 - o.lose));
+    if (o.lose) for (const k of [...RES, "parts"]) e.loot[k] = Math.floor(e.loot[k] * (1 - o.lose));
+    if (success && !a.auto && ["search", "trap", "revisit"].includes(sc.kind) && rnd(s) < 0.4) { e.loot.parts += 1; notes.push("쓸 만한 부품 하나를 주머니에 넣었다."); }
     let harm = (o.harm || 0) + (fumble ? 1 : 0);
     const kit = harm && findGear(s, (d) => d.armor);
     if (kit) { harm -= 1; kit.u -= 1; notes.push(`${G(kit.k).icon} ${G(kit.k).name}으로 상처를 막았다.`); if (kit.u <= 0) dropGear(s, kit, "다 썼다.", notes); }
@@ -700,8 +744,9 @@
     s.food = Math.max(0, s.food + e.loot.food);
     s.wood = Math.max(0, s.wood + e.loot.wood);
     s.meds = Math.max(0, s.meds + e.loot.meds);
+    s.parts = Math.max(0, (s.parts || 0) + (e.loot.parts || 0));
     s.hope = clamp(s.hope + e.loot.hope, 0, 100);
-    s.dayLines.push(`밤 탐색 (${placeOf(s, e.loc).name}): ${party.length ? "" : "아무도 돌아오지 못했다. "}${w.food} ${e.loot.food >= 0 ? "+" : ""}${e.loot.food} · ${w.wood} +${Math.max(0, e.loot.wood)} · ${w.meds} +${Math.max(0, e.loot.meds)}`);
+    s.dayLines.push(`밤 탐색 (${placeOf(s, e.loc).name}): ${party.length ? "" : "아무도 돌아오지 못했다. "}${w.food} ${e.loot.food >= 0 ? "+" : ""}${e.loot.food} · ${w.wood} +${Math.max(0, e.loot.wood)} · ${w.meds} +${Math.max(0, e.loot.meds)}${e.loot.parts ? ` · 부품 +${e.loot.parts}` : ""}`);
     s.log.push({ day: s.day, text: `${e.party.map((id) => byId(s, id).name).join("·")}이(가) ${placeOf(s, e.loc).name}에 다녀왔다.` });
     s.exp = null;
     return dawn(s);
@@ -718,6 +763,8 @@
       [/^🩹 (.+)이\(가\) 밤새 (.+)을\(를\) 간호했다/, (m) => `${m[1]}이(가) 밤새 ${m[2]} 곁에 앉아 있었다. 새벽녘, ${m[2]}의 숨소리가 조금 고르게 바뀌었다.`],
       [/^🎣 (.+)이\(가\) .+\+\d/, (m) => `${m[1]}이(가) 밤새 밖에서 떨다 돌아왔다. 손에 먹을 것이 들려 있었다.`],
       [/^🎣 (.+)은\(는\) 밤새 허탕/, (m) => `${m[1]}은(는) 빈손으로 돌아와 아무 말 없이 난로 앞에 앉았다.`],
+      [/^🛠 (.+)이\(가\) 밤새 (.+)에 매달렸다/, (m) => `${m[1]}이(가) 난로 불빛 아래서 밤새 ${m[2].replace(/ 기?$/, "")}에 매달렸다. 새벽녘, 무언가 하나가 완성되어 있었다.`],
+      [/^⚠ (.+)이\(가\) 고비/, (m) => `${m[1]}의 숨이 얕고 빠르다. 오늘 밤이 고비다.`],
       [/^🔧 (.+)이\(가\)/, (m) => `${m[1]}이(가) 틈마다 헝겊을 쑤셔 넣고 연통을 손봤다. 불은 적게 먹고 오래 탔다.`],
       [/^🕳/, () => (tags.add("도둑"), `아침에 보니 창고 문이 열려 있었다. 지키는 사람이 없던 밤, 누군가 다녀갔다.`)],
       [/^🥶/, () => (tags.add("추위"), `${w.wood}이(가) 떨어졌다. 모두 한데 엉겨 서로의 숨으로 밤을 버텼다.`)],
@@ -748,7 +795,7 @@
     const party = alive(s).filter((p) => home(s, p)).map((p) => p.id);
     s.gear.forEach((g, i) => { g.with = party[i % party.length] || null; });
     const wolf = st.rival === -1 ? null : s.flags.ally ? "f_wolf_ally" : s.flags.passage ? "f_wolf_pass" : "f_wolf_block";
-    s.exp = { loc: "finale", finale: true, queue: ["f_cross", wolf, "f_train"].filter(Boolean), party, step: 0, loot: { food: 0, wood: 0, meds: 0, hope: 0 }, scene: null, result: null, story: [], noise: 0, chased: false, chaseNext: false, isChase: false, truth: null, p1: null, refuse: null, scan: null };
+    s.exp = { loc: "finale", finale: true, queue: ["f_cross", wolf, "f_train"].filter(Boolean), party, step: 0, loot: { food: 0, wood: 0, meds: 0, hope: 0, parts: 0 }, scene: null, result: null, story: [], noise: 0, chased: false, chaseNext: false, isChase: false, truth: null, p1: null, refuse: null, scan: null };
     if (!party.length) { s.exp = { finale: true, party: [] }; return endFinale(s); }
     s.dayLines.push(`🚂 ${def.finale.place.name}로 떠났다. ${party.map((id) => byId(s, id).name).join("·")}.`);
     drawScene(s);
@@ -796,14 +843,20 @@
       if (p.hunger >= 2) p.stress = clamp(p.stress + 10, 0, 100);
       if (p.hunger >= 3) hurt(s, p, 1, "굶주림", notes);
     }
-    const sick = 0.22 + (alive(s).some((p) => p.hunger >= 2) ? 0.1 : 0) + s.day * 0.01;
+    const sick = 0.27 + (alive(s).some((p) => p.hunger >= 2) ? 0.1 : 0) + s.day * 0.01;
     if (rnd(s) < sick) {
-      const v = pick(s, alive(s)), bad = rnd(s) < 0.3;
-      if (v) { notes.push(`🤒 ${v.name}이(가) ${bad ? "심하게 " : ""}앓기 시작했다.`); hurt(s, v, bad ? 2 : 1, "병", notes); }
+      const v = pick(s, alive(s));
+      if (v) { notes.push(`🤒 ${v.name}이(가) 앓기 시작했다.`); hurt(s, v, 1, "병", notes); }
     }
+    // 상처: 위독해도 하루는 버틴다(고비). 고비를 치료 없이 넘기면 그때 죽을 수 있다
+    const cold = s.wood <= 0;
     for (const p of alive(s)) {
-      if (p.hp === 3 && !p.medToday) die(s, p, "치료받지 못한 상처", notes);
-      else if (p.hp === 2 && !p.medToday && rnd(s) < 0.35) hurt(s, p, 1, "상처 악화", notes);
+      if (p.hp < 3) p.crit = 0;
+      if (p.hp === 3 && !p.medToday) {
+        p.crit = (p.crit || 0) + 1;
+        if (p.crit >= 2 && rnd(s) < 0.8) die(s, p, "치료받지 못한 상처", notes);
+        else notes.push(`⚠ ${p.name}이(가) 고비를 맞았다. 오늘 밤 치료하지 않으면 위험하다.`);
+      } else if (p.hp === 2 && !p.medToday && (p.hunger >= 1 || cold) && rnd(s) < 0.25) hurt(s, p, 1, "상처 악화", notes);
     }
     const t = s.threats.find((x) => !x.done && x.day === s.day);
     if (t) {
@@ -1104,6 +1157,8 @@
     if (c.story === undefined) c.story = null;
     if (!c.chronicle) c.chronicle = [];
     if (!c.scouted) c.scouted = {};
+    if (!Number.isFinite(c.parts)) c.parts = 0;
+    if (c.exp && c.exp.loot && c.exp.loot.parts === undefined) c.exp.loot.parts = 0;
     return c;
   }
   // 밤 추천: 가장 모자란 것을 구하러, 그 장소에 맞는 두 사람
@@ -1123,7 +1178,7 @@
   const storyGoal = (s) => (story(s) ? story(s).goalLine(s) : null);
   const api = {
     newGame, toggleFeed, toggleMed, toggleSend, setPlace, nightfall, choose, proceed, resolveEvent, dismiss, validate, recommend,
-    sceneView, eventView, forecast, harsh, toggleCarry, toggleScout, placeInfo, gearName, N, setRole, roleOf, ROLES, rummage, storyGoal, isFinaleNight, nextThreat, alive, adults, byId, canGo, home, describe, scen, meta, defaultPlan, MAX_STEP,
+    sceneView, eventView, forecast, harsh, toggleCarry, toggleScout, placeInfo, gearName, N, setCraft, recipesFor, recipeOk, gearWhere, setRole, roleOf, ROLES, rummage, storyGoal, isFinaleNight, nextThreat, alive, adults, byId, canGo, home, describe, scen, meta, defaultPlan, MAX_STEP,
   };
   if (typeof module !== "undefined") module.exports = api;
   root.SurviveEngine = api;

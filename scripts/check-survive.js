@@ -93,6 +93,41 @@ for (const k of SC.order) {
   assert(out[k].smart / 120 < 0.9, k + " 너무 쉬우면 안 됨");
   assert(out[k].ends.size >= 3, k + " 결말이 다양");
 }
+// 부상: 위독해도 첫 아침은 고비로 버틴다
+{
+  let g = E.dismiss(E.newGame({ seed: 21, scenario: "flood" })).state;
+  const v = E.alive(g).find((p) => !p.leader);
+  v.hp = 3; g.plan = E.defaultPlan(g); g.plan.med = {}; for (const id of Object.keys(g.plan.role)) g.plan.role[id] = "rest";
+  const n = E.nightfall(g).state;
+  const after = n.phase === "exp" ? E.proceed(E.choose(n, 0).state, false).state : n;
+  const vv = E.byId(after, v.id);
+  assert(vv.alive || vv.hp < 3, "위독한 사람은 첫 아침을 버틴다");
+}
+// 만들기: 부품으로 밧줄을 만든다
+{
+  let g = E.dismiss(E.newGame({ seed: 33, scenario: "iceage" })).state;
+  g.parts = 5; g.gear = [];
+  const maker = E.alive(g).find((p) => !p.child && !p.leader);
+  maker.stats.craft = 20;
+  let x = E.setCraft(g, "rope"); assert(!x.error, x.error); g = x.state;
+  g = E.setRole(g, maker.id, "fix").state;
+  const n = E.nightfall(g).state;
+  assert(n.gear.some((q) => q.k === "rope") && n.parts === 3, "밧줄을 만들었다");
+  assert(E.setCraft(E.dismiss(E.newGame({ seed: 33, scenario: "iceage" })).state, "sled").error, "부품이 모자라면 못 만든다");
+}
+// 뒤지기: 부품이나 장비가 나온다
+{
+  let got = 0;
+  for (let i = 1; i <= 40; i++) {
+    let g = E.dismiss(E.newGame({ seed: i * 101, scenario: "nuclear" })).state;
+    const p = E.alive(g).find((q) => E.canGo(g, q)); g = E.toggleSend(g, p.id).state; g = E.setPlace(g, "depot").state;
+    g = E.nightfall(g).state; g = E.choose(g, E.sceneView(g).approaches.findIndex((a) => !a.locked)).state;
+    const before = g.gear.length + g.exp.loot.parts; const r = E.rummage(g);
+    if (!r.error && r.state.gear.length + r.state.exp.loot.parts > before) got++;
+    assert(E.rummage(r.state).error, "한 장면에 한 번만 뒤진다");
+  }
+  assert(got >= 20, "뒤지면 대개 무언가 나온다 " + got);
+}
 // 빙하기 이야기: 막이 넘어가고, 선로를 찾고, 마지막 밤까지 간다
 const story = { act3: 0, rail: 0, sled: 0, finale: 0, arcs: new Set(), cbs: new Set(), rival: new Set(), journal: 0 };
 const orig = E.resolveEvent;

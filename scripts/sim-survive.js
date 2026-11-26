@@ -44,6 +44,10 @@ function bot(strategy, seed, scenario = "random") {
       if (strategy === "random") {
         for (const p of E.alive(s)) if (r(3) === 0) { const x = E.toggleFeed(s, p.id); if (!x.error) s = x.state; }
       }
+      if (strategy === "smart") {
+        const want = s.meds === 0 && E.alive(s).some((p) => p.hp >= 2) ? "bandage" : s.story && !s.story.prog.sled ? "sled" : !s.gear.some((g) => g.k === "trap") ? "trap" : "bandage";
+        if (E.recipeOk(s, want)) { const x = E.setCraft(s, want); if (!x.error) s = x.state; }
+      }
       const rec = E.recommend(s);
       const go = strategy === "random" ? r(2) === 0 : rec.party.length && (s.food < 8 || s.wood < 3 || r(3) > 0);
       if (go && rec.party.length) {
@@ -60,7 +64,10 @@ function bot(strategy, seed, scenario = "random") {
         const v = E.sceneView(s), open = v.approaches.filter((x) => !x.locked);
         const a = strategy === "random" ? open[r(open.length)] : open.slice().sort((x, y) => y.p - x.p)[0];
         s = E.choose(s, a.i).state;
-      } else s = E.proceed(s, strategy === "random" ? r(2) === 0 : s.exp.result.success && s.exp.step < 1).state;
+      } else {
+        if (strategy === "smart" && !s.exp.result.rummaged && !s.exp.isChase && !s.exp.finale && s.exp.noise <= 4) { const x = E.rummage(s); if (!x.error) { s = x.state; continue; } }
+        s = E.proceed(s, strategy === "random" ? r(2) === 0 : s.exp.result.success && s.exp.step < 1).state;
+      }
       continue;
     }
   }

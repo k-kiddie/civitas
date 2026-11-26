@@ -239,3 +239,15 @@ small.why { color: #b98a72 !important; }
   .modal { padding-top: 20px; }
   .art.banner, .nightart .art { border-radius: 2px; }
 }
+.res { grid-template-columns: repeat(5, 1fr); }
+.bag { list-style: none; padding: 0; margin: 0; }
+.bag li { padding: 10px 0; border-top: 1px solid var(--line); font-size: 14px; line-height: 1.5; }
+.bag li small { color: var(--mute); font-size: 12px; }
+.bag li .who { color: var(--amber); }
+.place .gearhere { color: #a99b7e; }
+.find { margin: 16px 0; padding: 14px 0; border-top: 1px solid var(--amber); border-bottom: 1px solid var(--line); }
+.find > small:first-child { display: block; font-size: 11px; letter-spacing: .3em; color: var(--amber); }
+.find b { display: block; font-size: 19px; margin: 4px 0 2px; }
+.find p { margin: 4px 0; font-size: 14px; line-height: 1.8; color: var(--ink2); }
+.find > small:last-child { color: var(--mute); font-size: 12px; }
+h3 small { letter-spacing: 0; font-weight: 400; }
