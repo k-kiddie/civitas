@@ -107,7 +107,7 @@ http
       return;
     }
     // 생존 시나리오 그림: 나중에 추가되는 파일도 바로 보이도록 정해진 폴더의 webp/png만 그때그때 읽는다
-    const art = url.pathname.match(/^\/assets\/(portraits|scenarios)\/([a-z0-9_/-]+)\.(webp|png)$/);
+    const art = url.pathname.match(/^\/assets\/(portraits|scenarios|gear)\/([a-z0-9_/-]+)\.(webp|png)$/);
     if (art && req.method === "GET" && !url.pathname.includes("..")) {
       const file = path.join(root, "assets", art[1], art[2] + "." + art[3]);
       if (file.startsWith(path.join(root, "assets")) && fs.existsSync(file)) {
