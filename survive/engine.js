@@ -367,7 +367,7 @@
     for (const g of s.gear) g.with = plan.send.includes(plan.carry[g.uid]) ? plan.carry[g.uid] : null;
     if (plan.send.length) {
       const pl = scen(s).places[plan.place];
-      s.exp = { loc: plan.place, party: plan.send.slice(), step: 0, loot: { food: 0, wood: 0, meds: 0, hope: 0, parts: 0 }, scene: null, result: null, story: [], noise: pl.danger - 1, chased: false, chaseNext: false, isChase: false, truth: null, p1: null, refuse: null, scan: null };
+      s.exp = { loc: plan.place, party: plan.send.slice(), step: 0, loot: { food: 0, wood: 0, meds: 0, hope: 0, parts: 0 }, scene: null, result: null, story: [], noise: pl.danger - 1, chased: false, isChase: false, truth: null, p1: null, refuse: null, scan: null };
       if (s.scouted && s.day - (s.scouted[plan.place] ?? -9) <= 2) { s.exp.knowWay = true; s.exp.noise = 0; }
       const gg = findGear(s, (d) => d.scan);
       if (gg) s.exp.scan = `${G(gg.k).icon} 계수기가 가리킨다: 남은 것 ${lvl(s.stock[plan.place])}`;
@@ -597,6 +597,15 @@
       notes.push(`⬆ ${p.name}의 ${D.stats[stat].name}이(가) ${p.stats[stat]}이(가) 되었다.`);
     }
   }
+  // 기척: 소리가 쌓이면 징조가 보이고, 움직일 때 들킬 확률이 생긴다(무조건 들키지 않는다)
+  const STAGES = ["고요", "어딘가 기척", "무언가 귀를 기울인다", "들킬 것 같다"];
+  const stageOf = (n) => (n >= 9 ? 3 : n >= 6 ? 2 : n >= 3 ? 1 : 0);
+  const caughtChance = (n) => Math.max(0, Math.min(1, (n - 5) * 0.2));
+  const SIGNS = ["멀리서 들리던 발소리가 멈췄다.", "어둠 저편에서 무언가 킁킁거린다.", "머리 위에서 먼지가 떨어진다. 무언가 걷고 있다.", "개 한 마리가 짖다가, 뚝 그쳤다.", "등 뒤의 공기가 달라졌다."];
+  function noiseWarn(s, before, notes) {
+    const e = s.exp, a = stageOf(before), b = stageOf(e.noise);
+    if (b > a && b >= 1) notes.push(`${pick(s, SIGNS)} (${STAGES[b]})`);
+  }
   function storyOutcome(s, o, notes) {
     if (!s.story || !o) return;
     const st = s.story, def = story(s);
@@ -619,6 +628,7 @@
     const f = live.slice().sort((a, b) => b.stats.wits - a.stats.wits)[0];
     const r = d20(s) + f.stats.wits + (findGear(s, (d) => d.wits) ? 1 : 0);
     e.result.rummaged = true;
+    const nb = e.noise;
     e.noise += 2;
     const st = s.stock[e.loc];
     const res = st ? RES.filter((k) => st[k] > 0) : [];
@@ -640,7 +650,23 @@
       notes.push(`${f.name}이(가) 어둠 속을 더듬었지만 아무것도 없었다.`);
       if (rnd(s) < 0.3) hurt(s, f, 1, "어둠 속을 뒤지다", notes);
     }
-    if (e.noise >= NOISE_MAX && !e.chased) { e.chaseNext = true; notes.push("🔊 너무 시끄러웠다. 어딘가에서 무언가가 고개를 든다."); }
+    noiseWarn(s, nb, notes);
+    return { state: s };
+  }
+  // 숨죽이고 기다린다: 기척이 가라앉지만 춥고 무섭다
+  function hush(state) {
+    const e0 = state.exp;
+    if (state.phase !== "exp" || !e0?.result || e0.result.hushed || e0.isChase || e0.finale || e0.noise < 4) return { state, error: "지금은 기다릴 필요가 없습니다." };
+    const s = clone(state), e = s.exp, notes = e.result.notes;
+    e.result.hushed = true;
+    e.noise = Math.max(0, e.noise - 4);
+    for (const id of e.party) { const p = byId(s, id); if (p.alive) p.stress = clamp(p.stress + 6, 0, 100); }
+    notes.push(`숨을 죽이고 오래 기다렸다. 심장 소리만 들렸다. 기척이 가라앉았다. (${STAGES[stageOf(e.noise)]})`);
+    const hz = N.placeHazard[s.scenario]?.[e.loc];
+    if ((hz === "cold" || s.scenario === "iceage") && !findGear(s, (d) => d.guard === "cold") && rnd(s) < 0.2) {
+      const live = e.party.map((id) => byId(s, id)).filter((p) => p.alive);
+      if (live.length) hurt(s, pick(s, live), 1, "동상", notes);
+    }
     return { state: s };
   }
   function choose(state, index) {
@@ -696,8 +722,9 @@
     if (roller.alive && !a.auto) gainXp(s, roller, a.stat, notes);
     // 소음: 행동마다 쌓이고 넘치면 '그것'이 온다
     const quiet = carried(s).some((g) => G(g.k).quiet) ? 1 : 0;
+    const nb = e.noise;
     e.noise = Math.max(0, e.noise + (a.noise ?? NOISE[a.stat]) + (success ? 0 : 2) - quiet);
-    if (e.noise >= NOISE_MAX && !e.chased && !e.isChase && !e.finale) { e.chaseNext = true; notes.push("🔊 너무 시끄러웠다. 어딘가에서 무언가가 고개를 든다."); }
+    if (!e.isChase && !e.finale) noiseWarn(s, nb, notes);
     if (e.isChase) e.noise = 2;
     // 장소 위험: 막는 장비가 없으면 누군가 다친다
     const hz = N.placeHazard[s.scenario]?.[e.loc];
@@ -723,8 +750,7 @@
       if (party.length && e.queue.length) { drawScene(s); return { state: s }; }
       return endFinale(s);
     }
-    if (party.length && e.chaseNext && !e.chased) {
-      e.chaseNext = false;
+    if (party.length && !e.chased && !e.isChase && rnd(s) < caughtChance(e.noise)) {
       e.chased = true;
       e.result = null;
       drawChase(s);
@@ -795,7 +821,7 @@
     const party = alive(s).filter((p) => home(s, p)).map((p) => p.id);
     s.gear.forEach((g, i) => { g.with = party[i % party.length] || null; });
     const wolf = st.rival === -1 ? null : s.flags.ally ? "f_wolf_ally" : s.flags.passage ? "f_wolf_pass" : "f_wolf_block";
-    s.exp = { loc: "finale", finale: true, queue: ["f_cross", wolf, "f_train"].filter(Boolean), party, step: 0, loot: { food: 0, wood: 0, meds: 0, hope: 0, parts: 0 }, scene: null, result: null, story: [], noise: 0, chased: false, chaseNext: false, isChase: false, truth: null, p1: null, refuse: null, scan: null };
+    s.exp = { loc: "finale", finale: true, queue: ["f_cross", wolf, "f_train"].filter(Boolean), party, step: 0, loot: { food: 0, wood: 0, meds: 0, hope: 0, parts: 0 }, scene: null, result: null, story: [], noise: 0, chased: false, isChase: false, truth: null, p1: null, refuse: null, scan: null };
     if (!party.length) { s.exp = { finale: true, party: [] }; return endFinale(s); }
     s.dayLines.push(`🚂 ${def.finale.place.name}로 떠났다. ${party.map((id) => byId(s, id).name).join("·")}.`);
     drawScene(s);
@@ -843,7 +869,7 @@
       if (p.hunger >= 2) p.stress = clamp(p.stress + 10, 0, 100);
       if (p.hunger >= 3) hurt(s, p, 1, "굶주림", notes);
     }
-    const sick = 0.27 + (alive(s).some((p) => p.hunger >= 2) ? 0.1 : 0) + s.day * 0.01;
+    const sick = 0.3 + (alive(s).some((p) => p.hunger >= 2) ? 0.1 : 0) + s.day * 0.01;
     if (rnd(s) < sick) {
       const v = pick(s, alive(s));
       if (v) { notes.push(`🤒 ${v.name}이(가) 앓기 시작했다.`); hurt(s, v, 1, "병", notes); }
@@ -1178,7 +1204,7 @@
   const storyGoal = (s) => (story(s) ? story(s).goalLine(s) : null);
   const api = {
     newGame, toggleFeed, toggleMed, toggleSend, setPlace, nightfall, choose, proceed, resolveEvent, dismiss, validate, recommend,
-    sceneView, eventView, forecast, harsh, toggleCarry, toggleScout, placeInfo, gearName, N, setCraft, recipesFor, recipeOk, gearWhere, setRole, roleOf, ROLES, rummage, storyGoal, isFinaleNight, nextThreat, alive, adults, byId, canGo, home, describe, scen, meta, defaultPlan, MAX_STEP,
+    sceneView, eventView, forecast, harsh, toggleCarry, toggleScout, placeInfo, gearName, N, hush, noiseStage: (s) => (s.exp ? { stage: stageOf(s.exp.noise), name: STAGES[stageOf(s.exp.noise)], risk: caughtChance(s.exp.noise), riskAfter: caughtChance(s.exp.noise + 2) } : null), setCraft, recipesFor, recipeOk, gearWhere, setRole, roleOf, ROLES, rummage, storyGoal, isFinaleNight, nextThreat, alive, adults, byId, canGo, home, describe, scen, meta, defaultPlan, MAX_STEP,
   };
   if (typeof module !== "undefined") module.exports = api;
   root.SurviveEngine = api;

@@ -106,17 +106,21 @@
     const loot = `${w.food} ${e.loot.food} · ${w.wood} ${e.loot.wood} · ${w.meds} ${e.loot.meds}`;
     const v = E.sceneView(s);
     const nz = Math.min(100, Math.round((e.noise / 8) * 100));
-    const noise = `<div class="noise ${nz >= 75 ? "hot" : ""}"><small>🔊 소음</small><i><i style="width:${nz}%"></i></i></div>`;
+    const ns = E.noiseStage(s);
+    const noise = e.finale ? "" : `<div class="noise ${ns.stage >= 2 ? "hot" : ""}"><small>기척 · ${ns.name}</small><i><i style="width:${nz}%"></i></i></div>`;
     const head = `<div class="nightart">${A.scene(sc(), e.finale ? (e.queue.length ? "night" : "ending_good") : e.isChase ? "threat_hit" : e.loc)}</div><div class="eyebrow">🌙 ${pl.name} · ${e.step + 1}번째 장면${v ? ` · <b class="kind k-${v.kind}">${v.kindName}</b>` : ""}${E.harsh(s) ? ` · 세상이 험해졌다` : ""}</div>${noise}<div class="party">${party.map((p) => `<span class="${p.alive ? "" : "dead"}">${face(p, 26)} ${esc(p.name)} <small>${HP[p.hp]}</small></span>`).join("")}<span class="loot">챙긴 것 ${loot}${gear.length ? ` · ${gear.map((g) => esc(E.gearName(g))).join(" ")}` : ""}</span></div>${e.scan ? `<p class="note">${esc(e.scan)}</p>` : ""}`;
     if (e.result) {
       const r = e.result, alive = party.filter((p) => p.alive), anyAlive = alive.length > 0;
       const refuser = e.refuse ? E.byId(s, e.refuse) : null;
-      const canDeeper = anyAlive && e.step < E.MAX_STEP && !e.isChase && !e.chaseNext;
+      const canDeeper = anyAlive && e.step < E.MAX_STEP && !e.isChase;
+      const RISK = (p) => (p <= 0 ? "" : p < 0.3 ? "들킬 수도 있다" : p < 0.7 ? "들킬 가능성이 높다" : "거의 확실히 들킨다");
+      const riskNow = !e.isChase && !e.chased ? RISK(ns.risk) : "";
       const dice = r.auto ? "" : `<div class="roll-line"><span class="d20 ${r.crit ? "crit" : r.fumble ? "fumble" : ""}">${r.roll}</span><span class="calc">${r.parts.map(([n, v]) => ` ${v >= 0 ? "+" : "−"} ${esc(n)} ${Math.abs(v)}`).join("")} = <b>${r.total}</b> <small>vs ${r.dc}</small></span></div><div class="verdict">${r.crit ? "대성공" : r.fumble ? "대실패" : r.success ? "성공" : "실패"}</div>`;
-      const deeper = canDeeper ? (refuser && refuser.alive ? btn(`더 들어간다 <small>${esc(refuser.name)}: “난 더 못 가…” — 강행하면 원망을 산다</small>`, "deeper", 'class="secondary warn"') : btn("더 들어간다 <small>더 많이, 더 위험하게, 더 시끄럽게</small>", "deeper", 'class="secondary"')) : "";
-      const rum = anyAlive && !r.rummaged && !e.isChase && !e.finale ? btn(`주변을 더 뒤진다 <small>부품이나 장비가 나올 수 있다${(E.N.placeGear[s.scenario]?.[e.loc] || []).length ? ` (여기선 ${(E.N.placeGear[s.scenario][e.loc]).map((k) => E.N.gear[k].name).join("·")})` : ""} · 소리가 난다</small>`, "rummage", 'class="secondary"') : "";
-      const homeLabel = !anyAlive ? "…" : e.chaseNext ? "돌아간다… <small>뒤에서 무언가 온다</small>" : "돌아간다";
-      return `<div class="veil night"><section class="modal result ${r.success ? "win" : "lose"} ${r.crit ? "crit" : ""} ${r.success ? "" : "flash"}" role="dialog" aria-modal="true">${head}<p class="picked">“${esc(r.approach)}” — ${esc(r.roller)}</p>${dice}${prose([r.text])}${r.find ? `<div class="find"><small>찾았다</small><b>${esc(E.N.gear[r.find.k].name)}</b><p>${esc(r.find.text)}</p><small>${esc(E.N.gear[r.find.k].desc)}</small></div>` : ""}${r.notes.map((n) => `<p class="note">${esc(n)}</p>`).join("")}${rum}${e.finale ? btn(e.queue.length && anyAlive ? "계속 간다" : "…", "home", 'class="primary"') : deeper + btn(homeLabel, "home", 'class="primary"')}</section></div>`;
+      const deeper = canDeeper ? (refuser && refuser.alive ? btn(`더 들어간다 <small>${esc(refuser.name)}: “난 더 못 가…” — 강행하면 원망을 산다</small>`, "deeper", 'class="secondary warn"') : btn(`더 들어간다 <small>더 많이, 더 위험하게${riskNow ? ` · 지금 움직이면 ${riskNow}` : ""}</small>`, "deeper", 'class="secondary"')) : "";
+      const rum = anyAlive && !r.rummaged && !e.isChase && !e.finale ? btn(`주변을 더 뒤진다 <small>부품이나 장비가 나올 수 있다${(E.N.placeGear[s.scenario]?.[e.loc] || []).length ? ` (여기선 ${(E.N.placeGear[s.scenario][e.loc]).map((k) => E.N.gear[k].name).join("·")})` : ""} · 소리가 난다${RISK(ns.riskAfter) ? ` — 뒤지고 나면 ${RISK(ns.riskAfter)}` : ""}</small>`, "rummage", 'class="secondary"') : "";
+      const homeLabel = !anyAlive ? "…" : riskNow ? `돌아간다 <small>지금 움직이면 ${riskNow}</small>` : "돌아간다";
+      const hushBtn = anyAlive && !r.hushed && !e.isChase && !e.finale && e.noise >= 4 ? btn(`숨죽이고 기다린다 <small>기척이 가라앉는다 · 춥고 무섭다</small>`, "hush", 'class="secondary"') : "";
+      return `<div class="veil night"><section class="modal result ${r.success ? "win" : "lose"} ${r.crit ? "crit" : ""} ${r.success ? "" : "flash"}" role="dialog" aria-modal="true">${head}<p class="picked">“${esc(r.approach)}” — ${esc(r.roller)}</p>${dice}${prose([r.text])}${r.find ? `<div class="find"><small>찾았다</small><b>${esc(E.N.gear[r.find.k].name)}</b><p>${esc(r.find.text)}</p><small>${esc(E.N.gear[r.find.k].desc)}</small></div>` : ""}${r.notes.map((n) => `<p class="note">${esc(n)}</p>`).join("")}${rum}${hushBtn}${e.finale ? btn(e.queue.length && anyAlive ? "계속 간다" : "…", "home", 'class="primary"') : deeper + btn(homeLabel, "home", 'class="primary"')}</section></div>`;
     }
     const FEEL = { "확실하다": "sure", "해볼 만하다": "good", "반반이다": "mid", "위험하다": "bad", "무모하다": "awful" };
     const choices = v.approaches.map((a) => btn(`${a.tag ? `<em class="req ${a.locked ? "no" : "ok"}">[${esc(a.tag)}]</em> ` : ""}<span>${esc(a.label)}</span>${a.locked ? `<small class="why">${esc(a.locked)}</small>` : `<small><b class="feel f-${FEEL[a.feel]}">${a.feel}</b>${a.auto ? "" : ` · ${D.stats[a.stat].icon} ${esc(a.rollerName)}`}${a.tool ? ` · <span class="${a.hasTool ? "has" : "no"}">${E.N.gear[a.tool]?.icon || ""} ${a.hasTool ? "도구 있음" : "도구가 있으면 나을 텐데"}</span>` : ""}${a.hint ? `<br><i class="whisper">${esc(v.hinter)}: ${esc(a.hint)}</i>` : ""}</small>`}`, "approach", `data-i="${a.i}" ${a.locked ? "disabled" : ""} class="${a.locked ? "locked" : a.tag ? "special" : ""}"`)).join("");
@@ -223,6 +227,7 @@
     else if (k === "scout") commit(E.toggleScout(state, a.dataset.id));
     else if (k === "role") { if (commit(E.setRole(state, a.dataset.id, a.dataset.r))) { sheet = null; render(); } }
     else if (k === "rummage") commit(E.rummage(state));
+    else if (k === "hush") commit(E.hush(state));
     else if (k === "craft") commit(E.setCraft(state, a.dataset.r));
     else if (k === "carry") commit(E.toggleCarry(state, a.dataset.uid, a.dataset.id));
     else if (k === "place") commit(E.setPlace(state, a.dataset.k));
