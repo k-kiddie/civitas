@@ -103,3 +103,8 @@ assets/scenarios/
 ## 그림을 넣는 방법
 - GPT가 저장소에 직접 올릴 수 있으면 위 경로로 커밋해 주세요. 작업 브랜치 이름은 `codex/scenario-art` 같은 새 브랜치를 쓰고, Claude가 검토 후 합칩니다.
 - 직접 올릴 수 없으면 동현이 GitHub 웹에서 해당 폴더로 이동해 **Add file → Upload files**로 올리면 됩니다. 파일 이름만 정확하면 됩니다.
+
+## 추가: 장면마다 다른 그림 (2026-11-26)
+게임이 찾는 파일 이름 전체와 설명은 `assets/scenarios/ART_LIST.md`에 있다(`node scripts/art-list.js`로 갱신).
+같은 폴더 `scenes/`에 그 이름 그대로 넣으면 바로 게임에 나온다. 없는 그림은 기존 장소·분위기 그림이 대신 나온다.
+장비 그림은 `assets/gear/<이름>.webp`(정사각 512).

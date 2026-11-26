@@ -811,6 +811,7 @@
     for (const l of r.lines) for (const [re, f] of P) { const m = l.match(re); if (m) { const t = f(m); if (!seen.has(t)) { seen.add(t); out.push(t); } break; } }
     const word = ["빈자리", "습격", "폭풍", "열", "허기", "도둑", "추위", "밤길"].find((t) => tags.has(t)) || "버팀";
     r.chapter = s.day === 1 ? r.title : `${s.day}일째 — ${word}`;
+    r.tag = { 빈자리: "dawn_death", 습격: "dawn_raid", 폭풍: "dawn_storm", 열: "dawn_sick", 허기: "dawn_hunger", 도둑: "dawn_theft", 추위: "dawn_cold", 밤길: "dawn_return", 버팀: "dawn_quiet" }[word];
     r.prose = s.day === 1 ? null : out;
     if (s.chronicle && r.prose) s.chronicle.push({ day: s.day, title: r.chapter, paras: r.prose });
   }
@@ -1061,7 +1062,7 @@
     if (!s.event) return null;
     const e = events(s).find((x) => x.id === s.event.id);
     return {
-      id: e.id, text: fillText(s, e.text), cast: s.event.cast, cast2: s.event.cast2, need: e.need || null,
+      id: e.id, art: e.beat ? `rival_${e.beat}` : e.id, text: fillText(s, e.text), cast: s.event.cast, cast2: s.event.cast2, need: e.need || null,
       choices: e.choices.map((c, i) => ({ i, label: fillText(s, c.label), tag: [c.need?.food && `${W(s).food} ${c.need.food}`, c.need?.wood && `${W(s).wood} ${c.need.wood}`, c.need?.meds && `${W(s).meds} ${c.need.meds}`, c.needPerson && `${meta(s, c.needPerson).name}`].filter(Boolean).join(" · "), reason: c.need?.meds && s.meds < c.need.meds ? `${W(s).meds}이(가) 없다` : c.need?.food && s.food < c.need.food ? `${W(s).food}이(가) 모자라다` : c.need?.wood && s.wood < c.need.wood ? `${W(s).wood}이(가) 모자라다` : c.need?.ledger && !s.flags.ledger ? "장부가 필요하다" : c.needPerson && !(byId(s, c.needPerson)?.alive && home(s, byId(s, c.needPerson))) ? `${meta(s, c.needPerson).name || "그 사람"}이(가) 없다` : "" })),
     };
   }

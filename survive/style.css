@@ -251,3 +251,4 @@ small.why { color: #b98a72 !important; }
 .find p { margin: 4px 0; font-size: 14px; line-height: 1.8; color: var(--ink2); }
 .find > small:last-child { color: var(--mute); font-size: 12px; }
 h3 small { letter-spacing: 0; font-weight: 400; }
+.gicon { float: right; width: 64px; height: 64px; background-size: cover; background-position: center; margin-left: 12px; }

@@ -9,7 +9,7 @@
     store: "opening-factory", pharmacy: "opening-clerk", mill: "opening-farm", granary: "opening-police", wreck: "storm-flood",
     event_people: "hearing", event_rival: "election-win", ending_good: "storm-safe", ending_bad: "storm-flood",
   };
-  const RIVAL_EVENTS = ["rival_offer", "doyun_offer"];
+  const RIVAL_EVENTS = ["rival_offer", "doyun_offer", "rival_r1", "rival_r2", "rival_r3"];
   // ── 임시 장면 그림: 시나리오 분위기만 내는 단순한 풍경 ──
   function sceneSvg(sc) {
     const sky = { nuclear: ["#3a3f38", "#6b6a5c"], iceage: ["#1d3550", "#9fc0d6"], flood: ["#14232c", "#3c5a66"] }[sc] || ["#222", "#555"];
@@ -25,10 +25,16 @@
     return `${BASE}scenarios/${sc}/scenes/${key}.webp`;
   }
   // key: 장소 id, title, shelter, night, dawn, threat_held, threat_hit, ending_good/bad, 또는 사건 id
+  // key: 문자열 또는 [가장 구체적인 이름, …, 기본 이름] 배열. 앞쪽 그림이 없으면 뒤쪽 그림이 보인다
+  const own = (sc, k) => `${BASE}scenarios/${sc}/scenes/${k}.webp`;
   function scene(sc, key, cls = "banner") {
-    const k = key && key.startsWith?.("ev:") ? (RIVAL_EVENTS.includes(key.slice(3)) ? "event_rival" : "event_people") : key;
-    return `<div class="art ${cls}" style='background-image:url("${sceneUrl(sc, k)}"),${sceneSvg(sc)}'></div>`;
+    const keys = (Array.isArray(key) ? key : [key]).filter(Boolean).map((k) => (k.startsWith?.("ev:") ? [k.slice(3), RIVAL_EVENTS.includes(k.slice(3)) ? "event_rival" : "event_people"] : [k])).flat();
+    const urls = [];
+    keys.forEach((k, i) => { const last = i === keys.length - 1; if (sc === "flood") { urls.push(own(sc, k)); if (last || FLOOD_SCENES[k]) urls.push(sceneUrl(sc, k)); } else urls.push(own(sc, k)); });
+    return `<div class="art ${cls}" style='background-image:${[...new Set(urls)].map((u) => `url("${u}")`).join(",")},${sceneSvg(sc)}'></div>`;
   }
+  // 장비 그림: assets/gear/<id>.webp (모든 재난 공통)
+  const gearArt = (k, cls = "gicon") => `<span class="${cls}" style='background-image:url("${BASE}gear/${k}.webp")'></span>`;
   // ── 초상 ──
   const LOOKS = {
     leader: ["#e6be98", "#1f1a17", "#3f5f6e"], sora: ["#d6a37c", "#3b5f86", "#5b4868"], eunho: ["#c48f68", "#2a221c", "#6b5836"], yun: ["#d3a27a", "#cfcac0", "#4f6649"],
@@ -53,7 +59,7 @@
     const cls = ["pt", !p.alive ? "dead" : "", p.hp === 1 ? "hurt" : "", p.hp >= 2 ? "sick" : "", p.stress >= 70 ? "worn" : ""].join(" ");
     return `<span class="${cls}" style='width:${size}px;height:${size}px;background-image:url("${portraitUrl(sc, p)}"),${faceSvg(p)}' role="img" aria-label="${p.name}"></span>`;
   }
-  const api = { scene, portrait, sceneUrl, portraitUrl };
+  const api = { scene, portrait, sceneUrl, portraitUrl, gearArt };
   root.SurviveArt = api;
   if (typeof module !== "undefined") module.exports = api;
 })(globalThis);
