@@ -26,9 +26,10 @@
     // 단계별 목표 표시
     goalLine(s) {
       const st = s.story;
-      if (st.act === 1) return `🎯 선로 찾기 · 단서 ${Math.min(st.clues, 2)}/2`;
-      if (st.act === 2) return `🎯 떠날 준비 · 선로 ${st.rail ? "✔" : "✘"} · 썰매 ${st.prog.sled ? "✔" : "✘"}`;
-      return `🚂 열차까지 ${Math.max(0, s.rescueDay - s.day)}일 · 선로 ${st.rail ? "✔" : "✘"} · 썰매 ${st.prog.sled ? "✔" : "✘"}`;
+      const rail = st.rail ? "선로를 안다" : "선로를 모른다", sled = st.prog.sled ? "썰매가 있다" : "썰매가 없다";
+      if (st.act === 1) return `선로를 찾아야 한다 — 단서 ${Math.min(st.clues, 2)}/2`;
+      if (st.act === 2) return `떠날 준비 — ${rail}, ${sled}`;
+      return `열차까지 ${Math.max(0, s.rescueDay - s.day)}일 — ${rail}, ${sled}`;
     },
     // 이야기 장면: 해당 장소의 첫 장면으로 먼저 나온다
     scenes: [

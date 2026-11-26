@@ -25,7 +25,7 @@
   function header() {
     const s = state, w = words(), S = E.scen(s), t = E.nextThreat(s);
     const tools = s.gear.map((g) => `<span class="tool" title="${esc(E.N.gear[g.k].desc)}">${esc(E.gearName(g))}</span>`).join("");
-    return `<header><div class="top"><span>${S.icon} <b>${S.name}</b> · ${s.day}일째</span><span>${btn(`🕯 ${s.memorial.length}`, "sheet", 'data-sheet="memorial" class="mini"')} ${btn("새로", "sheet", 'data-sheet="new" class="mini"')}</span></div>
+    return `<header><div class="top"><span><b>${S.name}</b>  ${s.day}일째</span><span>${btn(`기록${s.memorial.length ? ` · 잃은 이 ${s.memorial.length}` : ""}`, "sheet", 'data-sheet="memorial" class="mini"')} ${btn("새로", "sheet", 'data-sheet="new" class="mini"')}</span></div>
     <div class="res"><div class="r ${s.food < E.alive(s).length ? "low" : ""}"><small>${w.food}</small><b>${s.food}</b></div><div class="r ${s.wood < 2 ? "low" : ""}"><small>${w.wood}</small><b>${s.wood}</b></div><div class="r ${s.meds === 0 ? "low" : ""}"><small>${w.meds}</small><b>${s.meds}</b></div><div class="r ${s.hope < 25 ? "low" : ""}"><small>희망</small><b>${s.hope}</b><i class="hbar"><i style="width:${s.hope}%"></i></i></div></div>
     <div class="chips">${E.storyGoal(s) ? `<span class="chip goal story">${esc(E.storyGoal(s))}</span>` : `<span class="chip goal">🚩 ${w.goal} ${s.rescueDay - 1}~${s.rescueDay + 1}일</span>`}${t ? `<span class="chip threat ${t.day - s.day <= 1 ? "urgent" : ""}">⚠ ${w.threat} ${t.day - s.day <= 0 ? "오늘 밤" : t.day - s.day + "일 뒤"}${s.flags.braced ? " · 대비함" : ""}</span>` : ""}${tools}</div></header>`;
   }
@@ -85,7 +85,7 @@
     const roleSum = !plan || finale ? "" : ["guard", "nurse", "forage", "fix"].map((r) => { const who = E.alive(s).filter((p) => E.roleOf(s, p.id) === r && !p.child); return who.length ? `${E.ROLES[r].icon}${who.map((p) => esc(p.name)).join("·")}` : r === "guard" ? `<b class="warn">🛡 아무도 안 지킴</b>` : ""; }).filter(Boolean).join(" ");
     const go = !plan || finale ? "" : (plan.scout ? `👁 ${esc(E.byId(s, plan.scout).name)} 정찰 · ` : "") + (plan.send.length ? (plan.place ? `${plan.send.map((id) => esc(E.byId(s, id).name)).join("·")} → ${E.scen(s).places[plan.place].name}` : "보낼 곳을 고르세요") : "아무도 나가지 않는다");
     return `<main><p class="hint">${finale ? "마지막 저녁." : "저녁. 누구를 먹일지, 누구에게 약을 쓸지, 그리고 각자 오늘 밤 무엇을 맡을지 정하세요."}</p><div class="plist">${people}</div>${night}</main>
-    <section class="bar"><div class="fc">오늘 밤: ${w.food} −${f ? f.fed : 0}${f && f.hungry ? ` (${f.hungry}명 굶음)` : ""} · ${w.wood} −1 · ${roleSum}${go ? " · " + go : ""}</div>${btn(finale ? "선로로 떠난다 →" : "밤이 된다 →", "night", 'class="primary"')}</section>`;
+    <section class="bar"><div class="fc">오늘 밤: ${w.food} −${f ? f.fed : 0}${f && f.hungry ? ` (${f.hungry}명 굶음)` : ""} · ${w.wood} −1 · ${roleSum}${go ? " · " + go : ""}</div>${btn(finale ? "선로로 떠난다" : "밤이 된다", "night", 'class="primary"')}</section>`;
   }
   function personSheet(id) {
     const p = E.byId(state, id);
@@ -119,7 +119,7 @@
     return `<div class="veil night"><section class="modal scene ${v.chase ? "chase" : ""}" role="dialog" aria-modal="true">${head}${v.hazard ? `<p class="note hz">${v.hazard.icon} ${esc(v.hazard.text)}</p>` : ""}${prose([v.text], "big")}${v.say ? `<p class="say">${face(E.byId(s, v.say.id), 28)} <b>${esc(v.say.name)}</b> ${esc(v.say.text)}</p>` : ""}<div class="choices">${choices}</div></section></div>`;
   }
   function rollModal() {
-    return `<div class="veil night"><section class="modal roll" role="dialog" aria-modal="true"><p class="picked">“${esc(rolling.label)}”</p><p class="roll-head">${D.stats[rolling.stat].icon} ${esc(rolling.who)}</p><div class="dice">🎲</div><p class="muted heartbeat">숨을 참는다…</p></section></div>`;
+    return `<div class="veil night"><section class="modal roll" role="dialog" aria-modal="true"><p class="picked">“${esc(rolling.label)}”</p><p class="roll-head">${D.stats[rolling.stat].icon} ${esc(rolling.who)}</p><div class="dice">d20</div><p class="muted heartbeat">숨을 참는다…</p></section></div>`;
   }
   // ── 새벽 ──
   function reportModal() {
@@ -167,11 +167,14 @@
   }
   function titleScreen() {
     const cards = SC.order.map((k) => { const x = SC.scenarios[k]; return btn(`${A.scene(k, "title", "thumb")}<b>${x.icon} ${x.name}</b><small>${x.tagline}<br>난이도 ${x.level}</small>`, "pick", `data-k="${k}" class="scard ${pickScenario === k ? "on" : ""}"`); }).join("") + btn(`<div class="art thumb rand">?</div><b>🎲 무작위</b><small>어떤 재난일지 모른다</small>`, "pick", `data-k="random" class="scard ${pickScenario === "random" ? "on" : ""}"`);
-    return `<div class="title"><div class="logo">넷이서 버티기</div><p class="sub">CIVITAS · 생존</p><form id="new"><label>당신의 이름<input name="name" maxlength="10" required placeholder="이름" autocomplete="off"></label><h3>어떤 재난인가</h3><div class="scards">${cards}</div><ul class="how"><li>👥 당신과 세 사람. 한 명 한 명이 소중하다.</li><li>🌆 <b>저녁</b>: 누구를 먹일지, 누구에게 약을 쓸지, 누구를 밤에 내보낼지 정한다. 남은 사람은 거처를 지킨다.</li><li>🌙 <b>밤</b>: 어디에 뭐가 남았는지는 모른다. 기억과 소문, 정찰뿐. 장면마다 <b>d20 판정</b>, 소리를 내면 무언가 온다.</li><li>🎒 <b>장비</b>: 누구에게 무엇을 들려 보낼지 정한다. 그 사람이 쓰러지면 장비도 잃는다.</li><li>🌅 <b>새벽</b>: 굶주림·병·상처·재난이 덮친다. 위독한 사람은 약이나 간호 없이는 하루를 못 넘긴다.</li></ul><button class="primary" type="submit">시작 →</button></form><a class="back" href="../proto/">이전 맛보기(/proto)</a></div>`;
+    return `<div class="title"><div class="logo">넷이서 버티기</div><p class="sub">CIVITAS · 생존</p><form id="new"><label>당신의 이름<input name="name" maxlength="10" required placeholder="이름" autocomplete="off"></label><h3>어떤 재난인가</h3><div class="scards">${cards}</div><ul class="how"><li>👥 당신과 세 사람. 한 명 한 명이 소중하다.</li><li>🌆 <b>저녁</b>: 누구를 먹일지, 누구에게 약을 쓸지, 누구를 밤에 내보낼지 정한다. 남은 사람은 거처를 지킨다.</li><li>🌙 <b>밤</b>: 어디에 뭐가 남았는지는 모른다. 기억과 소문, 정찰뿐. 장면마다 <b>d20 판정</b>, 소리를 내면 무언가 온다.</li><li>🎒 <b>장비</b>: 누구에게 무엇을 들려 보낼지 정한다. 그 사람이 쓰러지면 장비도 잃는다.</li><li>🌅 <b>새벽</b>: 굶주림·병·상처·재난이 덮친다. 위독한 사람은 약이나 간호 없이는 하루를 못 넘긴다.</li></ul><button class="primary" type="submit">시작</button></form><a class="back" href="../proto/">이전 맛보기(/proto)</a></div>`;
   }
   // 바뀐 부분만 다시 그린다: 화면 전체를 매번 갈아엎으면 그림이 깜빡이고 다시 불러온다
   let paintedMain = null, paintedTop = null;
+  // 소설책: 화면에서 그림 문자(이모지)를 걷어 낸다
+  const EMOJI = /(?:\p{Extended_Pictographic}|[\u2600-\u27BF])(?:\uFE0F|\u200D\p{Extended_Pictographic})*\s?/gu;
   function paint(main, top) {
+    main = main.replace(EMOJI, ""); top = top.replace(EMOJI, "");
     let m = app.querySelector(":scope > .layer-main"), t = app.querySelector(":scope > .layer-top");
     if (!m || !t) { app.innerHTML = '<div class="layer-main"></div><div class="layer-top"></div>'; m = app.firstChild; t = app.lastChild; paintedMain = paintedTop = null; }
     if (main !== paintedMain) { m.innerHTML = main; paintedMain = main; }
