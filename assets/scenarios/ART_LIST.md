@@ -8,9 +8,9 @@
 
 ## 먼저 그릴 것 (35장)
 
-- **극 빙하기 분위기**: `dawn_quiet` · `dawn_storm` · `dawn_raid` · `dawn_death` · `dawn_sick` · `dawn_cold` · `act1` · `act2` · `act3`
-- **극 빙하기 이야기**: `s_map` · `s_sign` · `s_sled` · `rival_r1` · `rival_r2` · `rival_r3` · `f_cross` · `f_wolf_block` · `f_train` · `ending_missed`
-- **장비**: `crowbar` · `knife` · `lamp` · `rope` · `medkit` · `pack` · `gasmask` · `geiger` · `pistol` · `snowshoe` · `furcoat` · `rifle` · `boat` · `boots` · `torch` · `trap`
+- **극 빙하기 분위기**: ✅`dawn_quiet` · ✅`dawn_storm` · ✅`dawn_raid` · ✅`dawn_death` · ✅`dawn_sick` · ✅`dawn_cold` · ✅`act1` · ✅`act2` · ✅`act3`
+- **극 빙하기 이야기**: ✅`s_map` · ✅`s_sign` · ✅`s_sled` · ✅`rival_r1` · ✅`rival_r2` · ✅`rival_r3` · ✅`f_cross` · ✅`f_wolf_block` · ✅`f_train` · ✅`ending_missed`
+- **장비**: ✅`crowbar` · ✅`knife` · ✅`lamp` · ✅`rope` · ✅`medkit` · ✅`pack` · ✅`gasmask` · ✅`geiger` · ✅`pistol` · ✅`snowshoe` · ✅`furcoat` · ✅`rifle` · ✅`boat` · ✅`boots` · ✅`torch` · ✅`trap`
 
 ## 핵겨울 (`assets/scenarios/nuclear/scenes/`)
 
@@ -98,31 +98,31 @@
 
 ### 분위기 (아침 장 · 막 · 결말)
 
-- ⬜ `dawn_quiet.webp` — 조용한 아침, 거처 안
-- ⬜ `dawn_storm.webp` — 눈보라이(가) 지나간 아침
-- ⬜ `dawn_raid.webp` — 늑대단에게 습격당한 아침
-- ⬜ `dawn_death.webp` — 누군가를 잃은 아침, 빈자리
-- ⬜ `dawn_sick.webp` — 앓는 사람 곁의 새벽
+- ✅ `dawn_quiet.webp` — 조용한 아침, 거처 안
+- ✅ `dawn_storm.webp` — 눈보라이(가) 지나간 아침
+- ✅ `dawn_raid.webp` — 늑대단에게 습격당한 아침
+- ✅ `dawn_death.webp` — 누군가를 잃은 아침, 빈자리
+- ✅ `dawn_sick.webp` — 앓는 사람 곁의 새벽
 - ⬜ `dawn_hunger.webp` — 빈 그릇, 굶주린 얼굴들
 - ⬜ `dawn_theft.webp` — 털린 창고
-- ⬜ `dawn_cold.webp` — 연료가 떨어져 서로 껴안고 떠는 밤
+- ✅ `dawn_cold.webp` — 연료가 떨어져 서로 껴안고 떠는 밤
 - ⬜ `dawn_return.webp` — 밤 탐색에서 돌아온 사람들
 - ⬜ `last_morning.webp` — 마지막 아침
-- ⬜ `act1.webp` — 1막 · 얼어붙은 기지 — 선로가 어디 있는지 알아내기
-- ⬜ `act2.webp` — 2막 · 늑대의 겨울 — 떠날 준비: 선로와 썰매
-- ⬜ `act3.webp` — 3막 · 남행 — 살아서 열차에 오르기
+- ✅ `act1.webp` — 1막 · 얼어붙은 기지 — 선로가 어디 있는지 알아내기
+- ✅ `act2.webp` — 2막 · 늑대의 겨울 — 떠날 준비: 선로와 썰매
+- ✅ `act3.webp` — 3막 · 남행 — 살아서 열차에 오르기
 - ⬜ `ending_all.webp` — 결말: 눈 덮인 선로 끝에서 열차 불빛이 다가왔다.
 - ⬜ `ending_most.webp` — 결말: 열차에 오르며 누군가 설원을 돌아봤다.
 - ⬜ `ending_few.webp` — 결말: 열차 문이 닫혔다.
 - ⬜ `ending_riot.webp` — 결말: 마지막 연료가 바닥난 밤, 사람들이 당신을 기지 밖으로 내몰았다.
 - ⬜ `ending_lost.webp` — 결말: 눈은 기지를 완전히 덮었다.
-- ⬜ `ending_missed.webp` — 결말: 열차 불빛이 지평선 저편으로 지나갔다.
+- ✅ `ending_missed.webp` — 결말: 열차 불빛이 지평선 저편으로 지나갔다.
 
 ### 밤 장면
 
-- ⬜ `s_map.webp` — [탐색 · 버려진 관측소] 관측소 맨 안쪽, 측량실.
-- ⬜ `s_sign.webp` — [탐색 · 얼어붙은 마을] 마을 끝 버스 정류장.
-- ⬜ `s_sled.webp` — [탐색 · 추락한 수송기] 화물칸 맨 뒤.
+- ✅ `s_map.webp` — [탐색 · 버려진 관측소] 관측소 맨 안쪽, 측량실.
+- ✅ `s_sign.webp` — [탐색 · 얼어붙은 마을] 마을 끝 버스 정류장.
+- ✅ `s_sled.webp` — [탐색 · 추락한 수송기] 화물칸 맨 뒤.
 - ⬜ `i_roof.webp` — [탐색 · 얼어붙은 마을] 굴뚝 하나만 눈 위로 삐죽 솟아 있다.
 - ⬜ `i_family.webp` — [조우 · 얼어붙은 마을] 마을 끝 집 창문에 희미한 불빛이 있다.
 - ⬜ `i_cellar.webp` — [함정 · 얼어붙은 마을] 부서진 헛간 바닥에 지하 저장고 문이 있다.
@@ -165,11 +165,11 @@
 
 ### 마지막 밤
 
-- ⬜ `f_cross.webp` — 기지 문을 닫았다.
+- ✅ `f_cross.webp` — 기지 문을 닫았다.
 - ⬜ `f_wolf_ally.webp` — 선로 앞.
 - ⬜ `f_wolf_pass.webp` — 선로 앞을 늑대단이 막고 섰다.
-- ⬜ `f_wolf_block.webp` — 송전탑 아래, 선로가 보인다.
-- ⬜ `f_train.webp` — 멀리서 기적 소리.
+- ✅ `f_wolf_block.webp` — 송전탑 아래, 선로가 보인다.
+- ✅ `f_train.webp` — 멀리서 기적 소리.
 
 ### 아침 사건
 
@@ -188,9 +188,9 @@
 - ⬜ `revenge.webp` — 문 앞에 낯익은 사람이 서 있다.
 - ⬜ `forecast.webp` — 은서가 기압계를 두드린다.
 - ⬜ `frost_kid.webp` — 눈이의 손가락이 하얗게 얼었다.
-- ⬜ `rival_r1.webp` — 백곰: 썰매 한 대가 기지 앞에 섰다.
-- ⬜ `rival_r2.webp` — 백곰: 백곰이 혼자 왔다.
-- ⬜ `rival_r3.webp` — 백곰: 백곰이 지도를 펼친다.
+- ✅ `rival_r1.webp` — 백곰: 썰매 한 대가 기지 앞에 섰다.
+- ✅ `rival_r2.webp` — 백곰: 백곰이 혼자 왔다.
+- ✅ `rival_r3.webp` — 백곰: 백곰이 지도를 펼친다.
 - ⬜ `arc_meteorologist_0.webp` — 은서 사연 1: 은서가 낡은 기상 도표를 펼친다.
 - ⬜ `arc_meteorologist_1.webp` — 은서 사연 2: 은서가 창밖 별을 본다.
 - ⬜ `arc_meteorologist_2.webp` — 은서 사연 3: 은서가 기압계를 두드린다.
@@ -306,19 +306,19 @@
 
 ## 장비 (`assets/gear/`)
 
-- ⬜ `crowbar.webp` — 쇠지레 — 문·잔해를 여는 판정 +2
-- ⬜ `knife.webp` — 칼 — 몸싸움 판정 +2
-- ⬜ `lamp.webp` — 등불 — 살피기 +1 · 어둠 판정 +2 · 기름이 닳는다
-- ⬜ `rope.webp` — 밧줄 — 함정 장면 +2
-- ⬜ `medkit.webp` — 구급상자 — 밖에서 다칠 때 막아 준다 (2번)
-- ⬜ `pack.webp` — 큰 배낭 — 가져오는 양 ×1.5
-- ⬜ `gasmask.webp` — 방독면 (핵겨울) — 오염 지역 피폭을 막는다
-- ⬜ `geiger.webp` — 가이거 계수기 (핵겨울) — 들어간 곳에 남은 양을 알려 준다
-- ⬜ `pistol.webp` — 권총 (핵겨울) — 조우·추격에서 '쏜다' (총알 3)
-- ⬜ `snowshoe.webp` — 설피 (극 빙하기) — 소음 −1 · 추격 +2
-- ⬜ `furcoat.webp` — 털옷 (극 빙하기) — 동상을 막는다 · 집에서 추위를 막는다
-- ⬜ `rifle.webp` — 사냥총 (극 빙하기) — 조우·추격에서 '쏜다' (총알 3)
-- ⬜ `boat.webp` — 고무보트 (대홍수) — 물길 위험을 막는다 · 가져오는 양 ×1.3
-- ⬜ `boots.webp` — 고무장화 (대홍수) — 함정(감전·급류) 장면 +2
-- ⬜ `torch.webp` — 방수 손전등 (대홍수) — 살피기 +1 · 어둠 판정 +2 · 닳지 않는다
-- ⬜ `trap.webp` — 덫 — 집에서 먹을 것 구하기 +3
+- ✅ `crowbar.webp` — 쇠지레 — 문·잔해를 여는 판정 +2
+- ✅ `knife.webp` — 칼 — 몸싸움 판정 +2
+- ✅ `lamp.webp` — 등불 — 살피기 +1 · 어둠 판정 +2 · 기름이 닳는다
+- ✅ `rope.webp` — 밧줄 — 함정 장면 +2
+- ✅ `medkit.webp` — 구급상자 — 밖에서 다칠 때 막아 준다 (2번)
+- ✅ `pack.webp` — 큰 배낭 — 가져오는 양 ×1.5
+- ✅ `gasmask.webp` — 방독면 (핵겨울) — 오염 지역 피폭을 막는다
+- ✅ `geiger.webp` — 가이거 계수기 (핵겨울) — 들어간 곳에 남은 양을 알려 준다
+- ✅ `pistol.webp` — 권총 (핵겨울) — 조우·추격에서 '쏜다' (총알 3)
+- ✅ `snowshoe.webp` — 설피 (극 빙하기) — 소음 −1 · 추격 +2
+- ✅ `furcoat.webp` — 털옷 (극 빙하기) — 동상을 막는다 · 집에서 추위를 막는다
+- ✅ `rifle.webp` — 사냥총 (극 빙하기) — 조우·추격에서 '쏜다' (총알 3)
+- ✅ `boat.webp` — 고무보트 (대홍수) — 물길 위험을 막는다 · 가져오는 양 ×1.3
+- ✅ `boots.webp` — 고무장화 (대홍수) — 함정(감전·급류) 장면 +2
+- ✅ `torch.webp` — 방수 손전등 (대홍수) — 살피기 +1 · 어둠 판정 +2 · 닳지 않는다
+- ✅ `trap.webp` — 덫 — 집에서 먹을 것 구하기 +3
