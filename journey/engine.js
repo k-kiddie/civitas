@@ -216,10 +216,22 @@
     const evId = s.evPick[id] || p.ev;
     if (evId && !C.events[evId].climax) q.push({ kind: "place", id: evId });
     if (p.dest) q.push({ kind: "climax", dest: p.dest });
-    s.ev = { queue: q, cur: null, result: null };
+    s.ev = { queue: q, cur: null, result: null, lead: p.dest || p.gate ? "" : travelText(s) };
+    if (s.ev.lead) s.chronicle.push({ day: s.day, title: "길", paras: [s.ev.lead] });
     s.phase = "event";
     nextEvent(s);
     return { state: s };
+  }
+  // 하루를 잇는 문장: 지형·날씨·몸·동행의 한마디·남은 날
+  function travelText(s) {
+    const T = C.travel, act = Math.min(3, Math.max(1, s.act)), parts = [pick(s, T.terrain[act]), pick(s, T.sky)];
+    if (s.me.full <= 2) parts.push(T.body.hunger); else if (s.me.cold >= 2) parts.push(T.body.cold); else if (s.me.hp >= 2) parts.push(T.body.hurt);
+    const c = live(s).length ? pick(s, live(s)) : null;
+    if (c && C.roadTalk[c.id]) parts.push(C.roadTalk[c.id][c.trust >= 2 ? "warm" : c.trust > -0.5 ? "mid" : "cold"]);
+    else if (!c && s.day > 3) parts.push("혼자 걷는 길에서는 자기 발소리가 남의 것처럼 들린다.");
+    const left = s.trainDay - s.day;
+    if (left > 0 && left <= 4) parts.push(`열차까지 ${left}일.`);
+    return parts.join(" ");
   }
   // 박자를 사건으로. 동행이 필요한 배신 박자는 동행이 생길 때까지 기다린다
   function beatEvent(s, beat) {
@@ -243,7 +255,7 @@
   const STRAY = (s) => {
     const left = Object.keys(C.people).filter((k) => !comp(s, k));
     const id = left[Math.floor((s.day * 7) % left.length)];
-    return { id: "stray", text: `눈 덮인 바위 그늘에 누군가 웅크리고 있다. ${C.people[id].role} ${C.people[id].name}. 입술이 파랗다. “…남쪽으로 가요? 같이 가면 안 될까요.”`, choices: [
+    return { id: "stray", text: `눈 덮인 바위 그늘에 누군가 웅크리고 있다. ${C.people[id].role} ${C.people[id].name}. 입술이 파랗고 눈썹에 서리가 앉았다. 당신을 보더니 일어서려다 다시 주저앉는다. “…남쪽으로 가요? 혼자서는 더 못 가겠어요. 같이 가면, 안 될까요.”`, choices: [
       { label: "함께 가자", fx: { join: id }, t: `${C.people[id].name}이(가) 고개를 끄덕였다. 손이 얼음장 같았다.` },
       { label: "혼자 가겠다", fx: { fact: s.facts.stray_refused ? "stray_refused2" : "stray_refused" }, t: "등 뒤에서 아무 소리도 들리지 않았다." },
     ], art: "camp_talk" };
@@ -254,8 +266,9 @@
     e.result = null;
     while (e.queue.length) {
       const it = e.queue.shift();
-      if (it.kind === "place") { e.cur = { kind: "place", id: it.id, scene: "start" }; return; }
-      if (it.kind === "beat") { e.cur = { kind: "beat", beat: it.beat, scene: "start" }; return; }
+      const lead = e.lead || ""; e.lead = "";
+      if (it.kind === "place") { e.cur = { kind: "place", id: it.id, scene: "start", lead }; return; }
+      if (it.kind === "beat") { e.cur = { kind: "beat", beat: it.beat, scene: "start", lead }; return; }
       if (it.kind === "stray") { e.cur = { kind: "beat", beat: STRAY(s), scene: "start" }; return; }
       if (it.kind === "climax") { e.cur = { kind: "climax", dest: it.dest, scene: "arrive" }; return; }
       if (it.kind === "confront") { if (!live(s).some((c) => c.id === it.id)) continue; e.cur = { kind: "beat", beat: C.confront, scene: "start", cid: it.id }; return; }
@@ -313,9 +326,21 @@
     const sc = sceneOf(s);
     if (!sc) return null;
     const c = s.ev.cur;
+    const pre = [];
+    if (c.scene === "start" && !s.ev.result) {
+      if (c.lead) pre.push(c.lead);
+      if (c.kind === "beat") {
+        const bl = C.leads[`${c.beat.id}_${s.origin}`] || C.leads[c.beat.id];
+        if (bl) pre.push(bl);
+        if (/^(bt|hk|fs)_t[AB]$/.test(c.beat.id)) {
+          const mine = (s.sus || []).filter((x) => x.mine).slice(0, 3);
+          pre.push(mine.length ? `그제야 조각들이 맞춰졌다. ${mine.map((x) => `‘${x.text.length > 70 ? x.text.slice(0, 70) + "…" : x.text}’`).join(" ")}` : "아무것도 눈치채지 못했다. 그래서 더 아팠다.");
+        }
+      }
+    }
     return {
       kind: c.kind, title: c.kind === "climax" ? C.climax[c.dest].name : C.places[s.place].name,
-      text: fill(s, sc.text), art: artOf(s), result: s.ev.result,
+      text: [...pre.map((t) => fill(s, t)), fill(s, sc.text)].join("\n\n"), art: artOf(s), result: s.ev.result,
       choices: (sc.choices || []).map((ch, i) => {
         const lock = reqState(s, ch.req);
         const tag = ch.label.match(/^\[([^\]]+)\]/)?.[1] || "";
@@ -343,9 +368,13 @@
     applyFx(s, out.fx || {}, notes);
     const cur = s.ev.cur;
     if (cur.kind === "beat") { const tw = cur.beat.onTwist; if (tw) twistAfter(s, tw); }
-    const text = fill(s, out.t || "");
+    const JOIN_T = { maru: "마루가 사냥총을 등에 메고 당신 곁에 섰다. 말은 없었다. 그걸로 충분했다.", hanbyeol: "한별이 담요를 여미며 웃었다. “좋아요. 하늘길은 제가 볼게요.”", hyean: "혜안이 고개를 숙이고 당신 뒤에 섰다. 발소리가 눈 위에서 거의 나지 않았다.", eunseo: "은서가 공책을 품에 넣고 따라나섰다. “바람은 제가 읽을게요.”" };
+    const text = fill(s, out.t || (out.fx?.join && JOIN_T[out.fx.join]) || "");
     if (out.fx?.clue) (s.sus = s.sus || []).push({ day: s.day, text, mine: out.fx.clue === CLUE_OF[s.dir.premise] });
-    s.chronicle.push({ day: s.day, title: view(state).title, paras: [fill(s, sc.text), `“${fill(s, ch.label.replace(/^\[[^\]]+\]\s*/, ""))}” — ${text}`].filter(Boolean) });
+    const v0 = view(state);
+    s.chronicle.push({ day: s.day, title: v0.title, paras: [...v0.text.split("\n\n").filter((t) => !s.chronicle.some((x) => x.title === "길" && x.paras[0] === t)), `“${fill(s, ch.label.replace(/^\[[^\]]+\]\s*/, ""))}” — ${text}`].filter(Boolean) });
+    const hv = out.fx?.human || 0;
+    if (Math.abs(hv) >= 4 && live(s).length) { const c = pick(s, live(s)); if (C.reacts[c.id]) notes.push(C.reacts[c.id][hv > 0 ? "good" : "bad"]); }
     s.ev.result = { text, notes, roll, go: out.go || null, ending: out.fx?.ending || null };
     if (s.me.hp >= 4) { s.ev.result.ending = "frozen"; }
     return { state: s };
@@ -431,7 +460,9 @@
       const lines = debtLines(s, c.dest);
       const P = premiseOf(s);
       const payoff = PAYOFF[s.dir.premise](s) && s.dir.twisted && !s.dir.payoffDone;
-      return { id: "climax", text: [cl.arrive, ...lines].join("\n\n"), choices: [{ label: "앞으로 나아간다", go: payoff ? "payoff" : "resolve" }] };
+      const comps = live(s), f = s.facts;
+      const with_ = [comps.length ? `${comps.map((x) => x.name).join("와(과) ")}이(가) 당신 곁에 서 있다. ${comps.length > 1 ? "둘 다" : ""} 숨이 하얗다.` : "곁에 아무도 없다. 혼자 여기까지 왔다.", f.took_child ? "빨간 모자 아이가 당신 손을 꼭 잡고 있다." : "", f.kin_taken ? `${nameOf(s, s.dir.roles.kin)}이(가) 당신 옷자락을 놓지 않는다.` : "", f.dog ? "개 한 마리가 다리에 몸을 붙이고 떤다." : "", s.origin === "parent" ? "품속 사진을 한 번 만져 본다." : s.origin === "crew" ? "주머니 속 이름표들이 서로 부딪힌다." : ""].filter(Boolean).join(" ");
+      return { id: "climax", text: [cl.arrive, with_, ...lines].join("\n\n"), choices: [{ label: "앞으로 나아간다", go: payoff ? "payoff" : "resolve" }] };
     }
     if (c.scene === "payoff") {
       const P = premiseOf(s);
