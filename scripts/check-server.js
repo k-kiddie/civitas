@@ -49,6 +49,19 @@ const assert = require("node:assert/strict"),
           Number(res.headers.get("content-length")) > 0 || url === "/healthz",
         );
       }
+      for (const asset of [
+        "people/parent_m.webp",
+        "origins/deserter.webp",
+        "places/start_base.webp",
+        "scenes/hk_sick_child.webp",
+        "items/soi_photo.webp",
+        "ui/title.webp",
+      ]) {
+        const res = await fetch(base + prefix + "/assets/journey/" + asset);
+        assert.equal(res.status, 200, "journey/" + asset);
+        assert.equal(res.headers.get("content-type"), "image/webp");
+        assert(Number(res.headers.get("content-length")) > 0);
+      }
       const redirect = await fetch(base + prefix + "/next?sample=1", {
         redirect: "manual",
       });
@@ -64,6 +77,8 @@ const assert = require("node:assert/strict"),
         "/DESIGN.md",
         "/package.json",
         "/src/engine/missing.js",
+        "/assets/journey/ART_DESIGN.md",
+        "/assets/journey/people/missing.webp",
       ])
         assert.equal((await fetch(base + prefix + url)).status, 404);
     }
