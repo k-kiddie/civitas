@@ -323,7 +323,7 @@
   }
   const TOOL_BONUS = { force: ["knife", "crowbar"], wits: ["lamp"], craft: ["crowbar", "scrap"] };
   function chance(s, ch) {
-    const [stat, dc] = ch.check, r = roller(s, stat);
+    const [stat, dc0] = ch.check, r = roller(s, stat), dc = dc0 - (s.ev?.cur?.scout === "ok" ? 2 : 0);
     const tool = (TOOL_BONUS[stat] || []).some((k) => hasItem(s, k)) ? 1 : 0;
     const mod = r.v + tool + (live(s).length && r.id === "me" ? 1 : 0);
     return { r, mod, dc, p: clamp((21 - (dc - mod)) / 20, 0.05, 0.95) };
@@ -352,11 +352,12 @@
       will: s.will, useWill: !!s.ev.useWill, help: s.ev.help || null,
       helpers: live(s).filter((c) => c.trust >= 1 && c.hp <= 1).map((c) => ({ id: c.id, name: c.name })),
       costs: s.ev.result?.cost ? costOptions(s) : null,
+      canScout: canScout(s), scoutNote: c.scoutNote || "",
       choices: (sc.choices || []).map((ch, i) => {
         const lock = reqState(s, ch.req);
         const tag = ch.label.match(/^\[([^\]]+)\]/)?.[1] || "";
         const info = ch.check ? chance(s, ch) : null;
-        return { i, label: fill(s, ch.label.replace(/^\[[^\]]+\]\s*/, "")), tag, lock, feel: info ? feel(info.p) : "", who: info ? info.r.name : "", stat: ch.check ? STATS[ch.check[0]] : "" };
+        return { i, label: fill(s, ch.label.replace(/^\[[^\]]+\]\s*/, "")), tag, lock, feel: info ? feel(info.p) : "", who: info ? info.r.name : "", stat: ch.check ? STATS[ch.check[0]] : "", approach: ch.check ? APPROACH[ch.check[0]] : "" };
       }),
     };
   }
@@ -458,6 +459,20 @@
     const a = C.adventures[act];
     if (!a) return null;
     return { ...a, need: a.need.map((n) => ({ label: n.label, have: n.item ? hasItem(s, n.item) : n.companion ? live(s).some((c) => c.id === n.companion) : n.food ? s.food >= n.food : n.fact ? !!s.facts[n.fact] : n.truths ? allTruths(s).length >= n.truths : false })) };
+  }
+  // 먼저 살펴본다: 눈치 판정. 성공하면 이 장면의 판정이 쉬워지고, 실패하면 시계가 찬다
+  const APPROACH = { force: "힘으로", wits: "몰래·눈치로", talk: "말로", craft: "꾀로" };
+  function canScout(s) {
+    const c = s.ev?.cur;
+    return !!c && c.scene === "start" && !s.ev.result && !s.ev.pending && !c.scout && c.kind !== "climax" && (sceneOf(s)?.choices || []).some((x) => x.check);
+  }
+  function scout(state) {
+    if (!canScout(state)) return { state, error: "지금은 살필 수 없다." };
+    const s = clone(state), c = s.ev.cur, r = roller(s, "wits"), roll = d20(s), ok = roll + r.v >= 10;
+    c.scout = ok ? "ok" : "fail";
+    if (ok) c.scoutNote = `${r.name === "당신" ? "당신이" : r.name + "이(가)"} 먼저 주변을 살폈다. 발 디딜 곳, 숨을 곳, 상대의 버릇이 보인다. (이 장면의 판정 −2 · 🎲${roll}+${r.v})`;
+    else { const k = s.act >= 2 ? "wolves" : "storm"; s.clocks[k] += 1; c.scoutNote = `살피느라 시간을 썼지만 보이는 건 없었다. ${k === "wolves" ? "늑대단 추적" : "눈보라"} +1 (🎲${roll}+${r.v})`; }
+    return { state: s };
   }
   const closeAct = (state) => { const s = clone(state); s.actCard = 0; return { state: s }; };
   // 반전 뒤처리: 배신자가 떠나거나 남는다
@@ -856,7 +871,7 @@
       return ch + (jong ? a : b);
     });
   }
-  const api = { newGame, begin, options, go, view, choose, cont, campToggle, useItem, drop, craft, sleep, validate, live, hasItem, allTruths, reroll, accept, payCost, setWill, setHelp, clocksView, adventure, closeAct, TIER, bagCount, fullLabel, mealForecast, goals, notebook, josa, BAG, HP, HUNGER, COLD, STATS, C, premiseOf, fill };
+  const api = { newGame, begin, options, go, view, choose, cont, campToggle, useItem, drop, craft, sleep, validate, live, hasItem, allTruths, scout, reroll, accept, payCost, setWill, setHelp, clocksView, adventure, closeAct, TIER, bagCount, fullLabel, mealForecast, goals, notebook, josa, BAG, HP, HUNGER, COLD, STATS, C, premiseOf, fill };
   root.JourneyEngine = api;
   if (typeof module !== "undefined") module.exports = api;
 })(globalThis);

@@ -97,10 +97,12 @@
       const dice = r.roll ? `<div class="roll-line"><span class="d20 ${r.roll.r === 20 ? "crit" : r.roll.r === 1 ? "fumble" : ""}">${r.roll.r}</span><span class="calc">${esc(r.roll.who)} ${esc(r.roll.stat)} ${r.roll.mod >= 0 ? "+" : "−"}${Math.abs(r.roll.mod)} = <b>${r.roll.r + r.roll.mod}</b> <small>vs ${r.roll.dc}</small></span></div><div class="verdict tier-${r.roll.tier}">${esc(r.roll.tierName || (r.roll.ok ? "성공" : "실패"))}</div>` : "";
       return `<div class="veil"><section class="modal result ${r.roll && !r.roll.ok ? "lose flash" : "win"}" role="dialog">${head}${dice}${prose([r.text])}${r.notes.map((n) => `<p class="note">${esc(n)}</p>`).join("")}${btn(r.ending ? "결말" : "계속", "cont", 'class="primary"')}</section></div>`;
     }
-    const choices = v.choices.map((c) => btn(`${c.tag ? `<em class="req ${c.lock ? "no" : "ok"}">[${esc(c.tag)}]</em> ` : ""}<span>${esc(c.label)}</span>${c.lock ? `<small class="why">${esc(c.lock)}</small>` : c.feel ? `<small><b class="feel f-${{ "해볼 만하다": "good", "반반이다": "mid", "위험하다": "bad", "무모하다": "awful" }[c.feel]}">${c.feel}</b> · ${esc(c.stat)} · ${esc(c.who)}</small>` : ""}`, "choose", `data-i="${c.i}" ${c.lock ? "disabled" : ""} class="${c.lock ? "locked" : c.tag ? "special" : ""}"`)).join("");
+    const choices = v.choices.map((c) => btn(`${c.tag ? `<em class="req ${c.lock ? "no" : "ok"}">[${esc(c.tag)}]</em> ` : ""}<span>${esc(c.label)}</span>${c.lock ? `<small class="why">${esc(c.lock)}</small>` : c.feel ? `<small>${c.approach ? `<span class="appr">${esc(c.approach)}</span> · ` : ""}<b class="feel f-${{ "해볼 만하다": "good", "반반이다": "mid", "위험하다": "bad", "무모하다": "awful" }[c.feel]}">${c.feel}</b> · ${esc(c.stat)} · ${esc(c.who)}</small>` : ""}`, "choose", `data-i="${c.i}" ${c.lock ? "disabled" : ""} class="${c.lock ? "locked" : c.tag ? "special" : ""}"`)).join("");
     const anyRoll = v.choices.some((c) => c.feel && !c.lock);
     const boost = anyRoll ? `<div class="boost">${btn(v.useWill ? `의지를 건다 ✔ <small>+2 · 남은 의지 ${s.will}</small>` : `의지를 건다 <small>+2 · 남은 의지 ${s.will}</small>`, "will", `class="tg ${v.useWill ? "on" : ""}" ${s.will <= 0 && !v.useWill ? "disabled" : ""}`)}${v.helpers.map((h) => btn(v.help === h.id ? `${esc(h.name)}이(가) 돕는다 ✔ <small>+1 · 실패하면 함께 다친다</small>` : `${esc(h.name)}에게 도움을 청한다 <small>+1</small>`, "help", `data-id="${h.id}" class="tg ${v.help === h.id ? "on" : ""}"`)).join("")}</div>` : "";
-    return `<div class="veil"><section class="modal scene" role="dialog">${head}${prose(v.text.split("\n\n"))}${boost}<div class="choices">${choices}</div></section></div>`;
+    const scoutBox = v.scoutNote ? `<p class="note scout">${esc(v.scoutNote)}</p>` : v.canScout ? btn(`먼저 주변을 살핀다 <small>눈치 · 성공하면 이 장면의 판정 −2, 실패하면 시계 +1</small>`, "scout", 'class="secondary scoutbtn"') : "";
+    const ask = v.choices.length > 1 ? `<p class="gm">어떻게 하겠는가?</p>` : "";
+    return `<div class="veil"><section class="modal scene" role="dialog">${head}${prose(v.text.split("\n\n"))}${scoutBox}${ask}${boost}<div class="choices">${choices}</div></section></div>`;
   }
   // ── 야영 ──
   function campView() {
@@ -184,6 +186,7 @@
     }
     else if (k === "reroll") { rolling = { label: E.view(state).pending.label, who: E.view(state).pending.who, stat: "다시" }; render(); setTimeout(() => { rolling = null; commit(E.reroll(state)); }, 1200); }
     else if (k === "accept") commit(E.accept(state));
+    else if (k === "scout") commit(E.scout(state));
     else if (k === "cost") commit(E.payCost(state, a.dataset.k));
     else if (k === "will") commit(E.setWill(state));
     else if (k === "help") commit(E.setHelp(state, a.dataset.id));

@@ -873,6 +873,107 @@
     pilot: { name: "마흔의 비행", text: "구조 비행은 처음부터 명단의 마흔만 태우러 왔다. 명단 밖은 없었다." },
   };
 
+  // ── TRPG 2단계: 장면마다 접근 방식(힘으로·몰래·말로·꾀로)을 갖춘다. 이야기는 그대로, 방법만 늘린다 ──
+  const moreApproaches = {
+    "p_village.start": [
+      C("집 뒤로 돌아가 창고를 몰래 살핀다", { check: ["wits", 11], win: { t: "창고 문틈으로 들어가 감자 몇 알과 장작을 챙겼다. 노인은 끝내 몰랐다.", fx: { food: 1, fuel: 1, human: -2 } }, lose: { t: "창고 문이 삐걱였다. 노인이 지팡이를 들고 나왔다. 서로 아무 말도 못 한 채 물러났다.", fx: { cold: 1 } } }),
+    ],
+    "p_church.start": [
+      C("염불이 끝나길 기다리지 않고 말을 건다", { check: ["talk", 9], win: { t: "그가 눈을 떴다. 화내지 않았다. “혜안이라 합니다. 남쪽으로 가십니까. 저도 그쪽입니다.”", go: "join" }, lose: { t: "그는 염불을 멈추지 않았다. 당신은 신도석에 앉아 끝날 때까지 기다렸다. 몸이 다 식었다.", fx: { cold: 1 }, go: "join" } }),
+      C("기운 종탑에서 마른 들보를 뜯어낸다", { check: ["craft", 11], win: { t: "들보 몇 개를 뜯어냈다. 오래 마른 나무라 잘 탈 것이다.", fx: { fuel: 3, human: -2 } }, lose: { t: "종탑이 크게 흔들렸다. 종이 한 번 울렸다. 그 소리가 설원 끝까지 퍼졌다.", fx: { hp: 1 } } }),
+    ],
+    "p_cave.start": [
+      C("작은 불을 피워 얼음을 천천히 녹인다", { check: ["craft", 11], win: { t: "물방울이 똑똑 떨어지고 드럼이 미끄러져 나왔다. 안쪽 숨소리는 깨지 않았다.", fx: { fuel: 3 } }, lose: { t: "녹은 물이 안쪽으로 흘렀다. 무언가 몸을 뒤척였다. 연료통 하나만 들고 뛰었다.", fx: { fuel: 1, hp: 1 } } }),
+    ],
+    "p_cabin.start": [
+      C("문을 박차고 들어가 총부터 빼앗는다", { check: ["force", 14], win: { t: "총구가 천장을 향했다. 거구의 사내가 당신 손목을 잡은 채 웃었다. “배짱 좋군. 마루다.”", go: "join" }, lose: { t: "개머리판이 먼저였다. 눈밭에 쓰러졌다. 문이 다시 닫혔다.", fx: { hp: 1 } } }),
+    ],
+    "p_observatory.start": [
+      C("꺼져 가는 발전기를 손봐 준다", { check: ["craft", 10], win: { t: "발전기가 고르게 돌기 시작했다. 관측소 안이 조금 따뜻해졌다. 여자가 처음으로 웃었다. “…은서예요.”", fx: { cold: -2 }, go: "join" }, lose: { t: "발전기가 연기를 뿜고 멈췄다. 둘 다 한참 떨었다.", fx: { cold: 1 }, go: "join" } }),
+    ],
+    "p_pylon.start": [
+      C("외상 없이 값을 깎는다", { check: ["talk", 12], win: { t: "구씨가 혀를 찼다. “장사꾼 울리는 손님이군.” 붕대 하나를 그냥 던져 줬다.", fx: { item: "bandage" } }, lose: { t: "“그럼 외상이지.” 구씨가 장부에 당신 이름을 적고 붕대를 건넸다.", fx: { item: "bandage", debt: { id: "gu", text: "상인 구씨에게 외상을 졌다", owe: true } } } }),
+      C("개들을 제압하고 짐을 턴다", { check: ["force", 13], win: { t: "개들이 낑낑대며 물러났다. 썰매에서 항생제 한 병을 낚아챘다. 구씨의 욕설이 멀리까지 따라왔다.", fx: { item: "antibiotics", human: -8, debt: { id: "gu", text: "구씨의 썰매를 털었다" } } }, lose: { t: "개 한 마리가 팔을 물었다. 구씨가 웃었다. “다음엔 물리지 말고 사.”", fx: { hp: 1, debt: { id: "gu", text: "구씨의 썰매를 털려다 들켰다" } } } }),
+    ],
+    "p_highway.start": [
+      C("차 엔진룸에서 연료를 빼낸다", { check: ["craft", 11], win: { t: "얼어붙은 연료관을 녹여 깡통 두 개를 채웠다.", fx: { fuel: 2 }, go: "join" }, lose: { t: "연료가 얼굴로 튀었다. 한참 눈이 따가웠다.", fx: { cold: 1 }, go: "join" } }),
+    ],
+    "g_bridge.start": [
+      C("부서진 차 문짝들을 엮어 끊긴 자리에 걸친다", { check: ["craft", 13], win: { t: "문짝 세 개를 철사로 묶어 다리를 놓았다. 삐걱였지만 건넜다." }, lose: { t: "문짝 하나가 빠졌다. 짐 하나가 강으로 떨어졌다. 겨우 건넜다.", fx: { hp: 1, food: -1 } } }),
+    ],
+    "p_merchant.start": [
+      C("짐 사이를 몰래 살핀다", { check: ["wits", 12], win: { t: "방수포 밑에 사슬과 아이 신발. 그리고 이름과 숫자가 적힌 장부. 사람값이다.", fx: { fact: "gu_chains", clue: "fs" } }, lose: { t: "구씨의 눈이 가늘어졌다. “손님, 장사 방해하면 값이 올라.”", fx: { food: -1 } } }),
+      C("구씨를 위협해 약을 빼앗는다", { check: ["force", 12], win: { t: "구씨가 항생제를 내밀며 웃었다. 금니가 떨렸다. “기억해 두지.”", fx: { item: "antibiotics", human: -8, debt: { id: "gu", text: "구씨를 위협해 약을 빼앗았다" } } }, lose: { t: "구씨의 개들이 덤볐다. 구씨는 휘파람을 불며 썰매를 몰고 떠났다.", fx: { hp: 1, debt: { id: "gu", text: "구씨를 위협하려다 쫓겨났다" } } } }),
+    ],
+    "p_mine.start": [
+      C("막힌 갱도를 힘으로 뚫는다", { check: ["force", 12], win: { t: "돌을 치우자 안쪽에서 석탄 더미가 나왔다. 망치 소리가 멈추고 누군가 웃었다.", fx: { fuel: 3, fact: "helped_village" } }, lose: { t: "천장에서 돌이 쏟아졌다. 망치 소리가 멎었다.", fx: { hp: 1 } } }),
+      C("망치 소리를 향해 소리쳐 말을 건다", { check: ["talk", 10], win: { t: "늙은 광부가 등불을 들고 나왔다. 당신 얼굴을 보더니 갱도 안 마을로 데려갔다. 따뜻한 국 한 그릇.", fx: { food: 1, cold: -2, fact: "helped_village", fact2: "grandson_sign" } }, lose: { t: "망치 소리가 뚝 그쳤다. 아무도 나오지 않았다.", fx: { cold: 1 } } }),
+    ],
+    "p_kennel.start": [
+      C("개들이 깊이 잠들 때까지 기다렸다 몰래 다가간다", { check: ["wits", 13], win: { t: "새벽, 개들의 숨소리가 고를 때 사슬을 풀었다. 소년이 속삭였다. “도치예요.”", fx: { fact: "dochi_saved", human: 8, debt: { id: "dochi", good: true, text: "사슬에 묶인 소년 도치를 구했다" } } }, lose: { t: "한 마리가 눈을 떴다. 우리 전체가 짖었다. 소년을 두고 뛰었다.", fx: { wolves: -2, debt: { id: "dochi", text: "사슬에 묶인 소년을 두고 도망쳤다" } } } }),
+      C("보초를 찾아가 소년을 사겠다고 한다", { req: { food: 2 }, check: ["talk", 12], win: { t: "보초가 식량 자루를 들어 보고 웃었다. “어차피 먹는 입이야.” 사슬 열쇠를 던졌다.", fx: { food: -2, fact: "dochi_saved", human: 6, debt: { id: "dochi", good: true, text: "식량을 주고 소년 도치를 데려왔다" } } }, lose: { t: "보초가 식량만 받고 웃었다. “꺼져.”", fx: { food: -2, wolves: -1 } } }),
+    ],
+    "p_lake.start": [
+      C("판자로 썰매를 엮어 얼음 위를 미끄러진다", { check: ["craft", 12], win: { t: "얼음 위를 미끄러지듯 건넜다. 반나절을 벌었다.", fx: { day: -1 } }, lose: { t: "썰매가 얇은 얼음을 깼다. 물에 빠지기 직전에 뛰어내렸다.", fx: { cold: 2 } } }),
+    ],
+    "p_wolfcamp.start": [
+      C("모닥불에 기름을 끼얹어 혼란을 만든다", { check: ["craft", 13], win: { t: "불길이 치솟았다. 늑대단이 우왕좌왕하는 사이 창고에서 식량을 퍼냈다. 백곰의 텐트 안에서 아이 기침 소리가 났다.", fx: { food: 3, wolves: -2, fact: "saw_sick_child", clue: "hk" } }, lose: { t: "불이 바람을 타고 이쪽으로 왔다. 겨우 빠져나왔다. 늑대단이 당신 얼굴을 봤다.", fx: { hp: 1, wolves: -2 } } }),
+    ],
+    "g_pass.start": [
+      C("바람이 약한 능선을 찾아 돌아간다", { check: ["wits", 12], win: { t: "바위 그늘을 따라 바람을 피해 넘었다. 손가락 하나 얼지 않았다." }, lose: { t: "능선을 잘못 골랐다. 하루를 헤맸다.", fx: { day: 1, cold: 1 } } }),
+    ],
+    "p_village2.start": [
+      C("유리 너머로 말을 걸어 진정시킨다", { check: ["talk", 11], win: { t: "두드리던 손이 멈췄다. 안에서 할머니가 녹슨 비상문 손잡이를 가리켰다. 문이 열렸다. 할머니가 초콜릿 상자를 내밀었다.", fx: { food: 2, human: 5 } }, lose: { t: "두드리는 소리가 점점 약해졌다. 그리고 멈췄다.", fx: { human: -2 } } }),
+    ],
+    "p_church2.start": [
+      C("납골당 뒤 통로로 몰래 들어가 창고를 뒤진다", { check: ["wits", 12], win: { t: "그들의 비축품에서 천과 술 한 병을 슬쩍했다. 기도 소리는 끊기지 않았다.", fx: { item: ["cloth", "liquor"], human: -4 } }, lose: { t: "아이 하나가 당신을 봤다. 소리를 지르진 않았다. 그 눈이 더 아팠다. 빈손으로 나왔다.", fx: { human: -2 } } }),
+    ],
+    "p_cave2.start": [
+      C("얼음을 깨서 상자를 꺼낸다", { check: ["force", 11], win: { t: "상자가 얼음째 빠져나왔다. 안에 라이터와 쪽지. ‘지열 계곡은 진짜다. — 박’", fx: { item: ["lighter", "refuge_note"], fact: "refuge_known" } }, lose: { t: "얼음 파편이 튀어 손등을 그었다. 상자는 꿈쩍도 하지 않았다.", fx: { hp: 1 } } }),
+    ],
+    "p_cabin2.start": [
+      C("벽의 덫을 손봐 오두막 둘레에 놓는다", { check: ["craft", 11], win: { t: "밤사이 산토끼 둘이 걸렸다.", fx: { food: 2 } }, lose: { t: "덫이 손가락을 물었다.", fx: { hp: 1 } } }),
+    ],
+    "p_observatory2.start": [
+      C("무전 숫자를 끝까지 받아 적는다", { check: ["wits", 11], win: { t: "“…정원 마흔. 명단은 하얀나루역장이 보관…” 받아 적은 숫자들 사이에서 열차 시간이 보였다.", fx: { fact: "list_rumor" }, go: "join" }, lose: { t: "배터리가 먼저 죽었다. 숫자 몇 개만 남았다.", go: "join" } }),
+    ],
+    "p_pylon2.start": [
+      C("돌을 쌓아 디딤대를 만들고 끈을 끊는다", { check: ["craft", 11], win: { t: "디딤대 위에서 끈을 끊었다. 그가 무너지듯 내려와 금반지를 쥐여 줬다.", fx: { item: "gold_ring", human: 8, wolves: -1, fact: "list_rumor" } }, lose: { t: "디딤대가 무너졌다. 발목을 접질렸다.", fx: { hp: 1 } } }),
+      C("지나가는 늑대단 썰매를 세워 풀어 달라고 한다", { check: ["talk", 13], win: { t: "늑대단이 비웃더니 끈을 끊어 줬다. “본보기는 하루면 충분하지.”", fx: { human: 5, wolves: 1 } }, lose: { t: "“너도 같이 매달아 줄까?” 썰매가 지나가며 채찍이 날아왔다.", fx: { hp: 1, wolves: -1 } } }),
+    ],
+    "p_highway2.start": [
+      C("두 무리를 다 쫓아낸다", { check: ["force", 14], win: { t: "고함 한 번에 두 무리가 흩어졌다. 상자는 당신 것이다.", fx: { food: 4, human: -5 }, go: "join" }, lose: { t: "두 무리가 동시에 덤볐다.", fx: { hp: 2 }, go: "join" } }),
+    ],
+    "g_bridge2.start": [
+      C("밤을 기다려 판자 길을 몰래 건넌다", { check: ["wits", 13], win: { t: "사내들이 불가에서 졸 때 판자를 건넜다. 아무도 몰랐다." }, lose: { t: "판자가 삐걱였다. 붙잡혀 짐을 털렸다.", fx: { food: -2, hp: 1 } } }),
+      C("통행세를 깎는다", { check: ["talk", 12], win: { t: "사내가 웃었다. “말 잘하네.” 식량 하나만 받았다.", fx: { food: -1 } }, lose: { t: "사내가 정색했다. 식량 둘을 받고, 덤으로 주먹 한 대.", fx: { food: -2, hp: 1 } } }),
+    ],
+    "p_merchant2.start": [
+      C("지렛대를 대고 썰매를 들어 올린다", { check: ["craft", 10], win: { t: "부서진 썰매 판자로 지렛대를 댔다. 구씨가 기어 나왔다. “빚은 없던 걸로 하지. 그리고 이거.” 피난처 쪽지.", fx: { unfact: "owe_gu", item: "refuge_note", fact: "refuge_known", debt: { id: "gu", good: true, text: "썰매에 깔린 구씨를 구했다" } } }, lose: { t: "지렛대가 부러졌다. 구씨가 비명을 질렀다.", fx: { hp: 1 } } }),
+    ],
+    "p_mine2.start": [
+      C("맨손으로 큰 돌을 밀어낸다", { check: ["force", 13], win: { t: "돌이 굴러 나갔다. 늙은 광부 둘이 기어 나와 당신 손을 잡았다. 석탄 한 자루.", fx: { fuel: 3, human: 6, fact: "helped_village" } }, lose: { t: "돌은 꿈쩍도 하지 않았다. 어깨가 빠질 것 같았다. 두드리는 소리가 약해졌다.", fx: { hp: 1 } } }),
+    ],
+    "p_kennel2.start": [
+      C("지름길로 앞질러 매복한다", { check: ["wits", 12], win: { t: "골짜기 끝 바위 뒤에서 기다렸다. 늑대단 둘이 지나갈 때 소년을 낚아챘다. “…도치예요.”", fx: { fact: "dochi_saved", human: 8, debt: { id: "dochi", good: true, text: "쫓기던 소년 도치를 구했다" } } }, lose: { t: "길을 잘못 들었다. 멀리서 소년의 비명이 들렸다.", fx: { debt: { id: "dochi", text: "쫓기던 소년을 구하지 못했다" } } } }),
+    ],
+    "p_lake2.start": [
+      C("낚싯줄을 얼음에 고정하고 천천히 감는다", { check: ["craft", 10], win: { t: "한참을 감았다. 팔뚝만 한 물고기가 올라왔다.", fx: { food: 2 } }, lose: { t: "줄이 끊어졌다. 손바닥이 다 까졌다.", fx: { cold: 1 } } }),
+    ],
+    "g_checkpoint2.start": [
+      C("보초를 설득해 여자를 보내게 한다", { check: ["talk", 13], win: { t: "“이 여자 남편이 백곰 일꾼이었소.” 거짓말이었다. 보초가 망설이다 아이를 돌려줬다. 당신도 그 틈에 지나갔다.", fx: { human: 6, debt: { id: "mother", good: true, text: "검문소에서 아이 엄마를 거짓말로 구했다" } } }, lose: { t: "보초가 당신을 노려봤다. 둘 다 몸수색을 당했다.", fx: { food: -1 } } }),
+      C("보초를 밀치고 아이를 되찾는다", { check: ["force", 13], win: { t: "아이를 엄마 품에 안겨 주고 함께 차단봉 너머로 뛰었다. 등 뒤에서 호루라기.", fx: { human: 8, wolves: -2 } }, lose: { t: "보초 셋이 덤볐다. 겨우 차단봉을 넘었다.", fx: { hp: 2, wolves: -2 } } }),
+    ],
+  };
+  for (const [key, list] of Object.entries(moreApproaches)) {
+    const [eid, sid] = key.split(".");
+    const sc = events[eid] && events[eid].scenes[sid];
+    if (!sc) continue;
+    // 판정 없는 '그냥 지나간다'류는 맨 뒤로
+    const plain = sc.choices.filter((c) => !c.check && !c.req && !c.fx?.join && !c.go);
+    sc.choices = [...sc.choices.filter((c) => !plain.includes(c)), ...list, ...plain];
+  }
+
   const api = { items, recipes, origins, people, cast, places, events, premises, originBeats, climax, endings, setpieces, memory, confront, narrators, road, pastSelf, truths, spine, travel, roadTalk, reacts, leads, adventures, hunt, stormBlock };
   root.JourneyContent = api;
   if (typeof module !== "undefined") module.exports = api;

@@ -140,6 +140,20 @@ assert.throws(() => E.validate({ v: 0 }));
   w = E.go(w, E.options(w)[0].id).state; assert.equal(w.ev.cur.beat?.id, "storm_block", "눈보라로 길이 막힌다");
   assert(E.adventure(w, 2).need.length >= 3);
 }
+// TRPG 2단계: 장면마다 접근이 여럿, 먼저 살펴보기
+{
+  let mains = 0, rich = 0;
+  for (const [id, ev] of Object.entries(C.events)) { if (ev.climax || /^road_/.test(id)) continue; const sc = ev.scenes.start; if (!sc || !sc.choices.some((c) => c.check)) continue; mains++; if (new Set(sc.choices.filter((c) => c.check).map((c) => c.check[0])).size >= 2) rich++; }
+  assert(rich / mains > 0.85, `접근 방식이 둘 이상인 장면 비율 ${rich}/${mains}`);
+  let g = E.begin(E.newGame({ origin: "drifter", seed: 21 })).state; g.dir.pending = [];
+  g = E.go(g, E.options(g)[0].id).state; let guard = 0;
+  while (g.phase === "event" && !E.view(g).canScout && guard++ < 10) g = stepEvent(g);
+  if (g.phase === "event" && E.view(g).canScout) {
+    const before = E.view(g).choices.find((c) => c.feel);
+    const sc = E.scout(g).state; assert(E.view(sc).scoutNote, "살핀 결과가 나온다"); assert(!E.view(sc).canScout, "한 번만 살핀다");
+    assert(E.view(sc).choices.every((c) => !c.feel || c.approach), "판정 선택에 접근 표시");
+  }
+}
 // 결말 보강: 조사, 명단 줄기, 수첩
 {
   assert.equal(E.josa("은서은(는) 마루이(가) 집(으)로 길(으)로"), "은서는 마루가 집으로 길로");
