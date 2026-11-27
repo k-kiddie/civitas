@@ -14,6 +14,11 @@
   const HUNGER = ["배부름", "배고픔", "굶주림", "아사 직전"];
   const COLD = ["따뜻함", "추움", "몸이 언다", "저체온"];
   const STATS = { force: "완력", wits: "눈치", talk: "말솜씨", craft: "손재주" };
+  // 포만도 0~10: 먹으면 오르고, 하루를 보내면 사람·추위·부상·고생에 따라 꺼진다
+  const FULL = [[9, "배부름"], [7, "든든함"], [5, "괜찮음"], [3, "출출함"], [1, "배고픔"], [0, "굶주림"]];
+  const fullLabel = (n) => FULL.find(([m]) => n >= m)[1];
+  const hungerOf = (n) => (n >= 5 ? 0 : n >= 3 ? 1 : n >= 1 ? 2 : 3);
+  const MEAL = [0, 3, 5];
   // 이야기 박자 → 그림 이름 (assets/journey/scenes/)
   const BEAT_ART = { bt_p1: "bt_crack", bt_p2: "bt_evidence", bt_p3: "bt_evidence", bt_c: "bt_trust", bt_tA: "bt_betrayal", bt_tB: "bt_betrayal", bt_pay: "bt_reckoning",
     hk_p1: "hk_radio", hk_p2: "hk_photo", hk_p3: "hk_radio", hk_c: "hk_sick_child", hk_tA: "hk_reveal", hk_tB: "hk_radio", hk_pay: "hk_choice",
@@ -25,7 +30,7 @@
     const o = C.origins[origin] || C.origins.parent;
     const s = {
       v: 1, rng: seed >>> 0, origin: C.origins[origin] ? origin : "parent", day: 1, trainDay: 13, act: 1, step: 0, place: o.start,
-      phase: "intro", me: { hp: 0, hunger: 0, cold: 0, stats: { ...o.stats } }, comps: [], food: o.food, fuel: o.fuel, bag: [],
+      phase: "intro", me: { hp: 0, hunger: 0, full: 7, cold: 0, stats: { ...o.stats } }, comps: [], food: o.food, fuel: o.fuel, bag: [],
       facts: {}, clues: { bt: 0, hk: 0, fs: 0 }, human: 60, wolves: 0, debts: [], journal: [], chronicle: [],
       map: {}, dir: null, ev: null, camp: null, ending: null, title: "", seen: {},
       evPick: {}, habit: { share: 0, harsh: 0, trust: 0 }, roadUsed: {},
@@ -329,6 +334,8 @@
       const o = ok ? ch.win : ch.lose;
       out = { t: o?.t, fx: { ...(ch.fx || {}), ...(o?.fx || {}) }, go: o?.go ?? ch.go };
     }
+    if (ch.check && ch.check[0] === "force") s.effort = (s.effort || 0) + 1;
+    if (out.fx?.cold || out.fx?.day) s.effort = (s.effort || 0) + 1;
     applyFx(s, out.fx || {}, notes);
     const cur = s.ev.cur;
     if (cur.kind === "beat") { const tw = cur.beat.onTwist; if (tw) twistAfter(s, tw); }
@@ -373,7 +380,7 @@
     if (fx.clue) { s.clues[fx.clue] = (s.clues[fx.clue] || 0) + 1; if (fx.clue === CLUE_OF[s.dir.premise]) notes.push("무언가 이상하다. 기억해 둔다."); }
     if (fx.debt && !fx.debt.good) for (const c of live(s)) (c.mem = c.mem || []).push(fx.debt.id);
     if (fx.debt) { s.debts.push({ ...fx.debt, day: s.day }); if (fx.debt.owe) s.facts.owe_gu = s.day; jr(s, fx.debt.text, fx.debt.good ? 2 : 3); }
-    if (fx.join && live(s).length < 2 && !comp(s, fx.join)) { s.comps.push({ id: fx.join, name: C.people[fx.join].name, hp: 0, hunger: 0, trust: 1, alive: true, talks: 0 }); notes.push(`${C.people[fx.join].name}이(가) 함께 걷는다.`); jr(s, `${C.people[fx.join].name}을(를) 길동무로 받아들였다.`, 1); }
+    if (fx.join && live(s).length < 2 && !comp(s, fx.join)) { s.comps.push({ id: fx.join, name: C.people[fx.join].name, hp: 0, hunger: 1, full: 5, trust: 1, alive: true, talks: 0 }); notes.push(`${C.people[fx.join].name}이(가) 함께 걷는다.`); jr(s, `${C.people[fx.join].name}을(를) 길동무로 받아들였다.`, 1); }
     else if (fx.join && live(s).length >= 2) notes.push("이미 둘이 함께다. 더는 데려갈 수 없다.");
     if (fx.trustAll) for (const c of live(s)) c.trust += fx.trustAll;
     const cc = s.ev?.cur?.cid ? comp(s, s.ev.cur.cid) : null;
@@ -505,20 +512,37 @@
   // ── 야영 ──
   function toCamp(s) {
     s.phase = "camp";
-    const feed = { me: s.food > 0 };
-    let f = s.food - (feed.me ? 1 : 0);
-    for (const c of live(s)) { feed[c.id] = f > 0; if (f > 0) f--; }
+    // 기본: 배고픈 사람부터 한 끼씩, 남으면 가장 배고픈 사람에게 한 끼 더
+    const ppl = [{ id: "me", full: s.me.full }, ...live(s).map((c) => ({ id: c.id, full: c.full }))].sort((a, b) => a.full - b.full);
+    const feed = {}; let f = s.food;
+    for (const p of ppl) { feed[p.id] = f > 0 ? 1 : 0; if (f > 0) f--; }
+    for (const p of ppl) if (f > 0 && p.full <= 2) { feed[p.id] = 2; f--; }
     s.camp = { feed, fire: s.fuel > 0, talked: false, used: [] };
     // 역장 손자 지름길 표식 → 하얀나루에서 도움
     if (s.debts.some((d) => d.id === "stationmaster" && d.good)) s.facts.grandson_ok = s.facts.grandson_ok || s.day;
+  }
+  // 하루에 배가 꺼지는 양: 사람마다 다르고, 춥거나 다쳤거나 고생한 날은 더 꺼진다
+  function burnOf(s, id, fire, warm) {
+    const p = id === "me" ? s.me : comp(s, id);
+    const base = id === "me" ? 2 : C.people[id].appetite || 2;
+    return base + (!fire && !warm ? 1 : 0) + (p.hp >= 2 ? 1 : 0) + ((s.effort || 0) >= 2 ? 1 : 0);
+  }
+  function mealForecast(s, id) {
+    const c = s.camp, p = id === "me" ? s.me : comp(s, id);
+    const warm = hasItem(s, "furcoat") || live(s).some((x) => C.people[x.id].perk === "shelter" && x.hp <= 1);
+    const burn = burnOf(s, id, c.fire, warm), after = Math.max(0, Math.min(10, (p.full ?? 5) + MEAL[c.feed[id] || 0] - burn));
+    const why = [id !== "me" && (C.people[id].appetite || 2) > 2 ? "덩치가 커서 금방 꺼진다" : "", id !== "me" && C.people[id].appetite === 1 ? "적게 먹고도 버틴다" : "", !c.fire && !warm ? "추우면 더 꺼진다" : "", p.hp >= 2 ? "상처가 기운을 먹는다" : "", (s.effort || 0) >= 2 ? "오늘 몸을 많이 썼다" : ""].filter(Boolean);
+    return { now: fullLabel(p.full ?? 5), full: p.full ?? 5, after, afterLabel: fullLabel(after), burn, why };
   }
   function campToggle(state, what, id) {
     if (state.phase !== "camp") return { state, error: "야영 중이 아니다." };
     const s = clone(state), c = s.camp;
     if (what === "feed") {
-      const n = Object.values(c.feed).filter(Boolean).length;
-      if (!c.feed[id] && n >= s.food) return { state, error: "식량이 모자라다." };
-      c.feed[id] = !c.feed[id];
+      const used = Object.values(c.feed).reduce((a, b) => a + (b || 0), 0);
+      const next = ((c.feed[id] || 0) + 1) % 3;
+      const cost = next - (c.feed[id] || 0);
+      if (cost > 0 && used + cost > s.food) { if (c.feed[id]) { c.feed[id] = 0; return { state: s }; } return { state, error: "식량이 모자라다." }; }
+      c.feed[id] = next;
     } else if (what === "fire") {
       if (!c.fire && s.fuel <= 0) return { state, error: "연료가 없다." };
       c.fire = !c.fire;
@@ -566,8 +590,7 @@
     if (state.phase !== "camp") return { state, error: "야영 중이 아니다." };
     if (bagCount(state) > BAG) return { state, error: `가방이 넘친다. ${bagCount(state) - BAG}개를 버려야 한다.` };
     const s = clone(state), c = s.camp, lines = [];
-    const eaters = Object.entries(c.feed).filter(([, v]) => v).map(([k]) => k);
-    s.food -= eaters.length;
+    s.food -= Object.values(c.feed).reduce((a, b) => a + (b || 0), 0);
     if (c.fire) s.fuel -= 1;
     const perk = (k) => live(s).find((p) => C.people[p.id].perk === k && p.hp <= 1);
     const hunter = perk("hunt"), healer = perk("heal"), stoker = perk("fire"), finder = perk("shelter");
@@ -575,27 +598,31 @@
     if (stoker && c.fire && rnd(s) < 0.5) { s.fuel += 1; lines.push(`${stoker.name}이(가) 고철 깡통으로 바람막이를 만들어 연료를 아꼈다.`); }
     const warm = hasItem(s, "furcoat") || !!finder;
     if (finder && !c.fire) lines.push(`${finder.name}이(가) 바람이 닿지 않는 바위 틈을 찾아냈다.`);
-    const body = (p, name, fed) => {
-      p.hunger = fed ? 0 : Math.min(3, p.hunger + 1);
-      if (p.hunger >= 3 && rnd(s) < 0.6) p.hp = Math.min(4, p.hp + 1);
+    const body = (p, name, meal) => {
+      p.full = Math.max(0, Math.min(10, (p.full ?? 5) + MEAL[meal || 0] - burnOf(s, p === s.me ? "me" : p.id, c.fire, warm)));
+      p.hunger = hungerOf(p.full);
+      const fed = p.full >= 5;
+      if (p.full === 0 && rnd(s) < 0.6) p.hp = Math.min(4, p.hp + 1);
       if (p === s.me) {
-        if (c.fire) p.cold = Math.max(0, p.cold - 2); else if (!warm) p.cold = Math.min(3, p.cold + 1);
+        if (c.fire) p.cold = Math.max(0, p.cold - 2 - (meal === 2 ? 1 : 0)); else if (!warm) p.cold = Math.min(3, p.cold + (meal === 2 ? 0 : 1));
         if (p.cold >= 3) p.hp = Math.min(4, p.hp + 1);
       } else if (!c.fire && rnd(s) < 0.3) p.hp = Math.min(4, p.hp + 1);
       if (p.hp >= 1 && p.hp <= 2 && fed && c.fire && rnd(s) < 0.35) p.hp -= 1;
       if (p.hp === 3) { p.crit = (p.crit || 0) + 1; if (p.crit >= 2 && rnd(s) < 0.7) p.hp = 4; }
     };
-    body(s.me, "당신", !!c.feed.me);
+    body(s.me, "당신", c.feed.me || 0);
     if (healer) { const pt = [s.me, ...live(s)].filter((x) => x !== healer && x.hp >= 1 && x.hp < 4).sort((a, b) => b.hp - a.hp)[0]; if (pt && rnd(s) < 0.6) { pt.hp -= 1; pt.crit = 0; lines.push(`${healer.name}이(가) 밤새 ${pt === s.me ? "당신" : pt.name}의 상처를 돌봤다.`); } }
     for (const p of live(s)) {
-      body(p, p.name, !!c.feed[p.id]);
-      if (!c.feed[p.id]) p.trust -= 1;
+      body(p, p.name, c.feed[p.id] || 0);
+      if (!c.feed[p.id]) p.trust -= 1; else if (c.feed[p.id] === 2) p.trust += 0.5;
+      if (p.full <= 1) p.trust -= 0.5;
       if (!c.fire) p.trust -= 0.5;
       if (p.hp >= 4) { p.alive = false; lines.push(`${p.name}이(가) 아침을 보지 못했다.`); jr(s, `${p.name}이(가) 죽었다.`, 3); }
       else if (p.trust <= -2.5) { p.gone = true; lines.push(`아침에 보니 ${p.name}의 자리가 비어 있다. 떠났다.`); jr(s, `${p.name}이(가) 떠났다.`, 3); }
     }
     s.chronicle.push({ day: s.day, title: "야영", paras: [c.fire ? "작은 불 앞에서 밤을 보냈다." : "불 없이 밤을 보냈다. 이가 딱딱 부딪혔다.", ...lines] });
     s.camp = null;
+    s.effort = 0;
     if (s.me.hp >= 4) return finish(s, "frozen");
     // 다음 걸음
     s.step += 1;
@@ -614,10 +641,13 @@
     c.evPick = c.evPick || {};
     c.habit = c.habit || { share: 0, harsh: 0, trust: 0 };
     c.roadUsed = c.roadUsed || {};
+    if (c.me.full === undefined) c.me.full = 7 - 2 * (c.me.hunger || 0);
+    for (const x of c.comps) if (x.full === undefined) x.full = 7 - 2 * (x.hunger || 0);
+    if (c.camp) for (const k of Object.keys(c.camp.feed)) c.camp.feed[k] = c.camp.feed[k] === true ? 1 : c.camp.feed[k] || 0;
     c.legacy = c.legacy || { truths: [], corpse: null };
     return c;
   }
-  const api = { newGame, begin, options, go, view, choose, cont, campToggle, useItem, drop, craft, sleep, validate, live, hasItem, allTruths, bagCount, BAG, HP, HUNGER, COLD, STATS, C, premiseOf, fill };
+  const api = { newGame, begin, options, go, view, choose, cont, campToggle, useItem, drop, craft, sleep, validate, live, hasItem, allTruths, bagCount, fullLabel, mealForecast, BAG, HP, HUNGER, COLD, STATS, C, premiseOf, fill };
   root.JourneyEngine = api;
   if (typeof module !== "undefined") module.exports = api;
 })(globalThis);

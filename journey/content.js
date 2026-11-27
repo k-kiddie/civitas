@@ -75,11 +75,11 @@
 
   // ── 인물 ──
   const people = {
-    maru: { name: "마루", role: "사냥꾼", stats: { force: 3, wits: 2, talk: 0, craft: 1 }, art: "hunter", bio: "말이 적은 거구. 백곰 이야기에 얼굴이 굳는다.", heart: "hard", perk: "hunt", perkText: "야영 때 사냥해 식량을 구해 온다",
+    maru: { name: "마루", role: "사냥꾼", stats: { force: 3, wits: 2, talk: 0, craft: 1 }, art: "hunter", bio: "말이 적은 거구. 백곰 이야기에 얼굴이 굳는다.", appetite: 3, heart: "hard", perk: "hunt", perkText: "야영 때 사냥해 식량을 구해 온다",
       talk: ["“…불 꺼지지 않게 해.”", "마루가 칼을 갈며 말했다. “동생이 있었어. 백곰이 눈밭에 버렸지.”", "“네가 왜 남쪽으로 가는지 이제 알 것 같아.”"] },
     hanbyeol: { name: "한별", role: "조종사", stats: { force: 1, wits: 2, talk: 1, craft: 3 }, art: "pilot", bio: "추락한 수송기에서 걸어 나왔다. 다시 날고 싶어 한다.", heart: "kind", perk: "fire", perkText: "고철로 난로를 만들어 연료를 아낀다",
       talk: ["“하늘에서 보면 이 설원도 꽤 예뻤어요.”", "한별이 별을 가리켰다. “저게 남쪽이에요. 나침반보다 정확해요.”", "“…같이 가 줘서 고마워요. 혼자였으면 벌써 멈췄을 거예요.”"] },
-    hyean: { name: "혜안", role: "스님", stats: { force: 0, wits: 2, talk: 3, craft: 1 }, art: "monk", bio: "누구도 원망하지 않는다. 그래서 가끔 무섭다.", heart: "kind", perk: "heal", perkText: "밤새 다친 사람을 돌본다",
+    hyean: { name: "혜안", role: "스님", stats: { force: 0, wits: 2, talk: 3, craft: 1 }, art: "monk", bio: "누구도 원망하지 않는다. 그래서 가끔 무섭다.", appetite: 1, heart: "kind", perk: "heal", perkText: "밤새 다친 사람을 돌본다",
       talk: ["“배고프면 화가 납니다. 먼저 드세요.”", "혜안이 불을 보며 말했다. “늑대단 사람들도 처음엔 우리 같았을 겁니다.”", "“당신이 누구를 두고 왔는지 압니다. 그래도 당신은 나쁜 사람이 아닙니다.”"] },
     eunseo: { name: "은서", role: "기상학자", stats: { force: 0, wits: 3, talk: 2, craft: 1 }, art: "meteorologist", bio: "바람을 읽는다. 기지 대원들을 알았다.", heart: "kind", perk: "shelter", perkText: "바람을 피할 자리를 찾아 체온을 지킨다",
       talk: ["“내일 바람이 바뀌어요. 일찍 출발해요.”", "은서가 낮게 말했다. “기지 대원들… 제가 마지막으로 무전을 받았어요. 셋으로 갈라졌다고.”", "“열차가 정말 오면, 그다음엔 뭘 하고 싶어요?”"] },
