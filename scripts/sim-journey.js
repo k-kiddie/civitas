@@ -8,6 +8,7 @@ function bot(seed, origin, style = "smart", legacy = null) {
   while (s.phase !== "end") {
     if (++guard > 2000) throw Error(`멈춤 ${s.phase} ${JSON.stringify(s.ev?.cur)}`);
     if (s.phase === "map") {
+      if (s.traitOffer) { s = E.pickTrait(s, s.traitOffer[0]).state; continue; }
       while (E.bagCount(s) > E.BAG) s = E.drop(s, s.bag.find((b) => !E.C.items[b.k].key).k).state;
       const ok = E.options(s).filter((o) => !o.lock);
       s = E.go(s, (style === "random" ? ok[r(ok.length)] : ok.find((o) => o.dest && o.dest !== "station" && o.dest !== "valley" && o.dest !== "return") || ok.find((o) => o.dest === "station") || ok[r(ok.length)]).id).state;

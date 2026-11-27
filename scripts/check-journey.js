@@ -154,6 +154,28 @@ assert.throws(() => E.validate({ v: 0 }));
     assert(E.view(sc).choices.every((c) => !c.feel || c.approach), "판정 선택에 접근 표시");
   }
 }
+// TRPG 3단계: 기술·실패에서 배우기·상태·특성·시트
+{
+  let g = E.begin(E.newGame({ origin: "deserter", seed: 31 })).state;
+  assert.equal(g.me.skills.fight, g.me.stats.force + 1, "탈출자는 싸움에 강하다");
+  assert(E.sheet(g).skills.length === 8);
+  // 실패에서 배운다
+  g.dir.pending = []; g = E.go(g, E.options(g)[0].id).state; let guard = 0;
+  while (g.phase === "event" && guard++ < 10 && !(E.view(g).choices.some((c) => c.feel && !c.lock) && !g.ev.result && !g.ev.pending)) g = stepEvent(g);
+  if (g.phase === "event" && !g.ev.result) {
+    const c = E.view(g).choices.find((x) => x.feel && !x.lock);
+    let h = E.choose(g, c.i).state; h.ev.pending.tier = "lose"; h.ev.pending.who = "당신";
+    const sk = h.ev.pending.skill; h.me.xp[sk] = 2; const v0 = h.me.skills[sk];
+    h = E.accept(h).state; assert.equal(h.me.skills[sk], v0 + 1, "세 번째 실패에서 기술이 오른다");
+  }
+  // 특성: 2막에 들어서면 고를 것이 나온다, 고르기 전엔 떠날 수 없다
+  let t = E.begin(E.newGame({ origin: "parent", seed: 32 })).state; t.act = 1; t.step = 4; t.phase = "camp"; t.camp = { feed: { me: 0 }, fire: false, talked: false };
+  t = E.sleep(t).state; assert.equal(t.act, 2); assert.equal(t.traitOffer.length, 3); assert(E.closeAct(t).error);
+  const tid = t.traitOffer[0]; t = E.pickTrait(t, tid).state; assert(t.traits.includes(tid)); assert(!E.closeAct(t).error);
+  // 상태: 굶주리면 탈진
+  let x = E.begin(E.newGame({ origin: "crew", seed: 33 })).state; x.phase = "camp"; x.me.full = 1; x.camp = { feed: { me: 0 }, fire: false, talked: false };
+  x = E.sleep(x).state; assert(x.me.cond.exhaust, "탈진");
+}
 // 결말 보강: 조사, 명단 줄기, 수첩
 {
   assert.equal(E.josa("은서은(는) 마루이(가) 집(으)로 길(으)로"), "은서는 마루가 집으로 길로");

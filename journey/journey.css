@@ -76,3 +76,11 @@
 .gm { font-style: italic; color: var(--amber); font-size: 14px; margin: 16px 0 0; }
 .note.scout { border-left-color: var(--amber); color: var(--ink2); }
 button.scoutbtn { margin-top: 10px; }
+.conds { display: flex; gap: 8px; margin-top: 8px; font-family: var(--sans); font-size: 11px; }
+.conds span { color: var(--red); border: 1px solid rgba(196,104,90,.5); padding: 1px 6px; border-radius: 2px; }
+.skills { list-style: none; padding: 0; margin: 0; }
+.skills li { padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.skills .sv { font-size: 18px; margin-left: 6px; color: var(--amber); }
+.skills small { display: block; font-size: 12px; color: var(--mute); }
+.skills small.mods { color: #c9b38a; }
+.parts { font-family: var(--sans); font-size: 12px; color: var(--mute); margin: 2px 0 6px; line-height: 1.6; }

@@ -864,6 +864,45 @@
     C("움직이지 않고 버틴다 (하루를 잃는다)", { fx: { day: 1, cold: 1 }, t: "하루 종일 눈굴 안에서 서로의 숨소리만 들었다." }),
     C("그래도 간다", { check: ["force", 14], win: { t: "얼굴이 찢어질 것 같았다. 그래도 하루를 잃지 않았다." }, lose: { t: "눈보라가 당신을 삼켰다. 겨우 기어 돌아왔다.", fx: { hp: 1, cold: 2, day: 1 } } }),
   ] };
+  // ── TRPG 3단계: 기술 8개 · 상태 · 특성 ──
+  const skills = {
+    lift: { name: "힘쓰기", stat: "force", desc: "들고, 밀고, 버틴다" },
+    fight: { name: "싸움", stat: "force", desc: "덮치고, 맞서고, 제압한다" },
+    look: { name: "살피기", stat: "wits", desc: "찾고, 읽고, 알아챈다" },
+    hide: { name: "숨기", stat: "wits", desc: "몰래, 조용히, 들키지 않게" },
+    persuade: { name: "설득", stat: "talk", desc: "달래고, 흥정하고, 마음을 연다" },
+    threat: { name: "위협", stat: "talk", desc: "윽박지르고, 겁을 준다" },
+    fix: { name: "수리", stat: "craft", desc: "고치고, 엮고, 만든다" },
+    aid: { name: "응급처치", stat: "craft", desc: "상처를 돌본다" },
+  };
+  // 선택지 문장으로 어떤 기술인지 고른다 (장면 글은 그대로 둔다)
+  const skillHints = [
+    ["fight", /싸|덮치|맞서|제압|칼|주먹|멱살|뚫는다|밀어붙|밀치|쓰러뜨|쫓아낸|털는다|턴다|빼앗는다/], ["threat", /위협|윽박|칼을 보이|요구|겁을/],
+    ["hide", /몰래|숨|기다렸다|살금|기어|어둠|들키지|매복|흩어져|밤을 기다려|틈을 노/], ["aid", /치료|붕대|상처|간호|부목/],
+  ];
+  const originSkills = {
+    parent: { persuade: 1, aid: 1 }, deserter: { fight: 1, hide: 1 }, drifter: { look: 1, hide: 1 },
+    crew: { look: 1, fix: 1 }, pilot: { fix: 1, look: 1 },
+  };
+  const companionSkills = { maru: { fight: 1, look: 1 }, hanbyeol: { fix: 1 }, hyean: { persuade: 1, aid: 1 }, eunseo: { look: 1 } };
+  const conditions = {
+    fear: { name: "공포", desc: "숨기 +1 · 싸움·위협 −2", mods: { hide: 1, fight: -2, threat: -2 } },
+    exhaust: { name: "탈진", desc: "힘쓰기·싸움 −2", mods: { lift: -2, fight: -2 } },
+    frost: { name: "동상", desc: "수리·응급처치 −2 (손가락이 말을 안 듣는다)", mods: { fix: -2, aid: -2 } },
+    anger: { name: "분노", desc: "싸움·위협 +1 · 설득 −2 · 숨기 −1", mods: { fight: 1, threat: 1, persuade: -2, hide: -1 } },
+  };
+  const traits = {
+    tracker: { name: "눈길의 사냥꾼", desc: "살피기 +1 · 하루에 배가 덜 꺼진다", mods: { look: 1 } },
+    wolfeye: { name: "늑대의 눈", desc: "위협 +2 · 마음 약한 동행은 당신을 조금 무서워한다", mods: { threat: 2 } },
+    callus: { name: "굳은살", desc: "힘쓰기 +1 · 동상에 걸리지 않는다", mods: { lift: 1 } },
+    quiet: { name: "조용한 발", desc: "숨기 +2", mods: { hide: 2 } },
+    friend: { name: "말벗", desc: "설득 +1 · 동행의 신뢰가 오른다", mods: { persuade: 1 } },
+    medic: { name: "야전 의무병", desc: "응급처치 +2 · 야영 때 다친 사람을 더 잘 돌본다", mods: { aid: 2 } },
+    tinker: { name: "고철쟁이", desc: "수리 +1 · 불을 피워도 가끔 연료를 아낀다", mods: { fix: 1 } },
+    endure: { name: "버티는 자", desc: "의지 최대 4", mods: {} },
+    fearless: { name: "겁 없는", desc: "공포에 빠지지 않는다 · 싸움 +1", mods: { fight: 1 } },
+    coldblood: { name: "차가운 피", desc: "분노에 빠지지 않는다 · 살피기 +1", mods: { look: 1 } },
+  };
   // 진실 조각 (여러 판에 걸쳐 모은다)
   const truths = {
     radio: { name: "무전의 목소리", text: "딸의 목소리는 3년 전 녹음이었고, 그걸 틀던 건 명단을 쥔 자들이었다." },
@@ -974,7 +1013,7 @@
     sc.choices = [...sc.choices.filter((c) => !plain.includes(c)), ...list, ...plain];
   }
 
-  const api = { items, recipes, origins, people, cast, places, events, premises, originBeats, climax, endings, setpieces, memory, confront, narrators, road, pastSelf, truths, spine, travel, roadTalk, reacts, leads, adventures, hunt, stormBlock };
+  const api = { items, recipes, origins, people, cast, places, events, premises, originBeats, climax, endings, setpieces, memory, confront, narrators, road, pastSelf, truths, spine, travel, roadTalk, reacts, leads, adventures, hunt, stormBlock, skills, skillHints, originSkills, companionSkills, conditions, traits };
   root.JourneyContent = api;
   if (typeof module !== "undefined") module.exports = api;
 })(globalThis);

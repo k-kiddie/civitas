@@ -49,8 +49,9 @@
   function header() {
     const s = state, left = s.trainDay - s.day;
     const st = (label, v, bad) => `<span class="${bad ? "bad" : ""}">${label}<b>${v}</b></span>`;
-    return `<header class="jhead"><div class="top"><span><b>남행</b>  ${s.day}일째</span><span>${btn("가방", "sheet", 'data-sheet="bag" class="mini"')} ${btn("기록", "sheet", 'data-sheet="chron" class="mini"')} ${btn("새로", "sheet", 'data-sheet="new" class="mini"')}</span></div>
+    return `<header class="jhead"><div class="top"><span><b>남행</b>  ${s.day}일째</span><span>${btn("나", "sheet", 'data-sheet="me" class="mini"')} ${btn("가방", "sheet", 'data-sheet="bag" class="mini"')} ${btn("기록", "sheet", 'data-sheet="chron" class="mini"')} ${btn("새로", "sheet", 'data-sheet="new" class="mini"')}</span></div>
       <div class="jstats">${st("몸", E.HP[s.me.hp], s.me.hp >= 2)}${st("배", E.fullLabel(s.me.full ?? 5), (s.me.full ?? 5) <= 2)}${st("체온", E.COLD[s.me.cold], s.me.cold >= 2)}${st("식량", s.food, s.food < 2)}${st("연료", s.fuel, s.fuel < 1)}${st("열차", left > 0 ? `${left}일 뒤쯤` : left === 0 ? "오늘 밤" : "지나갔다", left <= 1)}</div>
+      ${Object.entries(s.me.cond || {}).filter(([, v]) => v).length ? `<div class="conds">${Object.entries(s.me.cond).filter(([, v]) => v).map(([k]) => `<span title="${esc(C.conditions[k].desc)}">${esc(C.conditions[k].name)}</span>`).join("")}</div>` : ""}
       <div class="clocks"><span>의지 <b class="dots">${"●".repeat(s.will)}${"○".repeat(Math.max(0, 3 - s.will))}</b></span>${E.clocksView(s).map((c) => `<span class="${c.n >= c.max - 1 && c.k !== "clue" ? "hot" : ""}">${esc(c.name)} <b class="dots">${"●".repeat(c.n)}${"○".repeat(c.max - c.n)}</b></span>`).join("")}</div>
       ${E.live(s).length ? `<div class="jcomps">${E.live(s).map((c) => `<span>${face(c.id, 26)} ${esc(c.name)} <small>${E.HP[c.hp]}</small></span>`).join("")}</div>` : ""}</header>`;
   }
@@ -59,7 +60,7 @@
   function actCard() {
     const a = E.adventure(state, state.actCard);
     if (!a) return "";
-    return `<div class="veil night"><section class="modal actcard" role="dialog">${placeArt(state.act === 1 ? "gate_bridge" : state.act === 2 ? "gate_checkpoint" : "mountain_pass")}<h2 class="chapter">${esc(a.title)}</h2>${prose([a.goal])}<h3>필요해 보이는 것</h3><ul class="wall moments need">${a.need.map((n) => `<li class="${n.have ? "have" : ""}">${n.have ? "✔" : "·"} ${esc(n.label)}</li>`).join("")}</ul><p class="muted">하나만 있어도 길은 열린다. 없으면 대가를 치른다.</p>${btn("떠난다", "closeact", 'class="primary"')}</section></div>`;
+    return `<div class="veil night"><section class="modal actcard" role="dialog">${placeArt(state.act === 1 ? "gate_bridge" : state.act === 2 ? "gate_checkpoint" : "mountain_pass")}<h2 class="chapter">${esc(a.title)}</h2>${prose([a.goal])}<h3>필요해 보이는 것</h3><ul class="wall moments need">${a.need.map((n) => `<li class="${n.have ? "have" : ""}">${n.have ? "✔" : "·"} ${esc(n.label)}</li>`).join("")}</ul><p class="muted">하나만 있어도 길은 열린다. 없으면 대가를 치른다.</p>${state.traitOffer && state.traitOffer.length ? `<h3>지난 막이 당신을 바꿨다 <small>하나를 고른다</small></h3><div class="choices">${state.traitOffer.map((t) => btn(`<span>${esc(C.traits[t].name)}</span><small>${esc(C.traits[t].desc)}</small>`, "trait", `data-id="${t}"`)).join("")}</div>` : btn("떠난다", "closeact", 'class="primary"')}</section></div>`;
   }
   function mapView() {
     const s = state, cols = s.map[s.act] || [];
@@ -88,7 +89,7 @@
     if (rolling) return `<div class="veil night"><section class="modal roll" role="dialog"><p class="picked">“${esc(rolling.label)}”</p><p class="roll-head">${esc(rolling.who)} · ${esc(rolling.stat)}</p><div class="dice">d20</div><p class="muted heartbeat">숨을 참는다…</p></section></div>`;
     if (v.pending) {
       const p = v.pending, canRe = !["win", "crit"].includes(p.tier) && s.will > 0;
-      return `<div class="veil night"><section class="modal result ${["win", "crit"].includes(p.tier) ? "win" : p.tier === "partial" ? "" : "lose flash"}" role="dialog">${head}<p class="picked">“${esc(p.label)}”</p><div class="roll-line"><span class="d20 ${p.r === 20 ? "crit" : p.r === 1 ? "fumble" : ""}">${p.r}</span><span class="calc">${esc(p.who)} ${esc(p.stat)} ${p.mod >= 0 ? "+" : "−"}${Math.abs(p.mod)}${p.bonus ? ` · 의지·도움 +${p.bonus}` : ""} = <b>${p.total}</b> <small>vs ${p.dc}</small></span></div><div class="verdict tier-${p.tier}">${esc(p.tierName)}</div><p class="muted">${p.tier === "partial" ? "해내긴 한다. 대신 무언가를 내줘야 한다." : ["lose", "fumble"].includes(p.tier) ? "이대로면 실패다." : "해냈다."}${p.rerolled ? ` (다시 굴림 ${p.rerolled}번)` : ""}</p>${canRe ? btn(`의지 1점으로 다시 굴린다 <small>남은 의지 ${s.will}</small>`, "reroll", 'class="secondary"') : ""}${btn("받아들인다", "accept", 'class="primary"')}</section></div>`;
+      return `<div class="veil night"><section class="modal result ${["win", "crit"].includes(p.tier) ? "win" : p.tier === "partial" ? "" : "lose flash"}" role="dialog">${head}<p class="picked">“${esc(p.label)}”</p><div class="roll-line"><span class="d20 ${p.r === 20 ? "crit" : p.r === 1 ? "fumble" : ""}">${p.r}</span><span class="calc">= <b>${p.total}</b> <small>vs ${p.dc}</small></span></div><p class="parts">${(p.parts || []).map(([n, v]) => `${esc(n)} ${v >= 0 ? "+" : "−"}${Math.abs(v)}`).join(" · ")}${p.bonus ? ` · 의지·도움 +${p.bonus}` : ""}</p><div class="verdict tier-${p.tier}">${esc(p.tierName)}</div><p class="muted">${p.tier === "partial" ? "해내긴 한다. 대신 무언가를 내줘야 한다." : ["lose", "fumble"].includes(p.tier) ? "이대로면 실패다." : "해냈다."}${p.rerolled ? ` (다시 굴림 ${p.rerolled}번)` : ""}</p>${canRe ? btn(`의지 1점으로 다시 굴린다 <small>남은 의지 ${s.will}</small>`, "reroll", 'class="secondary"') : ""}${btn("받아들인다", "accept", 'class="primary"')}</section></div>`;
     }
     if (r && r.cost) {
       return `<div class="veil"><section class="modal result" role="dialog">${head}<div class="verdict tier-partial">대가를 치르는 성공</div>${prose([r.text])}${r.notes.map((n) => `<p class="note">${esc(n)}</p>`).join("")}<h3>무엇을 내줄까</h3><div class="choices">${v.costs.map((c) => btn(`<span>${esc(c.label)}</span><small class="${c.danger ? "why" : ""}">${esc(c.sub)}</small>`, "cost", `data-k="${c.k}"`)).join("")}</div></section></div>`;
@@ -133,6 +134,11 @@
     const c = state.chronicle || [];
     return `<div class="veil bottom"><section class="sheet chron" role="dialog"><h2>기록</h2>${state.narrator ? `<p class="narrator">${esc(state.narrator)}</p>` : ""}${c.map((x) => `<article><h3><small>${x.day}일</small> ${esc(x.title)}</h3>${x.paras.map((t) => `<p>${esc(t)}</p>`).join("")}</article>`).join("")}${btn("닫기", "close", 'class="secondary"')}</section></div>`;
   }
+  function meSheet() {
+    const m = E.sheet(state);
+    const sk = m.skills.map((x) => `<li><b>${esc(x.name)}</b> <span class="sv">${x.v}</span>${x.mods.length ? `<small class="mods">${x.mods.map(([n, v]) => `${esc(n)} ${v > 0 ? "+" : "−"}${Math.abs(v)}`).join(" · ")}</small>` : ""}<small>${esc(x.desc)}${x.xp ? ` · 배우는 중 ${"●".repeat(x.xp)}${"○".repeat(3 - x.xp)}` : ""}</small></li>`).join("");
+    return `<div class="veil bottom"><section class="sheet chron" role="dialog"><h2>${esc(m.origin)}</h2><p class="muted">몸 ${esc(m.body.hp)} · 배 ${esc(m.body.full)} · 체온 ${esc(m.body.cold)} · 의지 ${m.will}/${m.willMax}</p><h3>기술 <small>실패해서 배우면 오른다 (세 번)</small></h3><ul class="skills">${sk}</ul><h3>상태</h3>${m.conds.length ? m.conds.map((c) => `<p><b>${esc(c.name)}</b> <small class="muted">${esc(c.desc)}</small></p>`).join("") : `<p class="muted">멀쩡하다.</p>`}<h3>특성</h3>${m.traits.length ? m.traits.map((t) => `<p><b>${esc(t.name)}</b> <small class="muted">${esc(t.desc)}</small></p>`).join("") : `<p class="muted">막을 넘을 때마다 하나씩 얻는다.</p>`}${btn("닫기", "close", 'class="secondary"')}</section></div>`;
+  }
   function noteSheet() {
     const n = E.notebook(state);
     const list = (h, a, empty) => `<h3>${h}</h3>${a.length ? `<ul class="wall moments">${a.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : `<p class="muted">${empty}</p>`}`;
@@ -167,7 +173,7 @@
     else if (state.phase === "event") html = eventView();
     else if (state.phase === "camp") html = campView();
     else html = mapView();
-    if (state && !state.restart && state.phase !== "end" && sheet) html += sheet === "bag" ? bagSheet() : sheet === "chron" ? chronSheet() : sheet === "note" ? noteSheet() : sheet === "new" ? newSheet() : "";
+    if (state && !state.restart && state.phase !== "end" && sheet) html += sheet === "bag" ? bagSheet() : sheet === "chron" ? chronSheet() : sheet === "note" ? noteSheet() : sheet === "me" ? meSheet() : sheet === "new" ? newSheet() : "";
     if (toast) html += `<div class="toast">${esc(toast)} ${btn("×", "toast")}</div>`;
     app.innerHTML = E.josa(html);
     document.body.classList.toggle("modal-open", /class="veil/.test(html));
@@ -187,6 +193,7 @@
     else if (k === "reroll") { rolling = { label: E.view(state).pending.label, who: E.view(state).pending.who, stat: "다시" }; render(); setTimeout(() => { rolling = null; commit(E.reroll(state)); }, 1200); }
     else if (k === "accept") commit(E.accept(state));
     else if (k === "scout") commit(E.scout(state));
+    else if (k === "trait") commit(E.pickTrait(state, a.dataset.id));
     else if (k === "cost") commit(E.payCost(state, a.dataset.k));
     else if (k === "will") commit(E.setWill(state));
     else if (k === "help") commit(E.setHelp(state, a.dataset.id));

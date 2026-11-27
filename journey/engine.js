@@ -34,10 +34,12 @@
       facts: {}, clues: { bt: 0, hk: 0, fs: 0 }, human: 60, wolves: 0, debts: [], journal: [], chronicle: [],
       map: {}, dir: null, ev: null, camp: null, ending: null, title: "", seen: {},
       evPick: {}, habit: { share: 0, harsh: 0, trust: 0 }, roadUsed: {},
-      will: 3, clocks: { wolves: 0, storm: 0, heart: 0 }, actCard: 0,
+      will: 3, clocks: { wolves: 0, storm: 0, heart: 0 }, actCard: 0, traits: [], traitOffer: null,
       legacy: { truths: (legacy && legacy.truths) || [], corpse: (legacy && legacy.corpse) || null },
     };
     s.trainDay = 15 + Math.floor(rnd(s) * 2);
+    s.me.skills = Object.fromEntries(Object.entries(C.skills).map(([k, d]) => [k, o.stats[d.stat] + ((C.originSkills[s.origin] || {})[k] || 0)]));
+    s.me.xp = {}; s.me.cond = {};
     for (const k of o.items) addItem(s, k);
     if (o.randomItems) for (const k of shuffle(s, ["rope", "knife", "lamp", "crowbar", "lighter", "bandage", "liquor", "cigarettes", "cloth"]).slice(0, o.randomItems)) addItem(s, k);
     // 지도: 막마다 4걸음(걸음마다 2~3곳) + 관문
@@ -316,17 +318,39 @@
     return "";
   }
   // 판정: 나와 동행 중 가장 잘하는 사람
-  function roller(s, stat) {
-    const cands = [{ id: "me", name: "당신", v: s.me.stats[stat] - (s.me.hp >= 2 ? 1 : 0) - (s.me.cold >= 2 ? 1 : 0) - (s.me.hunger >= 2 ? 1 : 0) }];
-    for (const c of live(s)) cands.push({ id: c.id, name: c.name, v: C.people[c.id].stats[stat] - (c.hp >= 2 ? 1 : 0) });
+  // ── 기술 판정 ──
+  const DEFAULT_SKILL = { force: "lift", wits: "look", talk: "persuade", craft: "fix" };
+  function skillOf(ch) {
+    if (ch.skill) return ch.skill;
+    const stat = ch.check[0];
+    for (const [k, re] of C.skillHints) if (C.skills[k].stat === stat && re.test(ch.label)) return k;
+    return DEFAULT_SKILL[stat];
+  }
+  const willMax = (s) => (s.traits || []).includes("endure") ? 4 : 3;
+  function skillMods(s, k) {
+    const out = [];
+    for (const t of s.traits || []) { const v = C.traits[t].mods[k]; if (v) out.push([C.traits[t].name, v]); }
+    for (const [c, on] of Object.entries(s.me.cond || {})) if (on) { const v = C.conditions[c].mods[k]; if (v) out.push([C.conditions[c].name, v]); }
+    return out;
+  }
+  function roller(s, stat, skill = DEFAULT_SKILL[stat]) {
+    const pen = [];
+    if (s.me.hp >= 2) pen.push(["상처", -1]); if (s.me.cold >= 2) pen.push(["추위", -1]); if (s.me.hunger >= 2) pen.push(["허기", -1]);
+    const mods = skillMods(s, skill);
+    const meBase = s.me.skills ? s.me.skills[skill] : s.me.stats[stat];
+    const cands = [{ id: "me", name: "당신", base: meBase, parts: [...mods, ...pen], v: meBase + [...mods, ...pen].reduce((a, [, v]) => a + v, 0) }];
+    for (const c of live(s)) { const base = C.people[c.id].stats[stat] + ((C.companionSkills[c.id] || {})[skill] || 0); const parts = c.hp >= 2 ? [["상처", -1]] : []; cands.push({ id: c.id, name: c.name, base, parts, v: base + parts.reduce((a, [, v]) => a + v, 0) }); }
     return cands.sort((a, b) => b.v - a.v)[0];
   }
   const TOOL_BONUS = { force: ["knife", "crowbar"], wits: ["lamp"], craft: ["crowbar", "scrap"] };
   function chance(s, ch) {
-    const [stat, dc0] = ch.check, r = roller(s, stat), dc = dc0 - (s.ev?.cur?.scout === "ok" ? 2 : 0);
-    const tool = (TOOL_BONUS[stat] || []).some((k) => hasItem(s, k)) ? 1 : 0;
-    const mod = r.v + tool + (live(s).length && r.id === "me" ? 1 : 0);
-    return { r, mod, dc, p: clamp((21 - (dc - mod)) / 20, 0.05, 0.95) };
+    const [stat, dc0] = ch.check, skill = skillOf(ch), r = roller(s, stat, skill), dc = dc0 - (s.ev?.cur?.scout === "ok" ? 2 : 0);
+    const toolK = (TOOL_BONUS[stat] || []).find((k) => hasItem(s, k));
+    const parts = [[`${r.name} ${C.skills[skill].name}`, r.base], ...r.parts];
+    if (toolK) parts.push([C.items[toolK].name, 1]);
+
+    const mod = parts.reduce((a, [, v]) => a + v, 0);
+    return { r, mod, dc, skill, parts, p: clamp((21 - (dc - mod)) / 20, 0.05, 0.95) };
   }
   const feel = (p) => (p >= 0.75 ? "해볼 만하다" : p >= 0.55 ? "반반이다" : p >= 0.35 ? "위험하다" : "무모하다");
   function view(s) {
@@ -357,7 +381,7 @@
         const lock = reqState(s, ch.req);
         const tag = ch.label.match(/^\[([^\]]+)\]/)?.[1] || "";
         const info = ch.check ? chance(s, ch) : null;
-        return { i, label: fill(s, ch.label.replace(/^\[[^\]]+\]\s*/, "")), tag, lock, feel: info ? feel(info.p) : "", who: info ? info.r.name : "", stat: ch.check ? STATS[ch.check[0]] : "", approach: ch.check ? APPROACH[ch.check[0]] : "" };
+        return { i, label: fill(s, ch.label.replace(/^\[[^\]]+\]\s*/, "")), tag, lock, feel: info ? feel(info.p) : "", who: info ? info.r.name : "", stat: info ? C.skills[info.skill].name : "", approach: ch.check ? APPROACH[ch.check[0]] : "" };
       }),
     };
   }
@@ -376,7 +400,7 @@
     const info = chance(s, ch), useWill = s.ev.useWill && s.will > 0, helper = s.ev.help && live(s).some((c) => c.id === s.ev.help) ? s.ev.help : null;
     if (useWill) s.will -= 1;
     const bonus = (useWill ? 2 : 0) + (helper ? 1 : 0), r = d20(s);
-    s.ev.pending = { i, r, mod: info.mod, bonus, dc: info.dc, who: info.r.name, stat: STATS[ch.check[0]], help: helper, label: fill(s, ch.label.replace(/^\[[^\]]+\]\s*/, "")), tier: tierOf(r, info.mod + bonus, info.dc), rerolled: 0 };
+    s.ev.pending = { i, r, mod: info.mod, bonus, dc: info.dc, who: info.r.name, stat: C.skills[info.skill].name, skill: info.skill, parts: info.parts, help: helper, label: fill(s, ch.label.replace(/^\[[^\]]+\]\s*/, "")), tier: tierOf(r, info.mod + bonus, info.dc), rerolled: 0 };
     s.ev.useWill = false; s.ev.help = null;
     return { state: s };
   }
@@ -414,7 +438,14 @@
       if (p.tier === "fumble") { s.me.hp = Math.min(4, s.me.hp + 1); notes.push(`대실패: 당신도 다쳤다 (${HP[s.me.hp]})`); }
       if (p.help) { const h = comp(s, p.help); if (h && h.alive) { h.hp = Math.min(4, h.hp + 1); notes.push(`${h.name}도 다쳤다. 당신을 돕다가.`); } }
     }
-    if (p && p.tier === "crit") { s.will = Math.min(3, s.will + 1); notes.push("대성공: 기세가 올랐다. 의지 +1"); }
+    if (p && p.tier === "crit") { s.will = Math.min(willMax(s), s.will + 1); notes.push("대성공: 기세가 올랐다. 의지 +1"); }
+    // 실패에서 배운다: 내가 굴려 실패한 기술은 세 번째에 오른다
+    if (p && ["lose", "fumble"].includes(p.tier) && p.who === "당신" && p.skill && s.me.skills) {
+      s.me.xp[p.skill] = (s.me.xp[p.skill] || 0) + 1;
+      if (s.me.xp[p.skill] >= 3 && s.me.skills[p.skill] < 6) { s.me.xp[p.skill] = 0; s.me.skills[p.skill] += 1; notes.push(`실패에서 배웠다: ${C.skills[p.skill].name} ${s.me.skills[p.skill]}`); }
+    }
+    if (p && p.tier === "fumble" && !(s.traits || []).includes("fearless") && !s.me.cond.fear) { s.me.cond.fear = 1; notes.push("상태: 공포 — 숨기 +1, 싸움·위협 −2"); }
+    if ((out.fx?.human || 0) <= -8 && !(s.traits || []).includes("coldblood") && s.me.cond && !s.me.cond.anger) { s.me.cond.anger = 1; notes.push("상태: 분노 — 싸움·위협 +1, 설득 −2"); }
     if (p && p.help && ["win", "crit", "partial"].includes(p.tier)) { const h = comp(s, p.help); if (h) h.trust += 0.5; }
     const JOIN_T = { maru: "마루가 사냥총을 등에 메고 당신 곁에 섰다. 말은 없었다. 그걸로 충분했다.", hanbyeol: "한별이 담요를 여미며 웃었다. “좋아요. 하늘길은 제가 볼게요.”", hyean: "혜안이 고개를 숙이고 당신 뒤에 섰다. 발소리가 눈 위에서 거의 나지 않았다.", eunseo: "은서가 공책을 품에 넣고 따라나섰다. “바람은 제가 읽을게요.”" };
     const text = fill(s, out.t || (out.fx?.join && JOIN_T[out.fx.join]) || "");
@@ -474,7 +505,25 @@
     else { const k = s.act >= 2 ? "wolves" : "storm"; s.clocks[k] += 1; c.scoutNote = `살피느라 시간을 썼지만 보이는 건 없었다. ${k === "wolves" ? "늑대단 추적" : "눈보라"} +1 (🎲${roll}+${r.v})`; }
     return { state: s };
   }
-  const closeAct = (state) => { const s = clone(state); s.actCard = 0; return { state: s }; };
+  const closeAct = (state) => { if (state.traitOffer && state.traitOffer.length) return { state, error: "막을 넘으며 얻은 것을 먼저 고르세요." }; const s = clone(state); s.actCard = 0; return { state: s }; };
+  function pickTrait(state, id) {
+    if (!state.traitOffer || !state.traitOffer.includes(id)) return { state, error: "고를 수 없는 특성이다." };
+    const s = clone(state);
+    s.traits = [...(s.traits || []), id]; s.traitOffer = null;
+    if (id === "friend") for (const c of live(s)) c.trust += 1;
+    if (id === "wolfeye") for (const c of live(s)) if (C.people[c.id].heart === "kind") c.trust -= 0.5;
+    if (id === "endure") s.will = Math.min(4, s.will + 1);
+    jr(s, `${C.traits[id].name}이(가) 되었다.`, 1);
+    return { state: s };
+  }
+  function sheet(s) {
+    return {
+      origin: C.origins[s.origin].name, body: { hp: HP[s.me.hp], full: fullLabel(s.me.full ?? 5), cold: COLD[s.me.cold] }, will: s.will, willMax: willMax(s),
+      skills: Object.entries(C.skills).map(([k, d]) => ({ k, name: d.name, desc: d.desc, v: s.me.skills ? s.me.skills[k] : s.me.stats[d.stat], xp: (s.me.xp || {})[k] || 0, mods: skillMods(s, k) })),
+      conds: Object.entries(s.me.cond || {}).filter(([, v]) => v).map(([k]) => C.conditions[k]),
+      traits: (s.traits || []).map((t) => C.traits[t]),
+    };
+  }
   // 반전 뒤처리: 배신자가 떠나거나 남는다
   function twistAfter(s, tw) {
     const id = s.dir.roles.traitor;
@@ -732,7 +781,7 @@
   // 하루에 배가 꺼지는 양: 사람마다 다르고, 춥거나 다쳤거나 고생한 날은 더 꺼진다
   function burnOf(s, id, fire, warm) {
     const p = id === "me" ? s.me : comp(s, id);
-    const base = id === "me" ? 2 : C.people[id].appetite || 2;
+    const base = id === "me" ? ((s.traits || []).includes("tracker") ? 1 : 2) : C.people[id].appetite || 2;
     return base + (!fire && !warm ? 1 : 0) + (p.hp >= 2 ? 1 : 0) + ((s.effort || 0) >= 2 ? 1 : 0);
   }
   function mealForecast(s, id) {
@@ -799,7 +848,7 @@
     if (bagCount(state) > BAG) return { state, error: `가방이 넘친다. ${bagCount(state) - BAG}개를 버려야 한다.` };
     const s = clone(state), c = s.camp, lines = [];
     s.food -= Object.values(c.feed).reduce((a, b) => a + (b || 0), 0);
-    if (c.fire) s.fuel -= 1;
+    if (c.fire && !((s.traits || []).includes("tinker") && rnd(s) < 0.3)) s.fuel -= 1;
     const perk = (k) => live(s).find((p) => C.people[p.id].perk === k && p.hp <= 1);
     const hunter = perk("hunt"), healer = perk("heal"), stoker = perk("fire"), finder = perk("shelter");
     if (hunter && rnd(s) < 0.6) { s.food += 1; lines.push(`${hunter.name}이(가) 어둠 속에서 산토끼 한 마리를 들고 왔다.`); }
@@ -829,14 +878,21 @@
       else if (p.trust <= -2.5) { p.gone = true; lines.push(`아침에 보니 ${p.name}의 자리가 비어 있다. 떠났다.`); jr(s, `${p.name}이(가) 떠났다.`, 3); }
     }
     s.chronicle.push({ day: s.day, title: "야영", paras: [c.fire ? "작은 불 앞에서 밤을 보냈다." : "불 없이 밤을 보냈다. 이가 딱딱 부딪혔다.", ...lines] });
-    s.will = Math.min(3, s.will + (s.me.full >= 5 && c.fire ? 2 : 1));
+    s.will = Math.min(willMax(s), s.will + (s.me.full >= 5 && c.fire ? 2 : 1));
+    // 상태: 걸리고 풀린다
+    const cd = s.me.cond || (s.me.cond = {});
+    if ((s.effort || 0) >= 3 || s.me.full <= 2) { if (!cd.exhaust) lines.push("상태: 탈진 — 다리가 말을 듣지 않는다."); cd.exhaust = 1; } else if (s.me.full >= 5 && c.fire) cd.exhaust = 0;
+    if (s.me.cold >= 2 && !(s.traits || []).includes("callus")) { if (!cd.frost) lines.push("상태: 동상 — 손가락 끝이 검다."); cd.frost = 1; } else if (c.fire && s.me.cold <= 1) cd.frost = 0;
+    if (cd.fear) { cd.fear += 1; if ((c.fire && (c.talked || live(s).length)) || cd.fear > 2) { cd.fear = 0; lines.push("공포가 조금 가라앉았다."); } }
+    if (cd.anger) { if (c.talked || rnd(s) < 0.5) { cd.anger = 0; lines.push("분노가 식었다."); } }
+    if ((s.traits || []).includes("medic")) { const pt = [s.me, ...live(s)].filter((x) => x.hp >= 1 && x.hp < 4).sort((a, b) => b.hp - a.hp)[0]; if (pt && rnd(s) < 0.4) { pt.hp -= 1; lines.push(`야전 의무병의 손: ${pt === s.me ? "당신" : pt.name}의 상처를 묶었다.`); } }
     if (live(s).some((p) => !c.feed[p.id])) s.clocks.heart += 1;
     s.camp = null;
     s.effort = 0;
     if (s.me.hp >= 4) return finish(s, "frozen");
     // 다음 걸음
     s.step += 1;
-    if (s.step >= (s.map[s.act] || []).length) { s.act += 1; s.step = 0; s.actCard = s.act; }
+    if (s.step >= (s.map[s.act] || []).length) { s.act += 1; s.step = 0; s.actCard = s.act; if (s.act <= 3) s.traitOffer = shuffle(s, Object.keys(C.traits).filter((t) => !(s.traits || []).includes(t))).slice(0, 3); }
     s.phase = "map";
     s.lastNight = lines;
     return { state: s };
@@ -852,6 +908,9 @@
     c.habit = c.habit || { share: 0, harsh: 0, trust: 0 };
     c.roadUsed = c.roadUsed || {};
     if (c.will === undefined) c.will = 3;
+    c.traits = c.traits || []; if (c.traitOffer === undefined) c.traitOffer = null;
+    if (!c.me.skills) c.me.skills = Object.fromEntries(Object.entries(C.skills).map(([k, d]) => [k, c.me.stats[d.stat] + ((C.originSkills[c.origin] || {})[k] || 0)]));
+    c.me.xp = c.me.xp || {}; c.me.cond = c.me.cond || {};
     c.clocks = c.clocks || { wolves: 0, storm: 0, heart: 0 };
     if (c.actCard === undefined) c.actCard = 0;
     if (c.me.full === undefined) c.me.full = 7 - 2 * (c.me.hunger || 0);
@@ -871,7 +930,7 @@
       return ch + (jong ? a : b);
     });
   }
-  const api = { newGame, begin, options, go, view, choose, cont, campToggle, useItem, drop, craft, sleep, validate, live, hasItem, allTruths, scout, reroll, accept, payCost, setWill, setHelp, clocksView, adventure, closeAct, TIER, bagCount, fullLabel, mealForecast, goals, notebook, josa, BAG, HP, HUNGER, COLD, STATS, C, premiseOf, fill };
+  const api = { newGame, begin, options, go, view, choose, cont, campToggle, useItem, drop, craft, sleep, validate, live, hasItem, allTruths, scout, reroll, pickTrait, sheet, accept, payCost, setWill, setHelp, clocksView, adventure, closeAct, TIER, bagCount, fullLabel, mealForecast, goals, notebook, josa, BAG, HP, HUNGER, COLD, STATS, C, premiseOf, fill };
   root.JourneyEngine = api;
   if (typeof module !== "undefined") module.exports = api;
 })(globalThis);
