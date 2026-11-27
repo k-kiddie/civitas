@@ -85,6 +85,8 @@ registerPublic("proto");
 routes.set("/proto/", ["proto/index.html", "text/html; charset=utf-8"]);
 registerPublic("survive");
 routes.set("/survive/", ["survive/index.html", "text/html; charset=utf-8"]);
+registerPublic("journey");
+routes.set("/journey/", ["journey/index.html", "text/html; charset=utf-8"]);
 http
   .createServer((req, res) => {
     const url = new URL(req.url, "http://localhost");
@@ -96,7 +98,7 @@ http
     }
     const basePath = url.pathname.startsWith(`${BASE}/`) ? BASE : "";
     if (basePath) url.pathname = url.pathname.slice(BASE.length);
-    if (url.pathname === "/next" || url.pathname === "/proto" || url.pathname === "/survive") {
+    if (url.pathname === "/next" || url.pathname === "/proto" || url.pathname === "/survive" || url.pathname === "/journey") {
       res.writeHead(302, { location: `${basePath}${url.pathname}/${url.search}` });
       res.end();
       return;
@@ -107,7 +109,7 @@ http
       return;
     }
     // 생존 시나리오 그림: 나중에 추가되는 파일도 바로 보이도록 정해진 폴더의 webp/png만 그때그때 읽는다
-    const art = url.pathname.match(/^\/assets\/(portraits|scenarios|gear)\/([a-z0-9_/-]+)\.(webp|png)$/);
+    const art = url.pathname.match(/^\/assets\/(portraits|scenarios|gear|journey)\/([a-z0-9_/-]+)\.(webp|png)$/);
     if (art && req.method === "GET" && !url.pathname.includes("..")) {
       const file = path.join(root, "assets", art[1], art[2] + "." + art[3]);
       if (file.startsWith(path.join(root, "assets")) && fs.existsSync(file)) {
