@@ -95,7 +95,7 @@
   }
   function chronSheet() {
     const c = state.chronicle || [];
-    return `<div class="veil bottom"><section class="sheet chron" role="dialog"><h2>기록</h2>${c.map((x) => `<article><h3><small>${x.day}일</small> ${esc(x.title)}</h3>${x.paras.map((t) => `<p>${esc(t)}</p>`).join("")}</article>`).join("")}${btn("닫기", "close", 'class="secondary"')}</section></div>`;
+    return `<div class="veil bottom"><section class="sheet chron" role="dialog"><h2>기록</h2>${state.narrator ? `<p class="narrator">${esc(state.narrator)}</p>` : ""}${c.map((x) => `<article><h3><small>${x.day}일</small> ${esc(x.title)}</h3>${x.paras.map((t) => `<p>${esc(t)}</p>`).join("")}</article>`).join("")}${btn("닫기", "close", 'class="secondary"')}</section></div>`;
   }
   const newSheet = () => `<div class="veil"><section class="modal" role="dialog"><h2>처음부터 다시 할까요?</h2><p class="story">지금 여정은 사라집니다.</p>${btn("새로 시작", "restart", 'class="primary"')}${btn("취소", "close", 'class="secondary"')}</section></div>`;
   // ── 표지 · 시작 · 결말 ──
@@ -110,7 +110,7 @@
   function endView() {
     const s = state, e = C.endings[s.ending.key];
     const moments = s.journal.slice().sort((a, b) => b.w - a.w || a.day - b.day).slice(0, 6).sort((a, b) => a.day - b.day);
-    return `<div class="veil"><section class="modal ending" role="dialog">${art({ key: `end_${s.ending.key}`, fb: s.ending.key === "train" ? "f_train" : s.ending.key === "missed" ? "ending_missed" : s.ending.key === "frozen" ? "ending_bad" : "ending_good", dir: "endings" })}<p class="etitle">이번 겨울의 이야기</p><h2 class="storyname">「${esc(s.title)}」</h2><p class="muted">${esc(C.origins[s.origin].name)} · ${s.day}일</p><h3>${esc(e.title)}</h3>${prose([e.text, s.ending.inhuman ? C.endings.inhuman.text : ""])}${s.ending.inhuman ? `<p class="inhuman">— ${esc(C.endings.inhuman.title)}</p>` : ""}<h3>그 겨울의 결정들</h3><ul class="wall moments">${moments.map((m) => `<li><small>${m.day}일</small> ${esc(m.text)}</li>`).join("")}</ul>${btn("기록을 처음부터 읽기", "sheet", 'data-sheet="chron" class="secondary"')}${btn("다른 사람으로 다시", "restart", 'class="primary"')}</section></div>`;
+    return `<div class="veil"><section class="modal ending" role="dialog">${art({ key: `end_${s.ending.key}`, fb: s.ending.key === "train" ? "f_train" : s.ending.key === "missed" ? "ending_missed" : s.ending.key === "frozen" ? "ending_bad" : "ending_good", dir: "endings" })}<p class="narrator">${esc(s.narrator || "")}</p><p class="etitle">이번 겨울의 이야기</p><h2 class="storyname">「${esc(s.title)}」</h2><p class="muted">${esc(C.origins[s.origin].name)} · ${s.day}일</p><h3>${esc(e.title)}</h3>${prose([e.text, s.ending.inhuman ? C.endings.inhuman.text : ""])}${s.ending.inhuman ? `<p class="inhuman">— ${esc(C.endings.inhuman.title)}</p>` : ""}${s.dir.why ? `<p class="why">${esc(s.dir.why)}</p>` : ""}<h3>그 겨울의 결정들</h3><ul class="wall moments">${moments.map((m) => `<li><small>${m.day}일</small> ${esc(m.text)}</li>`).join("")}</ul>${btn("기록을 처음부터 읽기", "sheet", 'data-sheet="chron" class="secondary"')}${btn("다른 사람으로 다시", "restart", 'class="primary"')}</section></div>`;
   }
   function render() {
     let html;
