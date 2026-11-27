@@ -72,3 +72,7 @@
 .boost .tg small { color: var(--mute); margin-left: 4px; }
 .tier-crit { color: var(--amber) !important; } .tier-partial { color: #d6b56f !important; } .tier-fumble { color: var(--red) !important; }
 .need li.have { color: var(--green); }
+.appr { color: var(--ink2); letter-spacing: .04em; }
+.gm { font-style: italic; color: var(--amber); font-size: 14px; margin: 16px 0 0; }
+.note.scout { border-left-color: var(--amber); color: var(--ink2); }
+button.scoutbtn { margin-top: 10px; }
