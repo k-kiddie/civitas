@@ -3,7 +3,7 @@ const { chromium } = require("playwright");
 const assert = require("node:assert/strict");
 (async () => {
   const b = await chromium.launch();
-  for (const [origin, size] of [["parent", { width: 390, height: 844 }], ["deserter", { width: 320, height: 640 }], ["drifter", { width: 390, height: 844 }]]) {
+  for (const [origin, size] of [["parent", { width: 390, height: 844 }], ["deserter", { width: 320, height: 640 }], ["drifter", { width: 390, height: 844 }], ["crew", { width: 320, height: 640 }], ["pilot", { width: 390, height: 844 }]]) {
     const page = await b.newPage({ viewport: size });
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
@@ -21,7 +21,8 @@ const assert = require("node:assert/strict");
       if (await has("[data-action=begin]")) { await shot("intro"); await page.click("[data-action=begin]"); continue; }
       if (await has("[data-action=cont]")) { await page.click("[data-action=cont]"); continue; }
       if (await has("[data-action=choose]:not(:disabled)")) { await shot("event"); await page.locator("[data-action=choose]:not(:disabled)").first().click(); continue; }
-      if (await has("[data-action=drop]")) { await page.locator("[data-action=drop]").first().click(); continue; }
+      if (await has(".sheet [data-action=drop]") && await has(".slots.over")) { await page.locator("[data-action=drop]").first().click(); continue; }
+      if (await has(".sheet [data-action=close]")) { await page.click(".sheet [data-action=close]"); continue; }
       if (await has("[data-action=sleep]")) { await shot("camp"); await page.click("[data-action=sleep]"); continue; }
       if (await has(".jbar .warn")) { await page.click(".jbar .warn"); continue; }
       if (await has("[data-action=go]:not(:disabled)")) {

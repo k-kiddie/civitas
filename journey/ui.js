@@ -7,6 +7,12 @@
     get() { try { return JSON.parse(localStorage.getItem(SAVE)); } catch { return null; } },
     set(v) { try { localStorage.setItem(SAVE, JSON.stringify(v)); } catch {} },
   };
+  // 판을 넘어 남는 것: 모은 진실 조각, 지난 판에 쓰러진 나
+  const LEGACY = "civitas-journey-legacy";
+  const legacy = {
+    get() { try { return JSON.parse(localStorage.getItem(LEGACY)) || { truths: [], corpse: null, endings: [] }; } catch { return { truths: [], corpse: null, endings: [] }; } },
+    set(v) { try { localStorage.setItem(LEGACY, JSON.stringify(v)); } catch {} },
+  };
   let state = null, sheet = null, toast = "", pickOrigin = "parent", rolling = null, lastTap = 0;
   try { const v = store.get(); if (v) state = E.validate(v); } catch { toast = "저장이 손상되어 새로 시작합니다."; }
   const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -28,7 +34,16 @@
   const itemArt = (k) => `<span class="ithumb" style='background-image:url("${A}journey/items/${k}.webp"),url("${A}gear/${k}.webp")'></span>`;
   function commit(res) {
     if (res.error) { toast = res.error; render(); return false; }
-    state = res.state; toast = ""; store.set(state); render(); return true;
+    const was = state && state.phase;
+    state = res.state; toast = ""; store.set(state);
+    if (state.phase === "end" && was !== "end" && state.legacyOut) {
+      const L = legacy.get();
+      L.truths = [...new Set([...(L.truths || []), ...state.legacyOut.truths])];
+      L.corpse = state.legacyOut.corpse || null;
+      L.endings = [...new Set([...(L.endings || []), state.ending.key])];
+      legacy.set(L);
+    }
+    render(); return true;
   }
   // ── 머리말 ──
   function header() {
@@ -53,8 +68,8 @@
     return `${header()}<main class="jmain"><p class="act">${ACTS[s.act]}</p><ul class="route">${route}</ul>${night}<h3>어디로 갈까</h3><div class="nodes">${nodes}</div></main>${bar()}`;
   }
   function bar() {
-    const over = state.bag.length > E.BAG;
-    return `<nav class="jbar">${btn(`가방 ${state.bag.length}/${E.BAG}`, "sheet", `data-sheet="bag" class="${over ? "warn" : ""}"`)}${btn("기록", "sheet", 'data-sheet="chron"')}</nav>`;
+    const over = E.bagCount(state) > E.BAG;
+    return `<nav class="jbar">${btn(`가방 ${E.bagCount(state)}/${E.BAG}`, "sheet", `data-sheet="bag" class="${over ? "warn" : ""}"`)}${btn("기록", "sheet", 'data-sheet="chron"')}</nav>`;
   }
   // ── 사건 ──
   function eventView() {
@@ -78,20 +93,20 @@
     const heal = s.bag.filter((b) => C.items[b.k].use).map((b) => people.filter((x) => x.p.hp >= 1).map((x) => btn(`${esc(C.items[b.k].name)} → ${esc(x.name)}`, "use", `data-k="${b.k}" data-t="${x.id}" class="mini"`)).join(" ")).join(" ");
     const talk = !c.talked ? E.live(s).map((x) => btn(`${esc(x.name)}와(과) 이야기한다`, "talk", `data-id="${x.id}" class="mini"`)).join(" ") : "";
     const crafts = C.recipes.filter((r) => r.from.every((k) => E.hasItem(s, k))).map((r) => btn(esc(r.name), "craft", `data-r="${r.id}" class="mini"`)).join(" ");
-    const over = s.bag.length > E.BAG;
+    const over = E.bagCount(s) > E.BAG;
     return `${header()}<main class="jmain">${art({ key: c.fire ? "camp_fire" : "camp_storm", fb: c.fire ? "night" : "dawn_cold", dir: "places" })}<p class="act">야영 · ${esc(C.places[s.place].name)} 근처</p>
       <div class="campsec"><h3>먹을 사람 <small>식량 ${s.food}</small></h3>${rows}</div>
       <div class="campsec"><h3>불</h3><div class="crow"><span></span><div><b>${c.fire ? "불을 피운다" : "불 없이 버틴다"}</b><small>연료 ${s.fuel} · 불이 없으면 체온이 떨어지고 동행이 지친다</small></div>${btn(c.fire ? "피운다" : "안 피운다", "fire", `class="tg ${c.fire ? "on" : "off"}"`)}</div></div>
       ${heal ? `<div class="campsec"><h3>치료</h3><p>${heal}</p></div>` : ""}
       ${talk || c.talk ? `<div class="campsec"><h3>이야기</h3>${c.talk ? `<p class="talkline">${face(c.talk.id, 24)} ${esc(c.talk.line)}</p>` : `<p>${talk}</p>`}</div>` : ""}
       ${crafts ? `<div class="campsec"><h3>만들기</h3><p>${crafts}</p></div>` : ""}
-      ${btn(over ? `가방이 넘친다 — ${s.bag.length - E.BAG}개를 버려야 한다` : "밤을 보낸다", over ? "sheet" : "sleep", over ? 'data-sheet="bag" class="primary"' : 'class="primary"')}</main>${bar()}`;
+      ${btn(over ? `가방이 넘친다 — ${E.bagCount(s) - E.BAG}개를 버려야 한다` : "밤을 보낸다", over ? "sheet" : "sleep", over ? 'data-sheet="bag" class="primary"' : 'class="primary"')}</main>${bar()}`;
   }
   // ── 가방 · 기록 · 새로 ──
   function bagSheet() {
-    const s = state, over = s.bag.length > E.BAG;
+    const s = state, over = E.bagCount(s) > E.BAG;
     const rows = s.bag.map((b) => { const d = C.items[b.k]; return `<li>${itemArt(b.k)}<div><b>${esc(d.name)}</b>${d.uses ? ` <small>${b.u}회</small>` : ""}<small>${esc(d.kind)} · ${esc(d.desc)}</small></div><span class="acts">${d.key ? "<small>버릴 수 없다</small>" : btn("버리기", "drop", `data-k="${b.k}" class="drop"`)}</span></li>`; }).join("");
-    return `<div class="veil bottom"><section class="sheet" role="dialog"><h2>가방 <small class="slots ${over ? "over" : ""}">${s.bag.length}/${E.BAG}칸</small></h2><ul class="bagl">${rows || "<li class='muted'>비어 있다.</li>"}</ul>${btn("닫기", "close", 'class="secondary"')}</section></div>`;
+    return `<div class="veil bottom"><section class="sheet" role="dialog"><h2>가방 <small class="slots ${over ? "over" : ""}">${E.bagCount(s)}/${E.BAG}칸 · 단서는 칸을 차지하지 않는다</small></h2><ul class="bagl">${rows || "<li class='muted'>비어 있다.</li>"}</ul>${btn("닫기", "close", 'class="secondary"')}</section></div>`;
   }
   function chronSheet() {
     const c = state.chronicle || [];
@@ -101,7 +116,13 @@
   // ── 표지 · 시작 · 결말 ──
   function titleView() {
     const cards = Object.entries(C.origins).map(([k, o]) => btn(`${art({ key: k, fb: o.start === "outskirts" ? "camp" : "title", dir: "origins" }, "thumb")}<b>${esc(o.name)}</b><small>${esc(o.pitch)}</small>`, "origin", `data-k="${k}" class="ocard ${pickOrigin === k ? "on" : ""}"`)).join("");
-    return `<div class="title"><div class="logo">남행</div><p class="sub">CIVITAS · 극 빙하기</p><p class="story">열차가 남쪽 선로를 지난다는 소문. 영하 오십 도의 설원을 건너야 한다. 무엇을 들고, 누구와 걷고, 무엇을 내줄 것인가.</p><h3>당신은 누구인가</h3><div class="origins">${cards}</div>${btn("떠난다", "start", 'class="primary"')}<a class="back" href="../survive/">넷이서 버티기(/survive)</a></div>`;
+    return `<div class="title"><div class="logo">남행</div><p class="sub">CIVITAS · 극 빙하기</p><p class="story">열차가 남쪽 선로를 지난다는 소문. 영하 오십 도의 설원을 건너야 한다. 무엇을 들고, 누구와 걷고, 무엇을 내줄 것인가.</p><h3>당신은 누구인가</h3><div class="origins">${cards}</div>${legacyBox()}${btn("떠난다", "start", 'class="primary"')}<a class="back" href="../survive/">넷이서 버티기(/survive)</a></div>`;
+  }
+  function legacyBox() {
+    const L = legacy.get(), T = C.truths, n = Object.keys(T).length;
+    const got = (L.truths || []).filter((t) => T[t]);
+    if (!got.length && !(L.endings || []).length) return "";
+    return `<h3>지난 겨울들</h3><p class="muted">본 결말 ${(L.endings || []).length}/${Object.keys(C.endings).length - 1} · 그 겨울의 진실 ${got.length}/${n}</p>${got.map((t) => `<p class="truth">— ${esc(T[t].name)}: ${esc(T[t].text)}</p>`).join("")}${L.corpse ? `<p class="muted">지난번의 당신은 ${esc(C.origins[L.corpse.origin]?.name || "")}(으)로 쓰러졌다. 이번 길 어딘가에 그 흔적이 있다.</p>` : ""}`;
   }
   function introView() {
     const o = C.origins[state.origin];
@@ -110,7 +131,7 @@
   function endView() {
     const s = state, e = C.endings[s.ending.key];
     const moments = s.journal.slice().sort((a, b) => b.w - a.w || a.day - b.day).slice(0, 6).sort((a, b) => a.day - b.day);
-    return `<div class="veil"><section class="modal ending" role="dialog">${art({ key: `end_${s.ending.key}`, fb: s.ending.key === "train" ? "f_train" : s.ending.key === "missed" ? "ending_missed" : s.ending.key === "frozen" ? "ending_bad" : "ending_good", dir: "endings" })}<p class="narrator">${esc(s.narrator || "")}</p><p class="etitle">이번 겨울의 이야기</p><h2 class="storyname">「${esc(s.title)}」</h2><p class="muted">${esc(C.origins[s.origin].name)} · ${s.day}일</p><h3>${esc(e.title)}</h3>${prose([e.text, s.ending.inhuman ? C.endings.inhuman.text : ""])}${s.ending.inhuman ? `<p class="inhuman">— ${esc(C.endings.inhuman.title)}</p>` : ""}${s.dir.why ? `<p class="why">${esc(s.dir.why)}</p>` : ""}<h3>그 겨울의 결정들</h3><ul class="wall moments">${moments.map((m) => `<li><small>${m.day}일</small> ${esc(m.text)}</li>`).join("")}</ul>${btn("기록을 처음부터 읽기", "sheet", 'data-sheet="chron" class="secondary"')}${btn("다른 사람으로 다시", "restart", 'class="primary"')}</section></div>`;
+    return `<div class="veil"><section class="modal ending" role="dialog">${art({ key: `end_${s.ending.key}`, fb: s.ending.key === "train" ? "f_train" : s.ending.key === "missed" ? "ending_missed" : s.ending.key === "frozen" ? "ending_bad" : "ending_good", dir: "endings" })}<p class="narrator">${esc(s.narrator || "")}</p><p class="etitle">이번 겨울의 이야기</p><h2 class="storyname">「${esc(s.title)}」</h2><p class="muted">${esc(C.origins[s.origin].name)} · ${s.day}일</p><h3>${esc(e.title)}</h3>${prose([e.text, s.ending.inhuman ? C.endings.inhuman.text : ""])}${s.ending.inhuman ? `<p class="inhuman">— ${esc(C.endings.inhuman.title)}</p>` : ""}${s.dir.why ? `<p class="why">${esc(s.dir.why)}</p>` : ""}${(s.newTruths || []).length ? `<h3>새로 알게 된 진실</h3>${s.newTruths.map((t) => `<p class="truth">— ${esc(C.truths[t].name)}: ${esc(C.truths[t].text)}</p>`).join("")}<p class="muted">그 겨울의 진실 ${E.allTruths(s).length}/${Object.keys(C.truths).length}${E.allTruths(s).length >= 3 ? " · 하얀나루역에서 무언가 할 수 있을 것 같다" : ""}</p>` : ""}<h3>그 겨울의 결정들</h3><ul class="wall moments">${moments.map((m) => `<li><small>${m.day}일</small> ${esc(m.text)}</li>`).join("")}</ul>${btn("기록을 처음부터 읽기", "sheet", 'data-sheet="chron" class="secondary"')}${btn("다른 사람으로 다시", "restart", 'class="primary"')}</section></div>`;
   }
   function render() {
     let html;
@@ -129,7 +150,7 @@
     if (rolling) return;
     const k = a.dataset.action;
     if (k === "origin") { pickOrigin = a.dataset.k; render(); }
-    else if (k === "start") { state = E.newGame({ origin: pickOrigin, seed: crypto.getRandomValues(new Uint32Array(1))[0] }); sheet = null; store.set(state); render(); }
+    else if (k === "start") { const L = legacy.get(); state = E.newGame({ origin: pickOrigin, seed: crypto.getRandomValues(new Uint32Array(1))[0], legacy: { truths: L.truths, corpse: L.corpse } }); sheet = null; store.set(state); render(); }
     else if (k === "begin") commit(E.begin(state));
     else if (k === "go") commit(E.go(state, a.dataset.id));
     else if (k === "choose") {

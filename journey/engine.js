@@ -21,14 +21,15 @@
   const CLUE_OF = { betrayal: "bt", hidden_kin: "hk", false_salvation: "fs" };
 
   // ── 시작 ──
-  function newGame({ origin = "parent", seed = 1, name = "" } = {}) {
+  function newGame({ origin = "parent", seed = 1, name = "", legacy = null } = {}) {
     const o = C.origins[origin] || C.origins.parent;
     const s = {
       v: 1, rng: seed >>> 0, origin: C.origins[origin] ? origin : "parent", day: 1, trainDay: 13, act: 1, step: 0, place: o.start,
       phase: "intro", me: { hp: 0, hunger: 0, cold: 0, stats: { ...o.stats } }, comps: [], food: o.food, fuel: o.fuel, bag: [],
       facts: {}, clues: { bt: 0, hk: 0, fs: 0 }, human: 60, wolves: 0, debts: [], journal: [], chronicle: [],
       map: {}, dir: null, ev: null, camp: null, ending: null, title: "", seen: {},
-      evPick: {}, habit: { share: 0, harsh: 0, trust: 0 },
+      evPick: {}, habit: { share: 0, harsh: 0, trust: 0 }, roadUsed: {},
+      legacy: { truths: (legacy && legacy.truths) || [], corpse: (legacy && legacy.corpse) || null },
     };
     s.trainDay = 14 + Math.floor(rnd(s) * 2);
     for (const k of o.items) addItem(s, k);
@@ -42,7 +43,7 @@
       cols.push([act === 1 ? "gate_bridge" : "gate_checkpoint"]);
       s.map[act] = cols;
     }
-    s.map[3] = [["mountain_pass"], ["station_whiteferry", "geothermal_valley", "return_road"]];
+    s.map[3] = [["mountain_pass"], ["station_whiteferry", "geothermal_valley", "return_road", "old_airfield", "observatory_back"]];
     // 장소마다 사건이 여럿이면 이번 판에 나올 하나를 고른다
     for (const [k, p] of Object.entries(C.places)) if (Array.isArray(p.ev)) s.evPick[k] = pick(s, p.ev);
     // 감독: 전제는 1막 둘째 걸음에, 그때까지 본 당신의 버릇으로 고른다. 박자 자리는 미리 잡아 둔다
@@ -63,6 +64,8 @@
     at(1, 0, { type: "set", id: a1 });
     at(2, 2, { type: "set", id: pick(s, ["sp_ice_chase", a1 === "sp_whiteout" ? "sp_wolfpack" : "sp_whiteout"]) });
     at(3, 0, { type: "set", id: "sp_avalanche" });
+    // 지난 판의 내가 쓰러진 곳 근처에서 그 시신을 만난다
+    if (s.legacy.corpse) at(Math.min(2, Math.max(1, s.legacy.corpse.act || 1)), Math.floor(rnd(s) * 4), { type: "past" });
     s.chronicle.push({ day: 1, title: o.name, paras: o.intro.slice() });
     return s;
   }
@@ -96,6 +99,8 @@
   const comp = (s, id) => s.comps.find((c) => c.id === id);
   const live = (s) => s.comps.filter((c) => c.alive && !c.gone);
   const hasItem = (s, k) => s.bag.some((b) => b.k === k);
+  // 단서는 따로 지닌다: 가방 칸은 단서가 아닌 물건만 센다
+  const bagCount = (s) => s.bag.filter((b) => !C.items[b.k]?.key).length;
   const nameOf = (s, id) => (C.people[id] ? C.people[id].name : C.cast[id] ? C.cast[id].name : id);
   function addItem(s, k, notes) {
     if (!C.items[k]) return;
@@ -120,6 +125,8 @@
       "{parent_list_line}": s.dir.premise === "hidden_kin" && s.dir.twist === "A" ? "명단 맨 아래, 연필로 쓴 이름. ‘소이(9) — 백곰 소유, 거래 불가’." : "명단에 소이는 없다. 대신 맨 끝에 적힌 메모. ‘하얀나루역장이 진짜 명단을 갖고 있다.’",
       "{drift2_text}": s.facts.purpose_truth ? "기지 대원의 일기 조각이 바람에 날려 발밑에 걸린다. ‘명단 때문에 우린 셋으로 갈라졌다.’ 진실이 가까워진다." : s.facts.purpose_wealth ? "구씨의 썰매 자국 옆에 떨어진 장부 한 장. 사람 이름과 값이 적혀 있다. 이 설원에서 제일 비싼 건 사람이다." : `${c1 ? c1.name : "곁의 사람"}이(가) 열에 들떠 당신 소매를 잡는다. “나 두고 가지 마.” 지키겠다던 말이 시험받는다.`,
       "{payoff_line}": payoffLine(s),
+      "{past_who}": s.legacy.corpse ? C.origins[s.legacy.corpse.origin]?.name || "떠돌이" : "",
+      "{past_line}": s.legacy.corpse ? s.legacy.corpse.line : "",
       "{cname}": s.ev?.cur?.cid ? nameOf(s, s.ev.cur.cid) : "",
       "{cmem}": s.ev?.cur?.cid ? (C.memory[(comp(s, s.ev.cur.cid)?.mem || []).slice(-1)[0]] || "너랑 걷는 게 점점 무서워.") : "",
       "{parent3_text}": s.dir.premise === "hidden_kin" && s.dir.twist === "A" ? "고개 위에서 무전기가 지지직거린다. 낯선 목소리. 백곰이다. “네 딸 목소리를 틀던 게 나다. 그 애는 내 품에서 3년을 컸다. 선로로 와. 거기서 정하자.”" : s.dir.premise === "hidden_kin" ? "고개 위에서 무전기를 켠다. 이제 아무 소리도 나지 않는다. 테이프는 품에 있다. 그 목소리를 3년 동안 틀던 누군가가, 이 고개 너머에 있다." : "고개 위에서 무전기가 처음으로 다른 말을 한다. “…아빠? 하얀나루… 역장 할아버지가… 명단에…” 그리고 끊긴다. 3년 전 목소리가 아니다. 지금 목소리다.",
@@ -159,12 +166,14 @@
       let lock = "";
       if (p.dest === "valley" && !s.facts.refuge_known && !hasItem(s, "refuge_note") && !(s.dir.premise === "false_salvation" && s.dir.twist === "B")) lock = "피난처가 어디 있는지 모른다";
       if (p.dest === "return" && s.food < 2) lock = "돌아갈 식량이 없다";
-      return { id, name: p.name, gate: !!p.gate, dest: p.dest || null, lock, visited: !!s.seen[id] };
-    });
+      if (p.dest === "sky" && s.fuel < 4) lock = `연료가 네 통 필요하다 (지금 ${s.fuel})`;
+      const hidden = (p.dest === "sky" && !(s.facts.sky_path || s.origin === "pilot" || live(s).some((c) => c.id === "hanbyeol"))) || (p.dest === "signal" && !(s.facts.signal_path || s.origin === "crew" || s.facts.truth_crew));
+      return { id, name: p.name, gate: !!p.gate, dest: p.dest || null, lock, hidden, visited: !!s.seen[id] };
+    }).filter((o) => !o.hidden);
   }
   function go(state, id) {
     if (state.phase !== "map") return { state, error: "지금은 길을 고를 수 없다." };
-    if (state.bag.length > BAG) return { state, error: `가방이 넘친다. ${state.bag.length - BAG}개를 버려야 떠날 수 있다.` };
+    if (bagCount(state) > BAG) return { state, error: `가방이 넘친다. ${bagCount(state) - BAG}개를 버려야 떠날 수 있다.` };
     const opt = options(state).find((o) => o.id === id);
     if (!opt) return { state, error: "갈 수 없는 곳이다." };
     if (opt.lock) return { state, error: opt.lock };
@@ -194,6 +203,8 @@
     }
     // 배신 전제인데 아직 동행이 없으면, 길에서 누군가를 만난다
     if (s.dir.premise === "betrayal" && !live(s).length && s.act <= 2 && !s.facts.stray_refused2 && !p.gate) q.unshift({ kind: "stray" });
+    // 길 위의 우연한 만남
+    if (!p.gate && !p.dest && rnd(s) < 0.35) { const left = Object.keys(C.road).filter((k) => !s.roadUsed[k]); if (left.length) { const r = pick(s, left); s.roadUsed[r] = 1; q.push({ kind: "place", id: r }); } }
     const evId = s.evPick[id] || p.ev;
     if (evId && !C.events[evId].climax) q.push({ kind: "place", id: evId });
     if (p.dest) q.push({ kind: "climax", dest: p.dest });
@@ -207,6 +218,7 @@
     const P = premiseOf(s);
     if (beat.type === "origin") { const ob = C.originBeats[s.origin]?.[beat.n]; return ob ? { kind: "beat", beat: ob } : null; }
     if (beat.type === "set") return { kind: "place", id: beat.id };
+    if (beat.type === "past") return s.legacy.corpse ? { kind: "beat", beat: C.pastSelf } : null;
     if (!P) return null;
     if (s.dir.premise === "betrayal" && !s.dir.roles.traitor) {
       const c = live(s)[0];
@@ -254,6 +266,7 @@
     const c = s.ev && s.ev.cur, p = C.places[s.place];
     if (!c) return { key: p.art, fb: p.fb, dir: "places" };
     if (c.kind === "beat" && c.beat.id === "confront") return { key: "companion_confront", fb: p.fb, dir: "scenes" };
+    if (c.kind === "beat" && c.beat.art) return { key: c.beat.art, fb: p.fb, dir: "scenes" };
     if (c.kind === "beat") return { key: BEAT_ART[c.beat.id] || c.beat.art || p.art, fb: p.fb, dir: BEAT_ART[c.beat.id] || c.beat.art ? "scenes" : "places" };
     if (c.kind === "place" && C.events[c.id].art) return { key: C.events[c.id].art, fb: p.fb, dir: "scenes" };
     if (c.kind === "climax") return { key: C.climax[c.dest].art, fb: C.climax[c.dest].fb, dir: "scenes" };
@@ -270,6 +283,7 @@
     if (r.clues && (s.clues[CLUE_OF[s.dir.premise]] || 0) < r.clues) return "아직 알아챈 게 부족하다";
     if (r.anyComp && !live(s).length) return "곁에 아무도 없다";
     if (r.wolves !== undefined && s.wolves < r.wolves) return "늑대단이 당신을 믿지 않는다";
+    if (r.truths && allTruths(s).length < r.truths) return `그 겨울의 진실을 아직 다 모르지 않는다 (${allTruths(s).length}/${r.truths})`;
     return "";
   }
   // 판정: 나와 동행 중 가장 잘하는 사람
@@ -372,6 +386,7 @@
       if (s.facts.purpose_protect) for (const c of live(s)) c.trust += 2;
     }
     if (fx.payoff) s.dir.payoffDone = true;
+    if (fx.pastTake && s.legacy.corpse) for (const k of s.legacy.corpse.items || []) addItem(s, k, notes);
     if (fx.abandon) { const c = live(s)[live(s).length - 1]; if (c) { c.gone = true; jr(s, `피난처 문밖에 ${c.name}을(를) 두고 들어갔다.`, 4); } }
   }
 
@@ -412,6 +427,7 @@
     if (dest === "station") {
       if (s.day > s.trainDay) return { id: "res", text: "승강장은 비어 있다. 선로 위의 눈에 바퀴 자국이 아직 선명하다. 지평선 끝에 불빛 하나가 사라진다.", choices: [{ label: "선로 위에 주저앉는다", fx: { ending: "missed" } }] };
       return { id: "res", text: "열차가 승강장으로 미끄러져 들어온다. 서지 않는다. 화물칸 문이 열려 있고, 늑대단이 명단을 들고 이름을 부른다. 지금이다.", choices: [
+        { label: "[진실 조각 셋] 명단의 진실을 외치고, 늑대단의 명단을 불길에 던진다", req: { truths: 3 }, fx: { ending: "open", human: 10 } },
         { label: "[탑승 명단] 명단을 내밀고 오른다", req: { item: "passenger_list" }, fx: { ending: "train" } },
         { label: "[역장의 손자] 손자가 화물칸 문을 잡아 준다", req: { fact: "grandson_ok" }, fx: { ending: "train" } },
         { label: "[백곰의 빚] 백곰이 고개를 끄덕여 자리를 낸다", req: { fact: "gave_medicine" }, fx: { ending: "train" } },
@@ -431,6 +447,17 @@
         { label: "[백곰을 쓰러뜨렸다] 늑대단을 이끌고 돌담 문을 연다", req: { fact: "baekgom_down" }, fx: { ending: "king", human: -5 } },
       ] };
     }
+    if (dest === "sky") return { id: "res", text: "격납고 문을 끝까지 연다. 연료 드럼을 굴려 날개 밑으로 붓는다. 계기판에 먼지가 쌓였다. 엔진에 빠진 부품이 하나 있다. 진공관. 그리고 자리는 조종석 하나, 뒤에 하나.", choices: [
+      { label: "[진공관] 엔진을 살려 이륙한다", req: { item: "vacuum_tube" }, check: ["craft", live(s).length > 1 ? 13 : 10], win: { t: "엔진이 기침하듯 살아났다.", fx: { ending: "sky" } }, lose: { t: "엔진이 한 번 돌다 멈췄다. 다시는 돌지 않았다. 선로까지는 너무 멀다.", fx: { ending: "missed" } } },
+      { label: "[한별과 함께] 한별이 손으로 엔진을 깨운다", req: { companion: "hanbyeol" }, check: ["craft", 12], win: { t: "한별이 웃었다. 처음 보는 웃음이었다.", fx: { ending: "sky" } }, lose: { t: "한별이 조종간에 이마를 댔다. “미안해요.”", fx: { ending: "missed" } } },
+      { label: "자리는 둘. 동행 하나를 활주로에 두고 이륙한다", req: { anyComp: true }, fx: { ending: "sky", human: -15, abandon: true } },
+      { label: "날개를 포기하고 선로로 걷는다", fx: { ending: s.day + 2 > s.trainDay ? "missed" : "frozen" } },
+    ] };
+    if (dest === "signal") return { id: "res", text: "송신기 덮개를 연다. 회로는 멀쩡하다. 전원이 없다. 이걸 살리면, 당신은 여기 남아야 한다. 매일 같은 시간, 같은 말을 하기 위해.", choices: [
+      { label: "[배터리] 배터리를 물려 송신기를 살린다", req: { item: "battery" }, fx: { ending: "signal", human: 10 } },
+      { label: "[관측소 열쇠] 무전실 예비 발전기를 돌린다", req: { item: "obs_key" }, check: ["craft", 10], win: { t: "발전기가 덜컹거리며 돌았다. 빨간 불이 켜졌다.", fx: { ending: "signal", human: 10 } }, lose: { t: "발전기가 연기를 뿜고 멈췄다. 관측소에 갇혔다.", fx: { ending: "frozen" } } },
+      { label: "고철을 뒤져 송신기를 살린다", check: ["craft", 14], win: { t: "손끝이 다 터졌다. 빨간 불이 켜졌다.", fx: { ending: "signal", human: 10 } }, lose: { t: "송신기는 끝내 침묵했다.", fx: { ending: "frozen" } } },
+    ] };
     return { id: "res", text: "기지의 문을 연다. 난로는 차갑다. 하지만 지붕이 있고, 벽이 있다. 봄까지 버틸 수 있을까.", choices: [
       { label: "함께 겨울을 난다", req: { anyComp: true }, check: ["craft", s.food >= 4 && s.fuel >= 2 ? 8 : 13], win: { t: "난로에 불이 붙었다. 누군가 웃었다.", fx: { ending: "spring" } }, lose: { t: "식량이 먼저 떨어졌다.", fx: { ending: "frozen" } } },
       { label: "혼자 겨울을 난다", check: ["wits", s.food >= 4 && s.fuel >= 2 ? 10 : 15], win: { t: "길고 조용한 겨울이었다.", fx: { ending: "spring" } }, lose: { t: "너무 길었다.", fx: { ending: "frozen" } } },
@@ -443,13 +470,30 @@
     const P = s.dir.premise ? C.premises[s.dir.premise] : null, tw = P ? premiseOf(s).titles || P.titles : null;
     s.title = s.dir.twisted && tw ? tw[s.dir.twist] : `${C.origins[s.origin].short}의 겨울`;
     s.narrator = narratorOf(s, ending);
+    const found = allTruths(s);
+    s.newTruths = found.filter((t) => !s.legacy.truths.includes(t));
+    const last = s.journal.filter((j) => j.w >= 2).slice(-1)[0];
+    s.legacyOut = { truths: found, corpse: ending === "frozen" ? { origin: s.origin, act: s.act, line: last ? `${last.day}일. ${last.text}` : "남쪽으로. 계속 남쪽으로.", items: s.bag.filter((b) => !C.items[b.k].key).slice(0, 2).map((b) => b.k) } : null };
     jr(s, `${C.endings[ending].title}.`, 4);
     s.phase = "end";
     s.ev = null;
     return { state: s };
   }
 
+  // 진실 조각: 이번 판에서 알아낸 것 + 지난 판들에서 알아낸 것
+  function truthsThisRun(s) {
+    const f = s.facts, out = [];
+    if (s.origin === "parent" && s.dir.premise === "hidden_kin" && (f.kin_voice_real || f.kin_despair || s.dir.twisted)) out.push("radio");
+    if (f.baekgom_spared || (s.origin === "deserter" && s.dir.premise === "hidden_kin" && s.dir.twisted)) out.push("cage");
+    if ((f.purpose_truth && f.purpose_final) || f.fs_confronted || (s.dir.premise === "false_salvation" && s.dir.twist === "A" && s.dir.twisted)) out.push("gu");
+    if (f.truth_crew) out.push("crew");
+    if (f.truth_pilot) out.push("pilot");
+    return out;
+  }
+  const allTruths = (s) => [...new Set([...(s.legacy?.truths || []), ...truthsThisRun(s)])];
   function narratorOf(s, ending) {
+    if (ending === "signal") return "매일 같은 시간, 무전에 한 사람의 목소리가 실린다. 이것은 그 목소리가 들려준 이야기다.";
+    if (ending === "open") return "그 열차에 탔던 마흔 명 넘는 사람들이, 각자의 방식으로 이 이야기를 전한다.";
     const f = s.facts, alive = live(s), N = C.narrators;
     if (ending === "king" || ending === "wolves") return N.wolves;
     if (s.origin === "parent" && (f.kin_taken || f.kin_reunited || f.kin_chose) && ending !== "frozen") return N.soi;
@@ -520,7 +564,7 @@
   // 밤을 보낸다: 먹기·불·상처·체온, 동행의 신뢰
   function sleep(state) {
     if (state.phase !== "camp") return { state, error: "야영 중이 아니다." };
-    if (state.bag.length > BAG) return { state, error: `가방이 넘친다. ${state.bag.length - BAG}개를 버려야 한다.` };
+    if (bagCount(state) > BAG) return { state, error: `가방이 넘친다. ${bagCount(state) - BAG}개를 버려야 한다.` };
     const s = clone(state), c = s.camp, lines = [];
     const eaters = Object.entries(c.feed).filter(([, v]) => v).map(([k]) => k);
     s.food -= eaters.length;
@@ -569,9 +613,11 @@
     const c = clone(s);
     c.evPick = c.evPick || {};
     c.habit = c.habit || { share: 0, harsh: 0, trust: 0 };
+    c.roadUsed = c.roadUsed || {};
+    c.legacy = c.legacy || { truths: [], corpse: null };
     return c;
   }
-  const api = { newGame, begin, options, go, view, choose, cont, campToggle, useItem, drop, craft, sleep, validate, live, hasItem, BAG, HP, HUNGER, COLD, STATS, C, premiseOf, fill };
+  const api = { newGame, begin, options, go, view, choose, cont, campToggle, useItem, drop, craft, sleep, validate, live, hasItem, allTruths, bagCount, BAG, HP, HUNGER, COLD, STATS, C, premiseOf, fill };
   root.JourneyEngine = api;
   if (typeof module !== "undefined") module.exports = api;
 })(globalThis);

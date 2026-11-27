@@ -497,7 +497,7 @@
     p_observatory2: { scenes: {
       start: S("관측소 무전기가 아직 켜져 있다. 배터리 표시등이 깜빡인다. 스피커에서 숫자를 읽는 목소리가 반복된다. “…셋, 일곱, 둘… 남행선… 정원 마흔…”", [
         C("[배터리] 배터리를 갈고 끝까지 듣는다", { req: { item: "battery" }, fx: { take: "battery", fact: "list_rumor", fact2: "route_hint" }, t: "“…정원 마흔. 명단에 없는 자는 태우지 않는다. 명단은 하얀나루역장이 보관…” 목소리가 끊겼다. 열차는 진짜다. 그리고 자리는 정해져 있다.", go: "join" }),
-        C("무전기를 분해해 부품을 챙긴다", { check: ["craft", 10], win: { t: "진공관 몇 개와 고철, 배터리 하나.", fx: { item: ["scrap", "battery"] }, go: "join" }, lose: { t: "감전됐다. 손이 한참 떨렸다.", fx: { hp: 1 }, go: "join" } }),
+        C("무전기를 분해해 부품을 챙긴다", { check: ["craft", 10], win: { t: "진공관 몇 개와 고철, 배터리 하나.", fx: { item: ["scrap", "battery", "vacuum_tube"] }, go: "join" }, lose: { t: "감전됐다. 손이 한참 떨렸다.", fx: { hp: 1 }, go: "join" } }),
       ]),
       join: S("문이 열리고 안경에 성에가 낀 여자가 들어온다. 손에 기상 기록을 쥐었다. “그 무전, 저도 매일 듣고 있었어요. 은서예요. 남쪽으로 가요? 저 혼자선 못 가겠어요.”", [
         C("같이 가자", { fx: { join: "eunseo" } }),
@@ -680,7 +680,128 @@
     frozen: { title: "눈 속에서 잠들다", text: "졸음이 왔다. 이상하게 따뜻했다. 눈이 천천히 당신을 덮었다." },
     inhuman: { title: "사람이 아니게 되어", text: "살아남았다. 그런데 아무도 당신 곁에 앉지 않는다. 당신도 그 이유를 안다." },
   };
-  const api = { items, recipes, origins, people, cast, places, events, premises, originBeats, climax, endings, setpieces, memory, confront, narrators };
+  // ── 3단계: 출신 2개 ──
+  Object.assign(items, {
+    crew_list: { name: "대원 명단", kind: "단서", key: true, desc: "일곱 개의 이름. 셋에 줄이 그어져 있다" },
+    obs_key: { name: "관측소 열쇠", kind: "단서", key: true, desc: "무전실 문을 연다" },
+    flight_log: { name: "조종사 수첩", kind: "단서", key: true, desc: "부품 목록: 연료 네 통, 진공관" },
+    vacuum_tube: { name: "진공관", kind: "단서", key: true, desc: "무전기·엔진을 살리는 부품" },
+  });
+  Object.assign(origins, {
+    crew: {
+      name: "기지의 마지막 대원", short: "대원", stats: { force: 1, wits: 2, talk: 1, craft: 2 },
+      start: "base", items: ["crew_list", "obs_key", "bandage"], food: 5, fuel: 2,
+      pitch: "대원 일곱이 남쪽 길을 찾으러 떠났다. 아무도 돌아오지 않았다.",
+      intro: [
+        "식당의 의자 일곱 개가 비어 있다. 석 달째.",
+        "그날 당신은 열이 난다며 남았다. 정말 열이 났었는지, 이제는 기억이 흐리다.",
+        "명단의 일곱 이름을 손가락으로 짚는다. 남쪽으로 간다. 그들에게 무슨 일이 있었는지 알아야 한다.",
+      ],
+      premises: ["betrayal", "false_salvation"],
+    },
+    pilot: {
+      name: "추락한 조종사", short: "조종사", stats: { force: 1, wits: 2, talk: 1, craft: 3 },
+      start: "start_wreck", items: ["flight_log", "lighter", "scrap"], food: 5, fuel: 2,
+      pitch: "수송기가 떨어졌다. 다시 띄우면 남쪽으로 날 수 있다.",
+      intro: [
+        "눈을 뜨니 조종석 유리에 성에가 꽃처럼 피어 있었다. 부조종사는 대답하지 않았다.",
+        "구조 비행이었다. 무엇을 구하러 가던 비행이었는지, 수첩에 적혀 있다.",
+        "날개 아래로 기어 나온다. 하늘은 잃었지만 하늘로 가는 길은 안다. 남쪽으로.",
+      ],
+      premises: ["betrayal", "false_salvation"],
+    },
+  });
+  places.start_wreck = { act: 0, name: "수송기 잔해", art: "start_wreck", fb: "plane" };
+  places.old_airfield = { act: 3, dest: "sky", name: "옛 비행장", art: "old_airfield", fb: "plane", ev: "d_sky" };
+  places.observatory_back = { act: 3, dest: "signal", name: "관측소로 되돌아가는 길", art: "observatory", fb: "station", ev: "d_signal" };
+  events.d_sky = { climax: "sky" };
+  events.d_signal = { climax: "signal" };
+  climax.sky = { name: "옛 비행장", art: "climax_airfield", fb: "plane", arrive: "눈 덮인 활주로 끝, 격납고 문이 반쯤 열려 있다. 안에 낡은 수송기 한 대. 날개 위에 눈이 쌓였다. 연료 계기는 바닥이다. 그래도 형태는 온전하다." };
+  climax.signal = { name: "관측소", art: "end_signal", fb: "station", arrive: "왔던 길을 되짚어 관측소에 닿았다. 무전실 문 너머, 먼지 쌓인 송신기. 이걸 살리면 이 설원의 모든 생존자가 열차 시간과 길을 알게 된다." };
+  Object.assign(endings, {
+    sky: { title: "하늘로", text: "엔진이 기침하듯 살아났다. 활주로가 짧았다. 바퀴가 눈을 떠났다. 구름 위로 오르자 처음 보는 햇빛이 조종석을 채웠다." },
+    signal: { title: "신호를 지키는 사람", text: "송신기의 빨간 불이 켜졌다. 당신은 매일 같은 시간, 같은 말을 한다. “열차는 온다. 남동쪽, 송전탑을 따라와라.” 대답은 없다. 그래도 누군가는 듣고 있다." },
+    open: { title: "모두의 열차", text: "명단이 불길 속에서 오그라들었다. 화물칸 문 앞에서 누구도 이름을 부르지 않았다. 사람들이 서로를 끌어올렸다. 열차는 무거웠고, 느렸고, 모두를 태웠다." },
+  });
+  Object.assign(originBeats, {
+    crew: {
+      1: { id: "o_crew1", text: "눈 속에 파란 번호 패치가 보인다. 3번. 정우다. 당신과 같은 방을 쓰던. 그는 남쪽을 향해 엎드려 있다. 품에 일기장.", choices: [
+        C("[대원 명단] 명단에서 정우의 이름에 줄을 긋는다", { req: { item: "crew_list" }, fx: { fact: "crew_found1" }, t: "일곱 중 하나. 연필이 떨렸다. 그의 이름표를 주머니에 넣었다." }),
+        C("일기를 끝까지 읽는다", { check: ["wits", 10], win: { t: "‘명단의 자리가 넷뿐이란 걸 알았다. 우리는 셋으로 갈라졌다. 넷을 고른 건… 남겨 둔 그 녀석이었다.’ 당신 이야기다. 당신이 넷을 골랐다. 그래서 남았던 것이다.", fx: { fact: "truth_crew", human: -3 } }, lose: { t: "마지막 몇 장이 얼어 붙어 떨어지지 않았다." } }),
+      ] },
+      2: { id: "o_crew2", text: "늑대단 무리 속에 대원복이 보인다. 그 위에 늑대단 털옷. 6번, 민재다. 그가 당신을 알아보고 얼굴이 하얘진다. “너… 살아 있었구나. 넷 중에 네 이름이 없던 게 이상하다 했어.”", choices: [
+        C("빼내 온다", { check: ["wits", 12], win: { t: "밤에 그를 빼냈다. 민재가 털어놓았다. “구씨가 명단 자리를 팔았어. 우린 넷만 살리려고 명단을 훔쳤고, 나머지는 계곡 문 앞에서 쫓겨났어.”", fx: { fact: "crew_saved", fact2: "truth_crew", human: 5 } }, lose: { t: "늑대단이 눈치챘다. 민재는 끌려갔다.", fx: { hp: 1 } } }),
+        C("멀리서 지켜만 본다", { t: "민재는 다시는 이쪽을 보지 않았다.", fx: { human: -4 } }),
+      ] },
+      3: { id: "o_crew3", text: "고개 위에서 북쪽을 돌아본다. 관측소 안테나가 아주 작게 보인다. 송신기를 살리면 이 설원의 모든 생존자에게 열차 시간과 길을 알릴 수 있다. 하지만 누군가 거기 남아 신호를 지켜야 한다. 일곱의 이름이 주머니에서 무겁다.", choices: [
+        C("관측소로 돌아가기로 한다", { fx: { fact: "signal_path" }, t: "열차는 당신 없이 떠날 것이다. 대신 다른 누군가가 탈 것이다." }),
+        C("남쪽으로 간다", { t: "안테나가 등 뒤에서 사라졌다." }),
+      ] },
+    },
+    pilot: {
+      1: { id: "o_pilot1", text: "수첩 사이에 블랙박스 녹음 테이프를 끼워 두었다. 밤에 무전기로 틀어 본다. 마지막 교신. “…구조 대상 마흔, 하얀나루 경유, 명단 외 탑승 불가…” 그리고 부조종사의 목소리. “명단 밖 사람들은요?” 대답은 없다.", choices: [
+        C("부품 목록을 다시 외운다", { fx: { fact: "plane_plan" }, t: "연료 네 통. 진공관 하나. 그거면 남은 수송기 하나를 띄울 수 있다. 남서쪽 옛 비행장에." }),
+        C("녹음을 끝까지 듣는다", { check: ["wits", 10], win: { t: "녹음 끝에 관제사의 낮은 목소리. “명단은 기지 대원이 넘겨줬다. 넷만 고른 명단이다.” 이 비행은 처음부터 마흔만 구하러 온 것이다.", fx: { fact: "plane_plan", fact2: "truth_pilot" } }, lose: { t: "테이프가 늘어져 소리가 일그러졌다.", fx: { fact: "plane_plan" } } }),
+      ] },
+      2: { id: "o_pilot2", text: "늑대단 연료 창고. 드럼통 수십 개가 철조망 안에 쌓여 있다. 보초는 셋. 수송기를 띄우려면 네 통이 필요하다.", choices: [
+        C("[금반지] 반지를 주고 거래한다", { req: { item: "gold_ring" }, fx: { take: "gold_ring", fuel: 4, wolves: 1 }, t: "보초가 반지를 깨물어 보고 드럼 넷을 굴려 줬다." }),
+        C("밤에 숨어든다", { check: ["wits", 13], win: { t: "드럼 다섯을 하나씩 굴려 냈다. 창고 구석 공구함에서 진공관도 하나.", fx: { fuel: 5, item: "vacuum_tube", wolves: -1 } }, lose: { t: "드럼 하나가 넘어지며 굉음을 냈다. 하나만 들고 뛰었다.", fx: { fuel: 1, hp: 1, wolves: -1 } } }),
+        C("정면으로 턴다", { check: ["force", 14], win: { t: "보초들이 달아났다. 연료를 썰매 가득 실었다.", fx: { fuel: 6, wolves: -2, human: -4 } }, lose: { t: "총알이 드럼을 뚫었다. 불길 속에서 도망쳤다.", fx: { hp: 2 } } }),
+      ] },
+      3: { id: "o_pilot3", text: "고개 위에서 남서쪽을 본다. 눈 덮인 평원 끝에 작은 격납고 지붕. 옛 비행장이다. 저기 수송기가 있다면, 그리고 연료와 진공관이 있다면, 열차를 기다릴 필요가 없다. 자리는 둘.", choices: [
+        C("비행장으로 가기로 한다", { fx: { fact: "sky_path" }, t: "하늘은 아직 거기 있다." }),
+        C("선로로 간다", { t: "격납고 지붕이 눈보라에 가려졌다." }),
+      ] },
+    },
+  });
+  // 관측소 두 번째 사건에서 진공관도 나온다
+  // ── 길 위의 우연한 만남 (한 판에 몇 번, 같은 건 한 번만) ──
+  const road = {
+    road_dog: { art: "road_dog", scenes: { start: S("앙상한 개 한 마리가 멀찍이 따라온다. 갈비뼈가 드러났다. 멈추면 멈추고, 걸으면 걷는다.", [
+      C("식량 하나를 나눠 준다", { req: { food: 1 }, fx: { food: -1, fact: "dog", human: 3 }, t: "개가 허겁지겁 먹고 당신 발치에 앉았다. 그날부터 밤마다 당신 등에 붙어 잤다. 따뜻했다." }),
+      C("쫓아 버린다", { t: "개는 낑낑대며 사라졌다. 밤에 멀리서 울음소리가 들렸다." }),
+      C("잡는다", { check: ["force", 10], win: { t: "그날 밤은 고기가 있었다. 아무도 맛있다고 말하지 않았다.", fx: { food: 3, human: -6 } }, lose: { t: "개가 손을 물고 달아났다.", fx: { hp: 1 } } }),
+    ]) } },
+    road_sled: { art: "road_sled", scenes: { start: S("길가에 버려진 썰매. 개들은 없다. 방수포 아래 짐이 그대로다. 썰매 손잡이에 피 묻은 장갑 한 짝이 걸려 있다.", [
+      C("짐을 뒤진다", { check: ["wits", 9], win: { t: "통조림과 천 조각, 술 한 병. 장갑 주인은 어디 갔을까.", fx: { food: 2, item: ["cloth", "liquor"] } }, lose: { t: "방수포 아래에서 무언가 꿈틀거렸다. 쥐 떼였다. 거의 다 먹혔다.", fx: { food: 1 } } }),
+      C("손대지 않는다", { t: "누군가 돌아올지도 모른다. 그럴 리 없다는 걸 알면서도." }),
+    ]) } },
+    road_soldier: { art: "road_soldier", scenes: { start: S("눈 위에 앉은 채 얼어붙은 군인. 무릎 위에 사냥총이 놓여 있다. 손가락이 아직 방아쇠에 걸려 있다.", [
+      C("총을 빼낸다", { check: ["craft", 10], win: { t: "언 손가락을 하나씩 폈다. 총알이 세 발 남아 있었다.", fx: { item: "rifle", stress: 5 } }, lose: { t: "손가락이 부러지는 소리. 총은 빼냈지만 그 소리가 오래 남았다.", fx: { item: "rifle", human: -3 } } }),
+      C("경례하고 지나간다", { t: "짧게 경례했다. 그가 지키던 쪽을 한 번 바라봤다.", fx: { human: 2 } }),
+    ]) } },
+    road_family: { art: "road_family", scenes: { start: S("눈길 위에 가족 셋이 주저앉아 있다. 엄마, 아빠, 그리고 여섯 살쯤 된 아이. 아빠가 일어서려다 넘어진다. 엄마가 당신을 본다. 말은 하지 않는다.", [
+      C("식량 둘을 나눠 준다", { req: { food: 2 }, fx: { food: -2, human: 8, debt: { id: "family", good: true, text: "눈길의 가족에게 식량을 나눴다" } }, t: "아이가 통조림을 두 손으로 받았다. 엄마가 고개를 깊이 숙였다." }),
+      C("남쪽 길만 알려 준다", { t: "아빠가 고개를 끄덕였다. 일어서지는 못했다.", fx: { human: 1 } }),
+      C("지나친다", { t: "아이의 눈이 오래 따라왔다.", fx: { human: -5 } }),
+    ]) } },
+    road_trader: { art: "trade_merchant", scenes: { start: S("작은 썰매를 끄는 늙은 떠돌이가 손을 든다. “바꾸세. 난 붕대가 많고 담배가 없네.”", [
+      C("[담배] 담배를 붕대 둘과 바꾼다", { req: { item: "cigarettes" }, fx: { take: "cigarettes", item: ["bandage", "bandage"] }, t: "노인이 담배 냄새를 맡고 눈을 감았다." }),
+      C("[술] 술을 항생제와 바꾼다", { req: { item: "liquor" }, fx: { take: "liquor", item: "antibiotics" }, t: "노인이 술병을 품에 넣었다. “남쪽은 춥다네. 더 춥다네.”" }),
+      C("그냥 이야기만 듣는다", { t: "“하얀나루 역장 영감이 진짜 명단을 숨겨 놨다더군. 열차는 명단만 태운다지.”", fx: { fact: "list_rumor" } }),
+    ]) } },
+    road_grave: { art: "road_grave", scenes: { start: S("길가에 눈으로 쌓은 무덤. 꽂힌 나무 막대에 이름 대신 빨간 털실이 묶여 있다. 무덤 앞에 통조림 하나가 공물처럼 놓였다.", [
+      C("통조림을 가져간다", { fx: { food: 1, human: -4 }, t: "통조림은 차가웠다. 털실이 바람에 흔들렸다." }),
+      C("내 것도 하나 놓고 간다", { req: { food: 1 }, fx: { food: -1, human: 5 }, t: "통조림이 둘이 되었다. 누군가는 이걸 보고 덜 외로울 것이다." }),
+      C("그냥 지나간다", { t: "빨간 털실. 어디서 본 색이다." }),
+    ]) } },
+  };
+  Object.assign(events, road);
+  // 지난 판의 내가 남긴 시신
+  const pastSelf = { id: "past_self", art: "past_self", text: "눈 속에 웅크린 시신. {past_who}의 옷차림이다. 이상하게 낯익다. 품에 일기장이 있다. 마지막 장: ‘{past_line}’", choices: [
+    C("일기와 짐을 챙긴다", { fx: { pastTake: true }, t: "일기장 첫 장에 적힌 날짜는 없다. 글씨체가 당신 것과 닮았다. 짐을 나눠 졌다. 이번엔 다르게 가겠다." }),
+    C("눈을 덮어 묻어 준다", { fx: { human: 4 }, t: "눈을 한 줌씩 덮었다. 이 사람도 남쪽으로 가고 있었다. 당신처럼." }),
+  ] };
+  // 진실 조각 (여러 판에 걸쳐 모은다)
+  const truths = {
+    radio: { name: "무전의 목소리", text: "딸의 목소리는 3년 전 녹음이었고, 그걸 틀던 건 명단을 쥔 자들이었다." },
+    cage: { name: "철창의 밤", text: "백곰이 아이들을 철창에 가둔 건 명단의 자리와 바꾸기 위해서였다." },
+    gu: { name: "상인의 장부", text: "명단의 자리를 처음 판 사람은 구씨였다." },
+    crew: { name: "넷만 고른 명단", text: "기지 대원 일곱 중 넷만 고른 사람은 남았던 그 대원이었다." },
+    pilot: { name: "마흔의 비행", text: "구조 비행은 처음부터 명단의 마흔만 태우러 왔다. 명단 밖은 없었다." },
+  };
+
+  const api = { items, recipes, origins, people, cast, places, events, premises, originBeats, climax, endings, setpieces, memory, confront, narrators, road, pastSelf, truths };
   root.JourneyContent = api;
   if (typeof module !== "undefined") module.exports = api;
 })(globalThis);
