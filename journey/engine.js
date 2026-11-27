@@ -63,6 +63,8 @@
     at(1, 2, { type: "origin", n: 1 });
     at(2, 2, { type: "origin", n: 2 });
     at(3, 0, { type: "origin", n: 3 });
+    at(1, 3, { type: "spine", n: 1 });
+    at(2, 1, { type: "spine", n: 2 });
     if (s.origin === "drifter") { s.dir.pending = s.dir.pending.filter((b) => !(b.beat.type === "origin" && b.beat.n === 1)); at(2, 0, { type: "origin", n: 1 }); }
     // 명장면 셋: 막마다 하나
     const a1 = pick(s, ["sp_whiteout", "sp_wolfpack"]);
@@ -130,6 +132,7 @@
       "{parent_list_line}": s.dir.premise === "hidden_kin" && s.dir.twist === "A" ? "명단 맨 아래, 연필로 쓴 이름. ‘소이(9) — 백곰 소유, 거래 불가’." : "명단에 소이는 없다. 대신 맨 끝에 적힌 메모. ‘하얀나루역장이 진짜 명단을 갖고 있다.’",
       "{drift2_text}": s.facts.purpose_truth ? "기지 대원의 일기 조각이 바람에 날려 발밑에 걸린다. ‘명단 때문에 우린 셋으로 갈라졌다.’ 진실이 가까워진다." : s.facts.purpose_wealth ? "구씨의 썰매 자국 옆에 떨어진 장부 한 장. 사람 이름과 값이 적혀 있다. 이 설원에서 제일 비싼 건 사람이다." : `${c1 ? c1.name : "곁의 사람"}이(가) 열에 들떠 당신 소매를 잡는다. “나 두고 가지 마.” 지키겠다던 말이 시험받는다.`,
       "{payoff_line}": payoffLine(s),
+      "{spine2_text}": s.dir.premise === "false_salvation" || s.debts.some((d) => d.id === "gu" && !d.good) ? "길에서 만난 피난민 둘이 속삭인다. “구씨가 명단의 빈자리를 팔고 다닌대. 값은 사람이래. 자기가 데려온 사람 하나당 자리 하나.” 금니의 웃음이 떠오른다." : s.debts.some((d) => d.id === "stationmaster" && d.good) ? "얼어붙은 이정표에 누군가 칼로 새긴 글씨. ‘진짜 명단은 역장 할아버지가 숨겼다. 하얀나루에서 내가 지킨다. — 손자’ 당신이 식량을 나눈 노인의 손자다." : "늑대단 보초 둘이 지나가며 웃는다. “백곰 장부에 이름 올리려고 줄 선 것 봐. 명단 자리 하나에 뭘 내놓는지 알면 놀랄걸.” 명단은 백곰의 장부 안에 있다.",
       "{past_who}": s.legacy.corpse ? C.origins[s.legacy.corpse.origin]?.name || "떠돌이" : "",
       "{past_line}": s.legacy.corpse ? s.legacy.corpse.line : "",
       "{cname}": s.ev?.cur?.cid ? nameOf(s, s.ev.cur.cid) : "",
@@ -223,6 +226,7 @@
     const P = premiseOf(s);
     if (beat.type === "origin") { const ob = C.originBeats[s.origin]?.[beat.n]; return ob ? { kind: "beat", beat: ob } : null; }
     if (beat.type === "set") return { kind: "place", id: beat.id };
+    if (beat.type === "spine") { if (beat.n === 1 && s.facts.list_rumor) return null; if (beat.n === 2 && (s.facts.list_known || s.facts.has_list || s.facts.baekgom_list)) return null; return { kind: "beat", beat: C.spine[beat.n] }; }
     if (beat.type === "past") return s.legacy.corpse ? { kind: "beat", beat: C.pastSelf } : null;
     if (!P) return null;
     if (s.dir.premise === "betrayal" && !s.dir.roles.traitor) {
@@ -340,6 +344,7 @@
     const cur = s.ev.cur;
     if (cur.kind === "beat") { const tw = cur.beat.onTwist; if (tw) twistAfter(s, tw); }
     const text = fill(s, out.t || "");
+    if (out.fx?.clue) (s.sus = s.sus || []).push({ day: s.day, text, mine: out.fx.clue === CLUE_OF[s.dir.premise] });
     s.chronicle.push({ day: s.day, title: view(state).title, paras: [fill(s, sc.text), `“${fill(s, ch.label.replace(/^\[[^\]]+\]\s*/, ""))}” — ${text}`].filter(Boolean) });
     s.ev.result = { text, notes, roll, go: out.go || null, ending: out.fx?.ending || null };
     if (s.me.hp >= 4) { s.ev.result.ending = "frozen"; }
@@ -392,9 +397,14 @@
       if (s.facts.purpose_truth) s.facts.truth_known = s.day;
       if (s.facts.purpose_protect) for (const c of live(s)) c.trust += 2;
     }
-    if (fx.payoff) s.dir.payoffDone = true;
+    if (fx.payoff) {
+      s.dir.payoffDone = true;
+      const t = s.dir.roles.traitor && comp(s, s.dir.roles.traitor);
+      if (t && t.alive && (fx.fact === "forgave" || s.facts.bt_turned) && fx.fact !== "revenge") { t.gone = false; t.trust = Math.max(t.trust, 1); }
+    }
+    if (fx.names) s.names = Math.min(6, (s.names || 0) + fx.names);
     if (fx.pastTake && s.legacy.corpse) for (const k of s.legacy.corpse.items || []) addItem(s, k, notes);
-    if (fx.abandon) { const c = live(s)[live(s).length - 1]; if (c) { c.gone = true; jr(s, `피난처 문밖에 ${c.name}을(를) 두고 들어갔다.`, 4); } }
+    if (fx.abandon) { const c = live(s)[live(s).length - 1]; if (c) { c.gone = true; c.abandoned = true; jr(s, `피난처 문밖에 ${c.name}을(를) 두고 들어갔다.`, 4); } }
   }
 
   // ── 절정 ──
@@ -441,6 +451,7 @@
         { label: "[도치] 도치가 늑대단 사이로 길을 연다", req: { fact: "dochi_saved" }, fx: { ending: "train" } },
         { label: "달리는 화물칸으로 뛰어오른다", check: ["force", s.debts.some((d) => d.id === "dochi" && !d.good) ? 15 : 13], win: { t: "손이 문틀을 잡았다. 누군가 당신을 끌어올렸다.", fx: { ending: "train" } }, lose: { t: "손이 미끄러졌다. 바퀴 소리가 멀어진다.", fx: { ending: "missed", hp: 1 } } },
         { label: "마지막 자리를 내준다", req: { anyComp: true }, fx: { ending: "seat", human: 10 } },
+        { label: "[소이] 소이를 백곰 곁에 두고, 혼자 오른다", req: { fact: "kin_with_baekgom" }, fx: { ending: "letgo" } },
         { label: "[백곰을 쓰러뜨렸다] 늑대단 앞에 선다. 이제 내가 백곰이다", req: { fact: "baekgom_down" }, fx: { ending: "king" } },
         { label: "늑대단 쪽으로 걸어간다", req: { wolves: 1 }, fx: { ending: "wolves" } },
       ] };
@@ -455,8 +466,8 @@
       ] };
     }
     if (dest === "sky") return { id: "res", text: "격납고 문을 끝까지 연다. 연료 드럼을 굴려 날개 밑으로 붓는다. 계기판에 먼지가 쌓였다. 엔진에 빠진 부품이 하나 있다. 진공관. 그리고 자리는 조종석 하나, 뒤에 하나.", choices: [
-      { label: "[진공관] 엔진을 살려 이륙한다", req: { item: "vacuum_tube" }, check: ["craft", live(s).length > 1 ? 13 : 10], win: { t: "엔진이 기침하듯 살아났다.", fx: { ending: "sky" } }, lose: { t: "엔진이 한 번 돌다 멈췄다. 다시는 돌지 않았다. 선로까지는 너무 멀다.", fx: { ending: "missed" } } },
-      { label: "[한별과 함께] 한별이 손으로 엔진을 깨운다", req: { companion: "hanbyeol" }, check: ["craft", 12], win: { t: "한별이 웃었다. 처음 보는 웃음이었다.", fx: { ending: "sky" } }, lose: { t: "한별이 조종간에 이마를 댔다. “미안해요.”", fx: { ending: "missed" } } },
+      { label: "[진공관] 엔진을 살려 이륙한다", req: { item: "vacuum_tube" }, check: ["craft", live(s).length > 1 ? 13 : 10], win: { t: "엔진이 기침하듯 살아났다.", fx: { ending: "sky" } }, lose: { t: "엔진이 살아났다. 바퀴가 눈을 떠났다. 그리고 왼쪽 날개에서 검은 연기가 피어올랐다.", fx: { ending: "crash" } } },
+      { label: "[한별과 함께] 한별이 손으로 엔진을 깨운다", req: { companion: "hanbyeol" }, check: ["craft", 12], win: { t: "한별이 웃었다. 처음 보는 웃음이었다.", fx: { ending: "sky" } }, lose: { t: "한별이 조종간을 끝까지 당겼다. 고도가 오르지 않았다. 한별이 당신 손을 잡았다.", fx: { ending: "crash" } } },
       { label: "자리는 둘. 동행 하나를 활주로에 두고 이륙한다", req: { anyComp: true }, fx: { ending: "sky", human: -15, abandon: true } },
       { label: "날개를 포기하고 선로로 걷는다", fx: { ending: s.day + 2 > s.trainDay ? "missed" : "frozen" } },
     ] };
@@ -472,21 +483,87 @@
   }
   function finish(s, key) {
     const ending = key;
-    const inhuman = s.human <= 20 && !["frozen", "missed"].includes(key);
+    const inhuman = s.human <= 20 && !["frozen", "missed", "crash", "revenge"].includes(key);
     s.ending = { key: ending, inhuman };
     const P = s.dir.premise ? C.premises[s.dir.premise] : null, tw = P ? premiseOf(s).titles || P.titles : null;
     s.title = s.dir.twisted && tw ? tw[s.dir.twist] : `${C.origins[s.origin].short}의 겨울`;
     s.narrator = narratorOf(s, ending);
+    s.epilogue = epilogue(s, ending);
     const found = allTruths(s);
     s.newTruths = found.filter((t) => !s.legacy.truths.includes(t));
     const last = s.journal.filter((j) => j.w >= 2).slice(-1)[0];
-    s.legacyOut = { truths: found, corpse: ending === "frozen" ? { origin: s.origin, act: s.act, line: last ? `${last.day}일. ${last.text}` : "남쪽으로. 계속 남쪽으로.", items: s.bag.filter((b) => !C.items[b.k].key).slice(0, 2).map((b) => b.k) } : null };
+    s.legacyOut = { truths: found, corpse: ["frozen", "crash", "revenge"].includes(ending) ? { origin: s.origin, act: s.act, line: last ? `${last.day}일. ${last.text}` : "남쪽으로. 계속 남쪽으로.", items: s.bag.filter((b) => !C.items[b.k].key).slice(0, 2).map((b) => b.k) } : null };
     jr(s, `${C.endings[ending].title}.`, 4);
     s.phase = "end";
     s.ev = null;
     return { state: s };
   }
 
+  // ── 출신별 목표와 진행 ──
+  function goals(s) {
+    const f = s.facts, o = s.origin, out = { title: "", lines: [] };
+    if (o === "parent") {
+      out.title = "소이를 찾는다";
+      const where = f.kin_taken || f.kin_reunited ? "곁에 있다" : f.kin_with_baekgom ? "백곰의 품에 있다" : f.kin_seen_early ? "백곰이 안고 다니는 아이가 소이다" : f.saw_list && s.dir.premise === "hidden_kin" && s.dir.twist === "A" ? "늑대단 명단에 이름이 있다" : f.kin_voice_real ? "목소리는 3년 전 녹음. 그걸 틀던 사람이 남쪽에 있다" : f.parent_spoke || f.parent_silent ? "지금 목소리가 하얀나루, 역장 할아버지를 말했다" : "무전이 하얀나루를 말한다";
+      out.lines.push(`행방: ${where}`);
+    } else if (o === "deserter") {
+      out.title = "백곰에게서 벗어난다";
+      out.lines.push(f.baekgom_down ? "백곰은 쓰러졌다" : f.baekgom_spared ? "백곰이 길을 비켰다" : f.rejoin_wolves ? "늑대단으로 돌아갔다" : f.baekgom_hunting || s.debts.some((d) => d.id === "twins") ? "추적: 가까워지고 있다" : "추적: 쌍둥이가 뒤를 밟는다");
+      if (s.dir.premise === "hidden_kin" && s.dir.twisted) out.lines.push("도치: 죽은 줄 알았던 동생이 살아 있다");
+    } else if (o === "crew") {
+      out.title = "일곱 이름을 찾는다";
+      out.lines.push(`찾은 이름 ${s.names || 0}/7`);
+      if (f.truth_crew) out.lines.push("넷을 고른 사람이 누구였는지 안다");
+    } else if (o === "pilot") {
+      out.title = "수송기를 다시 띄운다";
+      out.lines.push(`연료 ${s.fuel}/4 · 진공관 ${hasItem(s, "vacuum_tube") ? "있음" : "없음"} · 비행장 ${f.plane_plan ? "위치를 안다" : "모른다"}`);
+    } else {
+      out.title = f.purpose_protect ? "곁의 사람을 지킨다" : f.purpose_truth ? "이 설원의 진실을 안다" : f.purpose_wealth ? "살아남아 부자가 된다" : "이유는 아직 없다";
+      if (f.purpose_abandoned) out.lines.push("이유를 놓아 버렸다");
+    }
+    const list = f.has_list ? "명단이 내 손에 있다" : f.baekgom_list ? "백곰의 장부에 내 이름이 있다" : f.list_known ? "명단이 어디 있는지 안다" : f.list_rumor ? "열차는 명단의 마흔만 태운다" : "";
+    if (list) out.lines.push(`명단: ${list}`);
+    return out;
+  }
+  function notebook(s) {
+    const g = goals(s), P = premiseOf(s);
+    const trustWord = (t) => (t >= 2 ? "깊이 믿는다" : t >= 0.5 ? "믿는다" : t > -1 ? "흔들린다" : "등을 돌리기 직전");
+    const people = [
+      ...s.comps.map((c) => `${c.name} — ${!c.alive ? "죽었다" : c.gone ? "떠났다" : `함께 걷는다 · ${trustWord(c.trust)}`}`),
+      ...s.debts.map((d) => `${d.good ? "○" : "×"} ${d.text}`),
+    ];
+    return { goal: g, sus: (s.sus || []).map((x) => `${x.day}일 — ${x.text}`), people, truths: allTruths(s).map((t) => C.truths[t].name) };
+  }
+  // ── 결말 문단: 도착한 곳 + 전제의 매듭 + 내 목표 + 사람들의 뒷이야기 ──
+  function epilogue(s, ending) {
+    const f = s.facts, d = s.dir, out = [], has = (id, good) => s.debts.some((x) => x.id === id && !!x.good === good);
+    const tr = d.roles.traitor ? nameOf(s, d.roles.traitor) : "", kin = d.roles.kin ? nameOf(s, d.roles.kin) : "";
+    // 전제의 매듭
+    const trc = d.roles.traitor ? comp(s, d.roles.traitor) : null;
+    if (d.premise === "betrayal" && tr && d.twisted) out.push(f.forgave ? (trc && trc.alive && !trc.gone ? `${tr}은(는) 그 뒤로 한 번도 당신 곁을 떠나지 않았다. 용서는 배신보다 무거웠다.` : `${tr}을(를) 용서했다. 그런데 마지막에 곁에 남은 건 당신 혼자였다.`) : f.revenge ? `${tr}의 이름을 다시는 입에 올리지 않았다. 가끔 꿈에 눈 위의 발자국 하나가 나온다.` : f.gu_caught ? `구씨는 사람들 앞에서 장부를 빼앗겼다. ${tr}의 동생은 마침내 ${tr}의 손을 잡았다.` : f.bt_turned ? `${tr}과(와) 함께 동생을 찾아 남쪽 끝까지 갔다. 찾았는지는 ${tr}만 안다.` : d.twist === "A" ? `${tr}은(는) 끝내 돌아오지 않았다. 그 쪽지가 진심이었는지 당신은 평생 모를 것이다.` : `${tr}은(는) 구씨에게 돌아갔다. 동생을 되찾았는지, 당신을 판 값이 그만했는지는 모른다.`);
+    if (d.premise === "hidden_kin" && d.twisted) out.push(ending === "letgo" ? `${kin}은(는) 흰 털옷 곁에 남았다. 당신은 그 아이가 웃는 얼굴을 기억하기로 했다.` : f.kin_reunited ? (s.origin === "parent" ? "소이는 당신 손을 놓지 않았다. ‘아빠’라는 말은 사흘 뒤에야 나왔다." : "도치와 둘이서 그 노래를 끝까지 불렀다. 처음으로.") : f.kin_chose ? `${kin}은(는) 오래 망설이다 당신 쪽으로 걸어왔다. 뒤를 한 번 돌아봤다.` : f.kin_guilt ? "도치는 끝내 용서한다는 말을 하지 않았다. 대신 곁에서 걸었다." : f.kin_fled ? "휘파람 소리는 다시 들리지 않았다." : f.kin_voice_real ? "테이프를 틀던 사람을 찾았다. 그가 소이가 남긴 마지막 말을 전해 주었다. ‘아빠, 나 남쪽으로 먼저 가.’" : f.kin_with_baekgom ? `${kin}은(는) 흰 털옷 곁에 남았다.` : `${kin}의 행방은 눈보라 속에 묻혔다.`);
+    if (d.premise === "false_salvation" && d.twisted) out.push(f.gu_judged ? "구씨의 장부는 불에 탔다. 금니는 사람들이 하나씩 나눠 가졌다." : f.gu_spared ? "구씨는 다시 썰매를 끌고 북쪽으로 갔다. 그 썰매에 무엇이 실렸는지는 묻지 않았다." : f.fs_freed ? "철창에서 풀려난 사람들 중 몇은 지금도 당신 이름을 기억한다." : f.fs_ignored ? "철창 속 비명은 아직도 밤마다 들린다." : "피난처의 규칙을 만든 사람이 누구인지, 끝내 알아내지 못했다.");
+    // 내 목표
+    const died = ["frozen", "revenge", "crash"].includes(ending);
+    if (s.origin === "parent" && !(d.premise === "hidden_kin" && d.twisted)) out.push(died ? "품속 사진이 마지막까지 따뜻했다." : ["train", "seat", "open"].includes(ending) && f.grandson_ok ? "승강장 끝, 역장 손자의 등 뒤에서 빨간 털모자가 튀어나왔다. 소이다. 무전 속 지금 목소리는 진짜였다." : ["train", "seat", "open", "missed"].includes(ending) ? "소이는 승강장에 없었다. 역장 손자에게 사진을 맡겼다. 언젠가 누군가 보여 줄 것이다." : "소이가 어디 있는지는 끝내 모른다. 무전기는 지금도 같은 시간에 켠다.");
+    if (s.origin === "deserter") out.push(ending === "revenge" ? "늑대단은 두목을 잃고 흩어졌다. 철창은 아무도 지키지 않게 되었다." : f.baekgom_down ? "백곰의 흰 털옷은 이제 주인이 없다." : f.baekgom_spared ? "백곰은 약속대로 다시 나타나지 않았다." : f.rejoin_wolves ? "늑대 이빨은 다시 목에 걸렸다." : "등 뒤의 썰매 방울 소리는 끝내 멎지 않았다.");
+    if (s.origin === "crew") { const n = s.names || 0; out.push(`일곱 중 ${n}명의 이름을 찾았다. ` + (n >= 5 ? "남은 칸을 들여다보다 손이 멈췄다. 일곱 번째 줄에는 처음부터 당신의 이름이 있었다. 넷을 고를 때, 당신은 스스로를 지웠던 것이다." : "나머지 이름은 아직 눈 아래 있다.")); }
+    if (s.origin === "pilot") out.push(ending === "sky" ? "조종사 수첩 마지막 장에 한 줄을 적었다. ‘다시 날았다.’" : ending === "crash" ? "수첩은 조종석에 남았다. 마지막 장은 비어 있다." : "날개는 어딘가의 격납고에 남았다. 하늘은 여전히 거기 있다.");
+    if (s.origin === "drifter") out.push(f.purpose_protect && f.purpose_final ? (live(s).length ? "지키겠다던 사람은 아직 곁에 있다." : "지키겠다던 사람을 지키지 못했다. 그래도 끝까지 지키려 했다.") : f.purpose_truth && f.purpose_final ? "이 설원의 진실을 알았다. 그걸로 배가 부르지는 않았다." : f.purpose_wealth && f.purpose_final ? "명단을 판 돈으로 남쪽에서 집을 샀다는 소문이 돈다. 그 집엔 아무도 찾아오지 않는다고." : f.purpose_abandoned ? "이유를 놓아 버린 뒤로, 당신은 다시 이름 없는 사람이 되었다." : "결국 이유는 찾지 못했다. 그래도 여기까지 걸었다.");
+    // 사람들의 뒷이야기
+    const life = { maru: "마루는 그 겨울 이후 다시는 사냥칼을 갈지 않았다.", hanbyeol: "한별은 하늘을 볼 때마다 당신 이야기를 한다.", hyean: "혜안은 지금도 밤마다 누군가를 위해 촛불을 켠다.", eunseo: "은서는 그해 겨울의 바람을 공책 한 권에 다 적었다." };
+    const people = [];
+    for (const c of s.comps) people.push(!c.alive ? `${c.name}은(는) 눈 아래 잠들었다. 무덤 자리를 기억하는 건 당신뿐이다.` : c.abandoned ? `${c.name}은(는) ${ending === "sky" ? "활주로 끝에 서서 날개가 사라질 때까지 보고 있었다" : "돌담 문밖에 남았다. 문이 닫히는 소리를 당신은 잊지 못한다"}.` : c.gone ? `${c.name}은(는) 떠난 뒤 다시 보지 못했다.` : died ? `${c.name}은(는) 당신이 쓰러진 자리에 돌 하나를 올려 두고 남쪽으로 갔다.` : life[c.id]);
+    if (f.dochi_saved) people.push("도치는 남쪽에서 썰매개를 키운다. 사슬 소리를 들으면 아직 몸이 굳는다.");
+    else if (has("dochi", false)) people.push("늑대단 털옷의 소년과는 끝내 다시 마주치지 않았다.");
+    if (has("stationmaster", true)) people.push("역장의 손자는 할아버지의 모자를 쓰고 하얀나루 선로를 지킨다.");
+    else if (has("stationmaster", false)) people.push("역장 노인은 그 겨울을 넘기지 못했다.");
+    if (has("gu", true) && !f.gu_judged) people.push("구씨는 장부에서 당신 이름을 지웠다고 했다. 믿지는 않는다.");
+    else if ((f.owe_gu || has("gu", false)) && !f.gu_judged) people.push("구씨의 장부에는 아직 당신 이름이 있다.");
+    if (f.gave_medicine) people.push("백곰은 약값을 갚았다고 생각했을까. 그의 아이는 그 겨울을 넘겼다.");
+    if (has("family", true) || has("mother", true)) people.push("눈길에서 식량을 나눈 가족은, 다음 해 봄 누군가에게 똑같이 했다.");
+    return { knots: out, people };
+  }
   // 진실 조각: 이번 판에서 알아낸 것 + 지난 판들에서 알아낸 것
   function truthsThisRun(s) {
     const f = s.facts, out = [];
@@ -500,13 +577,15 @@
   const allTruths = (s) => [...new Set([...(s.legacy?.truths || []), ...truthsThisRun(s)])];
   function narratorOf(s, ending) {
     if (ending === "signal") return "매일 같은 시간, 무전에 한 사람의 목소리가 실린다. 이것은 그 목소리가 들려준 이야기다.";
+    if (ending === "settle") return "당신이 도운 사람들은 겨울마다 불가에서 이 이야기를 한다. 고개를 넘지 않은 사람의 이야기.";
+    if (ending === "letgo") return C.narrators.soi;
     if (ending === "open") return "그 열차에 탔던 마흔 명 넘는 사람들이, 각자의 방식으로 이 이야기를 전한다.";
     const f = s.facts, alive = live(s), N = C.narrators;
     if (ending === "king" || ending === "wolves") return N.wolves;
     if (s.origin === "parent" && (f.kin_taken || f.kin_reunited || f.kin_chose) && ending !== "frozen") return N.soi;
     if (s.origin === "deserter" && (f.dochi_saved || f.kin_taken) && ending !== "frozen") return N.dochi;
     if (ending === "seat" && alive[0]) return N.companion.replace("{name}", alive[0].name);
-    if (["frozen", "missed"].includes(ending)) return alive[0] ? N.companion.replace("{name}", alive[0].name) : f.grandson_ok ? N.grandson : N.snow;
+    if (["frozen", "missed", "crash", "revenge"].includes(ending)) return alive[0] ? N.companion.replace("{name}", alive[0].name) : f.grandson_ok ? N.grandson : N.snow;
     return alive[0] ? N.companion.replace("{name}", alive[0].name) : N.self;
   }
   // ── 야영 ──
@@ -647,7 +726,18 @@
     c.legacy = c.legacy || { truths: [], corpse: null };
     return c;
   }
-  const api = { newGame, begin, options, go, view, choose, cont, campToggle, useItem, drop, craft, sleep, validate, live, hasItem, allTruths, bagCount, fullLabel, mealForecast, BAG, HP, HUNGER, COLD, STATS, C, premiseOf, fill };
+  // 받침을 보고 조사를 고른다: 은서은(는) → 은서는, 마루이(가) → 마루가
+  function josa(text) {
+    const PAIRS = { "이(가)": ["이", "가"], "은(는)": ["은", "는"], "을(를)": ["을", "를"], "과(와)": ["과", "와"], "와(과)": ["과", "와"], "아(야)": ["아", "야"], "(으)로": ["으로", "로"], "이라고": null };
+    return String(text).replace(/([가-힣0-9])(이\(가\)|은\(는\)|을\(를\)|과\(와\)|와\(과\)|아\(야\)|\(으\)로)/g, (m, ch, p) => {
+      const code = ch.charCodeAt(0);
+      const jong = code >= 0xac00 && code <= 0xd7a3 ? (code - 0xac00) % 28 : /[013678]/.test(ch) ? 1 : 0;
+      const [a, b] = PAIRS[p];
+      if (p === "(으)로") return ch + (jong && jong !== 8 ? a : b);
+      return ch + (jong ? a : b);
+    });
+  }
+  const api = { newGame, begin, options, go, view, choose, cont, campToggle, useItem, drop, craft, sleep, validate, live, hasItem, allTruths, bagCount, fullLabel, mealForecast, goals, notebook, josa, BAG, HP, HUNGER, COLD, STATS, C, premiseOf, fill };
   root.JourneyEngine = api;
   if (typeof module !== "undefined") module.exports = api;
 })(globalThis);

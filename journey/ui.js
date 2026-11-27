@@ -65,11 +65,13 @@
     }).join("");
     const nodes = E.options(s).map((o) => btn(`${placeArt(o.id, "thumb")}<b>${esc(o.name)}</b><small>${o.lock ? esc(o.lock) : o.gate ? "관문 — 넘으면 돌아올 수 없다" : o.dest ? "마지막 목적지" : "하루가 걸린다"}</small>`, "go", `data-id="${o.id}" class="node ${o.gate ? "gate" : ""}" ${o.lock ? "disabled" : ""}`)).join("");
     const night = (s.lastNight || []).length ? `<p class="night">${s.lastNight.map(esc).join(" ")}</p>` : "";
-    return `${header()}<main class="jmain"><p class="act">${ACTS[s.act]}</p><ul class="route">${route}</ul>${night}<h3>어디로 갈까</h3><div class="nodes">${nodes}</div></main>${bar()}`;
+    const g = E.goals(s);
+    const goal = `<div class="goal"><b>${esc(g.title)}</b>${g.lines.map((l) => `<small>${esc(l)}</small>`).join("")}${btn("수첩 보기", "sheet", 'data-sheet="note" class="mini"')}</div>`;
+    return `${header()}<main class="jmain">${goal}<p class="act">${ACTS[s.act]}</p><ul class="route">${route}</ul>${night}<h3>어디로 갈까</h3><div class="nodes">${nodes}</div></main>${bar()}`;
   }
   function bar() {
     const over = E.bagCount(state) > E.BAG;
-    return `<nav class="jbar">${btn(`가방 ${E.bagCount(state)}/${E.BAG}`, "sheet", `data-sheet="bag" class="${over ? "warn" : ""}"`)}${btn("기록", "sheet", 'data-sheet="chron"')}</nav>`;
+    return `<nav class="jbar">${btn(`가방 ${E.bagCount(state)}/${E.BAG}`, "sheet", `data-sheet="bag" class="${over ? "warn" : ""}"`)}${btn("수첩", "sheet", 'data-sheet="note"')}${btn("기록", "sheet", 'data-sheet="chron"')}</nav>`;
   }
   // ── 사건 ──
   function eventView() {
@@ -114,6 +116,11 @@
     const c = state.chronicle || [];
     return `<div class="veil bottom"><section class="sheet chron" role="dialog"><h2>기록</h2>${state.narrator ? `<p class="narrator">${esc(state.narrator)}</p>` : ""}${c.map((x) => `<article><h3><small>${x.day}일</small> ${esc(x.title)}</h3>${x.paras.map((t) => `<p>${esc(t)}</p>`).join("")}</article>`).join("")}${btn("닫기", "close", 'class="secondary"')}</section></div>`;
   }
+  function noteSheet() {
+    const n = E.notebook(state);
+    const list = (h, a, empty) => `<h3>${h}</h3>${a.length ? `<ul class="wall moments">${a.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : `<p class="muted">${empty}</p>`}`;
+    return `<div class="veil bottom"><section class="sheet chron" role="dialog"><h2>수첩</h2><h3>목표</h3><p><b>${esc(n.goal.title)}</b></p>${n.goal.lines.map((l) => `<p class="muted">${esc(l)}</p>`).join("")}${list("이상한 것들", n.sus, "아직 눈치챈 게 없다.")}${list("사람들", n.people, "아직 누구와도 얽히지 않았다.")}${n.truths.length ? list("그 겨울의 진실", n.truths, "") : ""}${btn("닫기", "close", 'class="secondary"')}</section></div>`;
+  }
   const newSheet = () => `<div class="veil"><section class="modal" role="dialog"><h2>처음부터 다시 할까요?</h2><p class="story">지금 여정은 사라집니다.</p>${btn("새로 시작", "restart", 'class="primary"')}${btn("취소", "close", 'class="secondary"')}</section></div>`;
   // ── 표지 · 시작 · 결말 ──
   function titleView() {
@@ -133,7 +140,7 @@
   function endView() {
     const s = state, e = C.endings[s.ending.key];
     const moments = s.journal.slice().sort((a, b) => b.w - a.w || a.day - b.day).slice(0, 6).sort((a, b) => a.day - b.day);
-    return `<div class="veil"><section class="modal ending" role="dialog">${art({ key: `end_${s.ending.key}`, fb: s.ending.key === "train" ? "f_train" : s.ending.key === "missed" ? "ending_missed" : s.ending.key === "frozen" ? "ending_bad" : "ending_good", dir: "endings" })}<p class="narrator">${esc(s.narrator || "")}</p><p class="etitle">이번 겨울의 이야기</p><h2 class="storyname">「${esc(s.title)}」</h2><p class="muted">${esc(C.origins[s.origin].name)} · ${s.day}일</p><h3>${esc(e.title)}</h3>${prose([e.text, s.ending.inhuman ? C.endings.inhuman.text : ""])}${s.ending.inhuman ? `<p class="inhuman">— ${esc(C.endings.inhuman.title)}</p>` : ""}${s.dir.why ? `<p class="why">${esc(s.dir.why)}</p>` : ""}${(s.newTruths || []).length ? `<h3>새로 알게 된 진실</h3>${s.newTruths.map((t) => `<p class="truth">— ${esc(C.truths[t].name)}: ${esc(C.truths[t].text)}</p>`).join("")}<p class="muted">그 겨울의 진실 ${E.allTruths(s).length}/${Object.keys(C.truths).length}${E.allTruths(s).length >= 3 ? " · 하얀나루역에서 무언가 할 수 있을 것 같다" : ""}</p>` : ""}<h3>그 겨울의 결정들</h3><ul class="wall moments">${moments.map((m) => `<li><small>${m.day}일</small> ${esc(m.text)}</li>`).join("")}</ul>${btn("기록을 처음부터 읽기", "sheet", 'data-sheet="chron" class="secondary"')}${btn("다른 사람으로 다시", "restart", 'class="primary"')}</section></div>`;
+    return `<div class="veil"><section class="modal ending" role="dialog">${art({ key: `end_${s.ending.key}`, fb: s.ending.key === "train" ? "f_train" : s.ending.key === "missed" ? "ending_missed" : s.ending.key === "frozen" ? "ending_bad" : "ending_good", dir: "endings" })}<p class="narrator">${esc(s.narrator || "")}</p><p class="etitle">이번 겨울의 이야기</p><h2 class="storyname">「${esc(s.title)}」</h2><p class="muted">${esc(C.origins[s.origin].name)} · ${s.day}일</p><h3>${esc(e.title)}</h3>${prose([e.text, ...((s.epilogue && s.epilogue.knots) || []), s.ending.inhuman ? C.endings.inhuman.text : ""])}${s.ending.inhuman ? `<p class="inhuman">— ${esc(C.endings.inhuman.title)}</p>` : ""}${s.epilogue && s.epilogue.people.length ? `<h3>그 뒤</h3><ul class="wall moments">${s.epilogue.people.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}${s.dir.why ? `<p class="why">${esc(s.dir.why)}</p>` : ""}${(s.newTruths || []).length ? `<h3>새로 알게 된 진실</h3>${s.newTruths.map((t) => `<p class="truth">— ${esc(C.truths[t].name)}: ${esc(C.truths[t].text)}</p>`).join("")}<p class="muted">그 겨울의 진실 ${E.allTruths(s).length}/${Object.keys(C.truths).length}${E.allTruths(s).length >= 3 ? " · 하얀나루역에서 무언가 할 수 있을 것 같다" : ""}</p>` : ""}<h3>그 겨울의 결정들</h3><ul class="wall moments">${moments.map((m) => `<li><small>${m.day}일</small> ${esc(m.text)}</li>`).join("")}</ul>${btn("기록을 처음부터 읽기", "sheet", 'data-sheet="chron" class="secondary"')}${btn("다른 사람으로 다시", "restart", 'class="primary"')}</section></div>`;
   }
   function render() {
     let html;
@@ -143,9 +150,9 @@
     else if (state.phase === "event") html = eventView();
     else if (state.phase === "camp") html = campView();
     else html = mapView();
-    if (state && !state.restart && state.phase !== "end" && sheet) html += sheet === "bag" ? bagSheet() : sheet === "chron" ? chronSheet() : sheet === "new" ? newSheet() : "";
+    if (state && !state.restart && state.phase !== "end" && sheet) html += sheet === "bag" ? bagSheet() : sheet === "chron" ? chronSheet() : sheet === "note" ? noteSheet() : sheet === "new" ? newSheet() : "";
     if (toast) html += `<div class="toast">${esc(toast)} ${btn("×", "toast")}</div>`;
-    app.innerHTML = html;
+    app.innerHTML = E.josa(html);
     document.body.classList.toggle("modal-open", /class="veil/.test(html));
   }
   function act(a) {

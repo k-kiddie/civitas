@@ -106,6 +106,15 @@ assert.throws(() => E.validate({ v: 0 }));
   const par = E.begin(E.newGame({ origin: "parent", seed: 4 })).state; par.act = 3; par.step = 1;
   assert(!E.options(par).some((o) => o.dest === "sky" || o.dest === "signal"), "부모는 단서 없이는 비행장·관측소가 안 보인다");
 }
+// 결말 보강: 조사, 명단 줄기, 수첩
+{
+  assert.equal(E.josa("은서은(는) 마루이(가) 집(으)로 길(으)로"), "은서는 마루가 집으로 길로");
+  const g = E.begin(E.newGame({ origin: "crew", seed: 8 })).state;
+  assert(g.dir.pending.some((p) => p.beat.type === "spine" && p.beat.n === 1), "1막에 명단 이야기가 반드시 나온다");
+  assert.match(E.goals(g).title, /일곱 이름/);
+  const n = E.notebook(g); assert(n.goal && Array.isArray(n.sus) && Array.isArray(n.people));
+  for (const k of ["crash", "settle", "revenge", "letgo"]) assert(C.endings[k], "결말 " + k);
+}
 // 2단계: 장소 사건이 판마다 달라진다
 {
   const picks = new Set(); for (let i = 1; i <= 20; i++) picks.add(E.newGame({ origin: "parent", seed: i }).evPick.frozen_village);
@@ -120,12 +129,15 @@ for (let i = 1; i <= out.N; i++) {
     assert.equal(g.phase, "end");
     assert(C.endings[g.ending.key], "결말 " + g.ending.key);
     assert(g.narrator, "화자가 있다");
+    assert(g.epilogue && g.epilogue.knots.length >= 1, "결말에 내 목표의 매듭이 있다 " + g.origin);
+    if (g.facts.forgave && g.dir.roles.traitor && !g.comps.find((c) => c.id === g.dir.roles.traitor).abandoned) { const tn = E.C.people[g.dir.roles.traitor].name; assert(!g.epilogue.people.some((x) => x.startsWith(tn) && /떠난 뒤/.test(x)), "용서한 배신자가 떠났다고 나오지 않는다"); }
+    assert(E.goals(g).title, "목표가 있다");
     if (style === "smart") { out.sets = out.sets || new Set(); for (const c of g.chronicle) if (/화이트아웃|늑대 무리|썰매개 방울|눈사태/.test(c.paras.join())) out.sets.add(c.title); out.end[g.ending.key] = (out.end[g.ending.key] || 0) + 1; out.prem.add(g.dir.premise + g.dir.twist); out.titles.add(g.title); if (g.dir.twisted) out.twisted++; if (g.dir.payoffDone) out.payoff++; }
   }
 }
 assert(out.end.signal || out.end.sky, "새 결말이 나온다");
 assert(out.prem.size >= 6, "전제×반전 6가지 모두 나온다 " + [...out.prem]);
-assert(Object.keys(out.end).length >= 5, "결말 5가지 이상 " + JSON.stringify(out.end));
+assert(Object.keys(out.end).length >= 7, "결말 5가지 이상 " + JSON.stringify(out.end));
 assert(out.titles.size >= 8, "이야기 제목 8가지 이상");
 assert(out.twisted / out.N > 0.7, "대부분 반전까지 간다");
 console.log(`남행 엔진: 결말 ${JSON.stringify(out.end)} · 전제×반전 ${out.prem.size}종 · 제목 ${out.titles.size}종 · 반전 ${Math.round((out.twisted / out.N) * 100)}% · 회수 ${Math.round((out.payoff / out.N) * 100)}% · 결정성/저장/가방 통과`);
