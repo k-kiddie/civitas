@@ -250,3 +250,23 @@
 **3차**: 3막 장소 5 · 절정 3 · 결말 11 · 희생 박자 3 · 야영 나머지 · 출신 2개(대원·조종사) · `map_act3` · `journal_paper`
 
 다 넣은 뒤 `node scripts/art-list.js`를 돌리면 여정 그림도 목록에 ✅로 표시되게 할 예정이다.
+
+---
+
+## 10. 추가 (남행 3단계, 2026-11-27)
+
+게임에 이미 들어간 것들. 위 표와 같은 규칙으로 그린다.
+
+| 폴더 | 파일 | 장면 |
+|---|---|---|
+| `scenes/` | `road_dog.webp` | 앙상한 개 한 마리가 멀찍이 따라오는 눈길 |
+| `scenes/` | `road_sled.webp` | 길가에 버려진 썰매, 손잡이에 피 묻은 장갑 한 짝 |
+| `scenes/` | `road_soldier.webp` | 눈 위에 앉은 채 얼어붙은 군인, 무릎 위 사냥총 |
+| `scenes/` | `road_family.webp` | 눈길에 주저앉은 가족 셋(엄마·아빠·여섯 살 아이) |
+| `scenes/` | `road_grave.webp` | 눈으로 쌓은 무덤, 나무 막대에 빨간 털실, 앞에 통조림 하나 |
+| `endings/` | `end_open.webp` | 숨은 결말 「모두의 열차」: 불타는 명단, 화물칸 문 앞에서 서로를 끌어올리는 사람들 |
+| `items/` | `crew_list.webp` | 대원 명단 종이(이름 일곱 줄, 셋에 줄, 글씨는 알아볼 수 없게) |
+| `items/` | `obs_key.webp` | 관측소 무전실 열쇠(꼬리표 달린 녹슨 열쇠) |
+| `items/` | `flight_log.webp` | 조종사 수첩(가죽 표지, 그을린 모서리) |
+
+출신 `crew`·`pilot`의 초상과 카드, `start_wreck`, `old_airfield`, `end_sky`, `end_signal`, `end_king`, `past_self`, `companion_confront`, `sp_*`는 위 표에 이미 있다 — 이제 게임에서 쓰이니 2차보다 먼저 그려도 된다.

@@ -1,16 +1,16 @@
 "use strict";
 // 「남행」 봇: node scripts/sim-journey.js [판 수]
 const E = require("../journey/engine");
-function bot(seed, origin, style = "smart") {
-  let s = E.newGame({ origin, seed }), guard = 0, draw = seed >>> 0;
+function bot(seed, origin, style = "smart", legacy = null) {
+  let s = E.newGame({ origin, seed, legacy }), guard = 0, draw = seed >>> 0;
   const r = (m) => ((draw = (Math.imul(draw, 1664525) + 1013904223) >>> 0), Math.floor((draw / 2 ** 32) * m));
   s = E.begin(s).state;
   while (s.phase !== "end") {
     if (++guard > 2000) throw Error(`멈춤 ${s.phase} ${JSON.stringify(s.ev?.cur)}`);
     if (s.phase === "map") {
-      while (s.bag.length > E.BAG) s = E.drop(s, s.bag.find((b) => !E.C.items[b.k].key).k).state;
+      while (E.bagCount(s) > E.BAG) s = E.drop(s, s.bag.find((b) => !E.C.items[b.k].key).k).state;
       const ok = E.options(s).filter((o) => !o.lock);
-      s = E.go(s, (style === "random" ? ok[r(ok.length)] : ok.find((o) => o.dest === "station") || ok[r(ok.length)]).id).state;
+      s = E.go(s, (style === "random" ? ok[r(ok.length)] : ok.find((o) => o.dest && o.dest !== "station" && o.dest !== "valley" && o.dest !== "return") || ok.find((o) => o.dest === "station") || ok[r(ok.length)]).id).state;
     } else if (s.phase === "event") {
       if (s.ev.result) { s = E.cont(s).state; continue; }
       const v = E.view(s), ok = v.choices.filter((c) => !c.lock);
@@ -21,7 +21,7 @@ function bot(seed, origin, style = "smart") {
     } else if (s.phase === "camp") {
       for (const b of s.bag.slice()) if (E.C.items[b.k].use) { for (const t of ["me", ...E.live(s).map((c) => c.id)]) { const who = t === "me" ? s.me : E.live(s).find((c) => c.id === t); if (who && who.hp >= 1 && E.hasItem(s, b.k)) { const y = E.useItem(s, b.k, t); if (!y.error) s = y.state; } } }
       const c = E.live(s)[0]; if (c && !s.camp.talked) s = E.campToggle(s, "talk", c.id).state;
-      while (s.bag.length > E.BAG) s = E.drop(s, s.bag.find((b) => !E.C.items[b.k].key).k).state;
+      while (E.bagCount(s) > E.BAG) s = E.drop(s, s.bag.find((b) => !E.C.items[b.k].key).k).state;
       s = E.sleep(s).state;
     } else if (s.phase === "intro") s = E.begin(s).state;
   }
@@ -32,7 +32,7 @@ if (require.main === module) {
   for (const style of ["smart", "random"]) {
     const end = {}, prem = {}, titles = new Set(); let days = 0, twisted = 0, comps = 0;
     for (let i = 1; i <= N; i++) {
-      const o = ["parent", "deserter", "drifter"][i % 3];
+      const o = ["parent", "deserter", "drifter", "crew", "pilot"][i % 5];
       const s = bot((i * 2654435761) >>> 0, o, style);
       const k = s.ending.key + (s.ending.inhuman ? "+인간성" : "");
       end[k] = (end[k] || 0) + 1; prem[s.dir.premise + s.dir.twist] = (prem[s.dir.premise + s.dir.twist] || 0) + 1;

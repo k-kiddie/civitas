@@ -49,7 +49,7 @@ while (e.phase === "event" && guard++ < 20) {
 assert.equal(e.phase, "camp", "사건이 끝나면 야영");
 // 가방이 넘치면 떠날 수 없다
 let b = JSON.parse(JSON.stringify(e));
-while (b.bag.length <= E.BAG) b.bag.push({ k: "scrap", u: 0 });
+while (E.bagCount(b) <= E.BAG) b.bag.push({ k: "scrap", u: 0 });
 assert(E.sleep(b).error, "가방이 넘치면 밤을 못 보낸다");
 assert(E.drop(b, "radio").error, "단서 물건은 못 버린다");
 b = E.drop(b, "scrap").state; assert(!E.sleep(b).error);
@@ -89,6 +89,23 @@ assert.throws(() => E.validate({ v: 0 }));
   assert.equal(g.ending.key, "king", "설원의 왕");
   assert.match(g.narrator, /늑대단의 아이들/);
 }
+// 3단계: 출신 5개, 지난 판의 시신, 진실 조각 셋이면 모두의 열차
+{
+  assert.equal(Object.keys(C.origins).length, 5);
+  for (const o of Object.keys(C.origins)) { assert(C.places[C.origins[o].start], o + " 시작 장소"); const g = E.newGame({ origin: o, seed: 2 }); for (const k of C.origins[o].items) assert(g.bag.some((b) => b.k === k), o + " 시작 물건"); assert(C.originBeats[o][1] && C.originBeats[o][2] && C.originBeats[o][3], o + " 막별 사건"); }
+  const leg = { truths: ["crew", "pilot", "gu"], corpse: { origin: "crew", act: 1, line: "7일. 다리는 건너지 마라.", items: ["rope"] } };
+  const g = E.newGame({ origin: "parent", seed: 4, legacy: leg });
+  assert(g.dir.pending.some((p) => p.beat.type === "past"), "지난 판 시신이 배치된다");
+  assert.equal(E.allTruths(g).length, 3);
+  let h = E.begin(g).state; h.act = 3; h.step = 1; h.day = 5; h.dir.premise = "betrayal"; h.dir.pending = [];
+  h = E.go(h, "station_whiteferry").state; let guard = 0;
+  while (h.phase === "event" && guard++ < 10) { const v = E.view(h); if (v.result) { h = E.cont(h).state; continue; } const o = v.choices.find((c) => /불길에 던진다/.test(c.label)); h = E.choose(h, o && !o.lock ? o.i : v.choices.find((c) => !c.lock).i).state; }
+  assert.equal(h.ending.key, "open", "모두의 열차");
+  const pilot = E.begin(E.newGame({ origin: "pilot", seed: 4 })).state; pilot.act = 3; pilot.step = 1;
+  assert(E.options(pilot).some((o) => o.dest === "sky"), "조종사는 비행장이 보인다");
+  const par = E.begin(E.newGame({ origin: "parent", seed: 4 })).state; par.act = 3; par.step = 1;
+  assert(!E.options(par).some((o) => o.dest === "sky" || o.dest === "signal"), "부모는 단서 없이는 비행장·관측소가 안 보인다");
+}
 // 2단계: 장소 사건이 판마다 달라진다
 {
   const picks = new Set(); for (let i = 1; i <= 20; i++) picks.add(E.newGame({ origin: "parent", seed: i }).evPick.frozen_village);
@@ -97,7 +114,7 @@ assert.throws(() => E.validate({ v: 0 }));
 // 봇: 끝까지 가고, 전제·반전·결말·제목이 다양하다
 const out = { end: {}, prem: new Set(), titles: new Set(), twisted: 0, payoff: 0, N: 240 };
 for (let i = 1; i <= out.N; i++) {
-  const o = ["parent", "deserter", "drifter"][i % 3];
+  const o = ["parent", "deserter", "drifter", "crew", "pilot"][i % 5];
   for (const style of ["smart", "random"]) {
     const g = bot((i * 2654435761) >>> 0, o, style);
     assert.equal(g.phase, "end");
@@ -106,6 +123,7 @@ for (let i = 1; i <= out.N; i++) {
     if (style === "smart") { out.sets = out.sets || new Set(); for (const c of g.chronicle) if (/화이트아웃|늑대 무리|썰매개 방울|눈사태/.test(c.paras.join())) out.sets.add(c.title); out.end[g.ending.key] = (out.end[g.ending.key] || 0) + 1; out.prem.add(g.dir.premise + g.dir.twist); out.titles.add(g.title); if (g.dir.twisted) out.twisted++; if (g.dir.payoffDone) out.payoff++; }
   }
 }
+assert(out.end.signal || out.end.sky, "새 결말이 나온다");
 assert(out.prem.size >= 6, "전제×반전 6가지 모두 나온다 " + [...out.prem]);
 assert(Object.keys(out.end).length >= 5, "결말 5가지 이상 " + JSON.stringify(out.end));
 assert(out.titles.size >= 8, "이야기 제목 8가지 이상");
