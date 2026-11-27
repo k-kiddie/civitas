@@ -52,3 +52,5 @@
 .storyname { font-size: 24px; margin: 4px 0 2px; }
 .inhuman { color: var(--red); font-style: italic; }
 .found { font-family: var(--sans); font-size: 12px; color: #b8a27a; margin: 6px 0; }
+.narrator { font-style: italic; color: var(--ink2); font-size: 14px; line-height: 1.8; margin: 14px 0 6px; border-left: 1px solid var(--amber); padding-left: 12px; }
+.why { font-size: 14px; line-height: 1.8; color: #c9b38a; margin: 14px 0; font-style: italic; }
