@@ -51,10 +51,16 @@
     const st = (label, v, bad) => `<span class="${bad ? "bad" : ""}">${label}<b>${v}</b></span>`;
     return `<header class="jhead"><div class="top"><span><b>남행</b>  ${s.day}일째</span><span>${btn("가방", "sheet", 'data-sheet="bag" class="mini"')} ${btn("기록", "sheet", 'data-sheet="chron" class="mini"')} ${btn("새로", "sheet", 'data-sheet="new" class="mini"')}</span></div>
       <div class="jstats">${st("몸", E.HP[s.me.hp], s.me.hp >= 2)}${st("배", E.fullLabel(s.me.full ?? 5), (s.me.full ?? 5) <= 2)}${st("체온", E.COLD[s.me.cold], s.me.cold >= 2)}${st("식량", s.food, s.food < 2)}${st("연료", s.fuel, s.fuel < 1)}${st("열차", left > 0 ? `${left}일 뒤쯤` : left === 0 ? "오늘 밤" : "지나갔다", left <= 1)}</div>
+      <div class="clocks"><span>의지 <b class="dots">${"●".repeat(s.will)}${"○".repeat(Math.max(0, 3 - s.will))}</b></span>${E.clocksView(s).map((c) => `<span class="${c.n >= c.max - 1 && c.k !== "clue" ? "hot" : ""}">${esc(c.name)} <b class="dots">${"●".repeat(c.n)}${"○".repeat(c.max - c.n)}</b></span>`).join("")}</div>
       ${E.live(s).length ? `<div class="jcomps">${E.live(s).map((c) => `<span>${face(c.id, 26)} ${esc(c.name)} <small>${E.HP[c.hp]}</small></span>`).join("")}</div>` : ""}</header>`;
   }
   // ── 지도 ──
   const ACTS = { 1: "1막 · 얼어붙은 마을들", 2: "2막 · 늑대단의 땅", 3: "3막 · 남쪽 산맥" };
+  function actCard() {
+    const a = E.adventure(state, state.actCard);
+    if (!a) return "";
+    return `<div class="veil night"><section class="modal actcard" role="dialog">${placeArt(state.act === 1 ? "gate_bridge" : state.act === 2 ? "gate_checkpoint" : "mountain_pass")}<h2 class="chapter">${esc(a.title)}</h2>${prose([a.goal])}<h3>필요해 보이는 것</h3><ul class="wall moments need">${a.need.map((n) => `<li class="${n.have ? "have" : ""}">${n.have ? "✔" : "·"} ${esc(n.label)}</li>`).join("")}</ul><p class="muted">하나만 있어도 길은 열린다. 없으면 대가를 치른다.</p>${btn("떠난다", "closeact", 'class="primary"')}</section></div>`;
+  }
   function mapView() {
     const s = state, cols = s.map[s.act] || [];
     const route = cols.map((col, i) => {
@@ -67,7 +73,7 @@
     const night = (s.lastNight || []).length ? `<p class="night">${s.lastNight.map(esc).join(" ")}</p>` : "";
     const g = E.goals(s);
     const goal = `<div class="goal"><b>${esc(g.title)}</b>${g.lines.map((l) => `<small>${esc(l)}</small>`).join("")}${btn("수첩 보기", "sheet", 'data-sheet="note" class="mini"')}</div>`;
-    return `${header()}<main class="jmain">${goal}<p class="act">${ACTS[s.act]}</p><ul class="route">${route}</ul>${night}<h3>어디로 갈까</h3><div class="nodes">${nodes}</div></main>${bar()}`;
+    return `${s.actCard ? actCard() : ""}${header()}<main class="jmain">${goal}<p class="act">${ACTS[s.act]}</p><ul class="route">${route}</ul>${night}<h3>어디로 갈까</h3><div class="nodes">${nodes}</div></main>${bar()}`;
   }
   function bar() {
     const over = E.bagCount(state) > E.BAG;
@@ -80,12 +86,21 @@
     const r = v.result;
     const head = `${art(v.art)}<div class="eyebrow">${esc(v.title)} · ${s.day}일째</div>${(s.found || []).length && !r ? `<p class="found">길에서 주운 것: ${s.found.map(esc).join(", ")}</p>` : ""}`;
     if (rolling) return `<div class="veil night"><section class="modal roll" role="dialog"><p class="picked">“${esc(rolling.label)}”</p><p class="roll-head">${esc(rolling.who)} · ${esc(rolling.stat)}</p><div class="dice">d20</div><p class="muted heartbeat">숨을 참는다…</p></section></div>`;
+    if (v.pending) {
+      const p = v.pending, canRe = !["win", "crit"].includes(p.tier) && s.will > 0;
+      return `<div class="veil night"><section class="modal result ${["win", "crit"].includes(p.tier) ? "win" : p.tier === "partial" ? "" : "lose flash"}" role="dialog">${head}<p class="picked">“${esc(p.label)}”</p><div class="roll-line"><span class="d20 ${p.r === 20 ? "crit" : p.r === 1 ? "fumble" : ""}">${p.r}</span><span class="calc">${esc(p.who)} ${esc(p.stat)} ${p.mod >= 0 ? "+" : "−"}${Math.abs(p.mod)}${p.bonus ? ` · 의지·도움 +${p.bonus}` : ""} = <b>${p.total}</b> <small>vs ${p.dc}</small></span></div><div class="verdict tier-${p.tier}">${esc(p.tierName)}</div><p class="muted">${p.tier === "partial" ? "해내긴 한다. 대신 무언가를 내줘야 한다." : ["lose", "fumble"].includes(p.tier) ? "이대로면 실패다." : "해냈다."}${p.rerolled ? ` (다시 굴림 ${p.rerolled}번)` : ""}</p>${canRe ? btn(`의지 1점으로 다시 굴린다 <small>남은 의지 ${s.will}</small>`, "reroll", 'class="secondary"') : ""}${btn("받아들인다", "accept", 'class="primary"')}</section></div>`;
+    }
+    if (r && r.cost) {
+      return `<div class="veil"><section class="modal result" role="dialog">${head}<div class="verdict tier-partial">대가를 치르는 성공</div>${prose([r.text])}${r.notes.map((n) => `<p class="note">${esc(n)}</p>`).join("")}<h3>무엇을 내줄까</h3><div class="choices">${v.costs.map((c) => btn(`<span>${esc(c.label)}</span><small class="${c.danger ? "why" : ""}">${esc(c.sub)}</small>`, "cost", `data-k="${c.k}"`)).join("")}</div></section></div>`;
+    }
     if (r) {
-      const dice = r.roll ? `<div class="roll-line"><span class="d20 ${r.roll.r === 20 ? "crit" : r.roll.r === 1 ? "fumble" : ""}">${r.roll.r}</span><span class="calc">${esc(r.roll.who)} ${esc(r.roll.stat)} +${r.roll.mod} = <b>${r.roll.r + r.roll.mod}</b> <small>vs ${r.roll.dc}</small></span></div><div class="verdict">${r.roll.ok ? "성공" : "실패"}</div>` : "";
+      const dice = r.roll ? `<div class="roll-line"><span class="d20 ${r.roll.r === 20 ? "crit" : r.roll.r === 1 ? "fumble" : ""}">${r.roll.r}</span><span class="calc">${esc(r.roll.who)} ${esc(r.roll.stat)} ${r.roll.mod >= 0 ? "+" : "−"}${Math.abs(r.roll.mod)} = <b>${r.roll.r + r.roll.mod}</b> <small>vs ${r.roll.dc}</small></span></div><div class="verdict tier-${r.roll.tier}">${esc(r.roll.tierName || (r.roll.ok ? "성공" : "실패"))}</div>` : "";
       return `<div class="veil"><section class="modal result ${r.roll && !r.roll.ok ? "lose flash" : "win"}" role="dialog">${head}${dice}${prose([r.text])}${r.notes.map((n) => `<p class="note">${esc(n)}</p>`).join("")}${btn(r.ending ? "결말" : "계속", "cont", 'class="primary"')}</section></div>`;
     }
     const choices = v.choices.map((c) => btn(`${c.tag ? `<em class="req ${c.lock ? "no" : "ok"}">[${esc(c.tag)}]</em> ` : ""}<span>${esc(c.label)}</span>${c.lock ? `<small class="why">${esc(c.lock)}</small>` : c.feel ? `<small><b class="feel f-${{ "해볼 만하다": "good", "반반이다": "mid", "위험하다": "bad", "무모하다": "awful" }[c.feel]}">${c.feel}</b> · ${esc(c.stat)} · ${esc(c.who)}</small>` : ""}`, "choose", `data-i="${c.i}" ${c.lock ? "disabled" : ""} class="${c.lock ? "locked" : c.tag ? "special" : ""}"`)).join("");
-    return `<div class="veil"><section class="modal scene" role="dialog">${head}${prose(v.text.split("\n\n"))}<div class="choices">${choices}</div></section></div>`;
+    const anyRoll = v.choices.some((c) => c.feel && !c.lock);
+    const boost = anyRoll ? `<div class="boost">${btn(v.useWill ? `의지를 건다 ✔ <small>+2 · 남은 의지 ${s.will}</small>` : `의지를 건다 <small>+2 · 남은 의지 ${s.will}</small>`, "will", `class="tg ${v.useWill ? "on" : ""}" ${s.will <= 0 && !v.useWill ? "disabled" : ""}`)}${v.helpers.map((h) => btn(v.help === h.id ? `${esc(h.name)}이(가) 돕는다 ✔ <small>+1 · 실패하면 함께 다친다</small>` : `${esc(h.name)}에게 도움을 청한다 <small>+1</small>`, "help", `data-id="${h.id}" class="tg ${v.help === h.id ? "on" : ""}"`)).join("")}</div>` : "";
+    return `<div class="veil"><section class="modal scene" role="dialog">${head}${prose(v.text.split("\n\n"))}${boost}<div class="choices">${choices}</div></section></div>`;
   }
   // ── 야영 ──
   function campView() {
@@ -167,6 +182,12 @@
       if (c.feel) { rolling = { label: c.label, who: c.who, stat: c.stat }; render(); setTimeout(() => { rolling = null; commit(E.choose(state, i)); }, 1500); }
       else commit(E.choose(state, i));
     }
+    else if (k === "reroll") { rolling = { label: E.view(state).pending.label, who: E.view(state).pending.who, stat: "다시" }; render(); setTimeout(() => { rolling = null; commit(E.reroll(state)); }, 1200); }
+    else if (k === "accept") commit(E.accept(state));
+    else if (k === "cost") commit(E.payCost(state, a.dataset.k));
+    else if (k === "will") commit(E.setWill(state));
+    else if (k === "help") commit(E.setHelp(state, a.dataset.id));
+    else if (k === "closeact") commit(E.closeAct(state));
     else if (k === "cont") { if (commit(E.cont(state))) window.scrollTo(0, 0); }
     else if (k === "feed") commit(E.campToggle(state, "feed", a.dataset.id));
     else if (k === "fire") commit(E.campToggle(state, "fire"));

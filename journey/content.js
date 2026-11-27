@@ -843,6 +843,27 @@
     bt_tA: "",
     bt_tB: "",
   };
+  // ── TRPG: 막마다 모험 하나 ──
+  const adventures = {
+    1: { title: "1막 · 다리를 건너라", goal: "남쪽으로 가는 길은 강 위의 끊어진 철교 하나뿐이다. 그 전에 건널 방법을 마련해야 한다.",
+      need: [{ item: "rope", label: "밧줄 — 끊긴 철골에 걸 수 있다" }, { companion: "maru", label: "마루 — 짐승만 다니는 길을 안다" }, { food: 2, label: "식량 둘 — 다리 지키는 자들의 통행세" }, { item: "gold_ring", label: "금반지 — 무엇이든 살 수 있다" }] },
+    2: { title: "2막 · 검문소를 넘어라", goal: "협곡을 늑대단 검문소가 막고 있다. 넘으려면 통과할 수단이 필요하다. 그리고 열차의 명단이 어디 있는지 알아내야 한다.",
+      need: [{ item: "wolf_token", label: "늑대 이빨 표식 — 암호를 대면 지나간다" }, { item: "liquor", label: "술 — 보초의 입을 막는다" }, { item: "cigarettes", label: "담배 — 뇌물" }, { fact: "dochi_saved", label: "도치 — 늑대단만 아는 길" }, { fact: "list_known", label: "명단의 행방" }] },
+    3: { title: "3막 · 선로 앞에서", goal: "산을 넘으면 목적지가 갈린다. 열차는 명단의 마흔만 태운다. 지금까지 모은 것으로 결판을 낸다.",
+      need: [{ item: "passenger_list", label: "탑승 명단 — 화물칸 문을 연다" }, { fact: "grandson_ok", label: "역장의 손자 — 하얀나루에서 문을 잡아 준다" }, { fact: "gave_medicine", label: "백곰의 빚 — 약값" }, { truths: 3, label: "그 겨울의 진실 셋 — 명단을 불태울 이유" }] },
+  };
+  // 늑대단 추적 시계가 다 차면: 백곰이 직접 나선다
+  const hunt = { id: "hunt", art: "event_rival", text: "썰매개 방울 소리가 사방에서 동시에 울린다. 눈보라 속에서 썰매 넷이 원을 그리며 다가온다. 맨 앞 썰매에서 흰 곰 털옷이 내린다. 백곰이다. 그가 웃는다. “소리가 너무 컸어. 설원 끝까지 다 들리더군.”", choices: [
+    C("맞서 싸운다", { check: ["force", 15], win: { t: "백곰의 썰매개 둘이 쓰러지자 늑대단이 주춤했다. 백곰이 손을 들었다. “오늘은 여기까지.” 그들이 물러났다.", fx: { wolves: -1 } }, lose: { t: "눈 위에 쓰러졌다. 그들이 짐을 뒤져 가져갔다. 백곰이 당신 귀에 속삭였다. “다음엔 짐이 아니야.”", fx: { hp: 2, food: -3 } } }),
+    C("[늑대 이빨 표식] 표식을 보이며 형제라 말한다", { req: { item: "wolf_token" }, check: ["talk", 12], win: { t: "백곰이 표식을 한참 들여다봤다. “…형제라.” 그가 썰매로 돌아갔다.", fx: { wolves: 1 } }, lose: { t: "“형제는 도망치지 않아.” 표식을 빼앗겼다.", fx: { take: "wolf_token", hp: 1 } } }),
+    C("가진 것을 내주고 물린다", { fx: { food: -3, fuel: -2 }, t: "자루가 썰매에 실렸다. 백곰이 당신 어깨를 두드렸다. “현명하군.” 그 손이 오래 남았다." }),
+    C("눈보라 속으로 흩어져 달아난다", { check: ["wits", 13], win: { t: "눈보라가 발자국을 지웠다. 방울 소리가 멀어졌다." }, lose: { t: "길을 잃고 하루를 헤맸다. 짐 일부도 버렸다.", fx: { day: 1, food: -1, cold: 1 } } }),
+  ] };
+  // 눈보라 시계가 다 차면: 길이 막힌다
+  const stormBlock = { id: "storm_block", art: "sp_whiteout", text: "아침부터 하늘이 내려앉았다. 사흘 동안 쌓인 바람이 한꺼번에 쏟아진다. 눈보라. 한 걸음 앞도 보이지 않는다. 오늘은 갈 수 없다.", choices: [
+    C("움직이지 않고 버틴다 (하루를 잃는다)", { fx: { day: 1, cold: 1 }, t: "하루 종일 눈굴 안에서 서로의 숨소리만 들었다." }),
+    C("그래도 간다", { check: ["force", 14], win: { t: "얼굴이 찢어질 것 같았다. 그래도 하루를 잃지 않았다." }, lose: { t: "눈보라가 당신을 삼켰다. 겨우 기어 돌아왔다.", fx: { hp: 1, cold: 2, day: 1 } } }),
+  ] };
   // 진실 조각 (여러 판에 걸쳐 모은다)
   const truths = {
     radio: { name: "무전의 목소리", text: "딸의 목소리는 3년 전 녹음이었고, 그걸 틀던 건 명단을 쥔 자들이었다." },
@@ -852,7 +873,7 @@
     pilot: { name: "마흔의 비행", text: "구조 비행은 처음부터 명단의 마흔만 태우러 왔다. 명단 밖은 없었다." },
   };
 
-  const api = { items, recipes, origins, people, cast, places, events, premises, originBeats, climax, endings, setpieces, memory, confront, narrators, road, pastSelf, truths, spine, travel, roadTalk, reacts, leads };
+  const api = { items, recipes, origins, people, cast, places, events, premises, originBeats, climax, endings, setpieces, memory, confront, narrators, road, pastSelf, truths, spine, travel, roadTalk, reacts, leads, adventures, hunt, stormBlock };
   root.JourneyContent = api;
   if (typeof module !== "undefined") module.exports = api;
 })(globalThis);

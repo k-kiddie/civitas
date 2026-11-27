@@ -12,7 +12,8 @@ function bot(seed, origin, style = "smart", legacy = null) {
       const ok = E.options(s).filter((o) => !o.lock);
       s = E.go(s, (style === "random" ? ok[r(ok.length)] : ok.find((o) => o.dest && o.dest !== "station" && o.dest !== "valley" && o.dest !== "return") || ok.find((o) => o.dest === "station") || ok[r(ok.length)]).id).state;
     } else if (s.phase === "event") {
-      if (s.ev.result) { s = E.cont(s).state; continue; }
+      if (s.ev.pending) { const pd = s.ev.pending; s = (style === "smart" && ["lose", "fumble"].includes(pd.tier) && s.will > 0 && !pd.rerolled ? E.reroll(s) : E.accept(s)).state; continue; }
+      if (s.ev.result) { if (s.ev.result.cost) { const cs = E.view(s).costs; const k = style === "random" ? cs[r(cs.length)].k : (cs.find((c) => c.k === "item") || cs.find((c) => c.k === "clock")).k; s = E.payCost(s, k).state; continue; } s = E.cont(s).state; continue; }
       const v = E.view(s), ok = v.choices.filter((c) => !c.lock);
       if (!ok.length) throw Error("고를 것이 없음 " + v.text.slice(0, 40));
       const FEEL = { 해볼만하다: 3 };
