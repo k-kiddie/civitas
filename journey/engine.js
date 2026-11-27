@@ -34,9 +34,10 @@
       facts: {}, clues: { bt: 0, hk: 0, fs: 0 }, human: 60, wolves: 0, debts: [], journal: [], chronicle: [],
       map: {}, dir: null, ev: null, camp: null, ending: null, title: "", seen: {},
       evPick: {}, habit: { share: 0, harsh: 0, trust: 0 }, roadUsed: {},
+      will: 3, clocks: { wolves: 0, storm: 0, heart: 0 }, actCard: 0,
       legacy: { truths: (legacy && legacy.truths) || [], corpse: (legacy && legacy.corpse) || null },
     };
-    s.trainDay = 14 + Math.floor(rnd(s) * 2);
+    s.trainDay = 15 + Math.floor(rnd(s) * 2);
     for (const k of o.items) addItem(s, k);
     if (o.randomItems) for (const k of shuffle(s, ["rope", "knife", "lamp", "crowbar", "lighter", "bandage", "liquor", "cigarettes", "cloth"]).slice(0, o.randomItems)) addItem(s, k);
     // 지도: 막마다 4걸음(걸음마다 2~3곳) + 관문
@@ -198,6 +199,8 @@
     s.found = found;
     const q = [];
     if (!s.dir.premise && (s.act > 1 || s.step >= 1)) decidePremise(s);
+    s.actCard = 0;
+    if (!p.dest) s.clocks.storm += 1;
     // 동행이 마음이 상하면 길을 막아선다
     const angry = live(s).find((c) => c.trust <= -0.5 && !c.confronted);
     if (angry) { angry.confronted = true; q.push({ kind: "confront", id: angry.id }); }
@@ -216,6 +219,10 @@
     const evId = s.evPick[id] || p.ev;
     if (evId && !C.events[evId].climax) q.push({ kind: "place", id: evId });
     if (p.dest) q.push({ kind: "climax", dest: p.dest });
+    // 시계가 다 차면 이야기가 터진다
+    if (s.clocks.storm >= CLOCK.storm.max && !p.dest) { s.clocks.storm = 0; q.unshift({ kind: "beat", beat: C.stormBlock }); }
+    if (s.clocks.wolves >= CLOCK.wolves.max && s.dir.premise !== null && !s.facts.baekgom_down) { s.clocks.wolves = 2; q.unshift({ kind: "beat", beat: C.hunt }); }
+    if (s.clocks.heart >= CLOCK.heart.max && live(s).length) { s.clocks.heart = 0; const c = live(s).slice().sort((a, b) => a.trust - b.trust)[0]; c.trust = Math.min(c.trust, -0.5); q.push({ kind: "confront", id: c.id }); }
     s.ev = { queue: q, cur: null, result: null, lead: p.dest || p.gate ? "" : travelText(s) };
     if (s.ev.lead) s.chronicle.push({ day: s.day, title: "길", paras: [s.ev.lead] });
     s.phase = "event";
@@ -341,6 +348,10 @@
     return {
       kind: c.kind, title: c.kind === "climax" ? C.climax[c.dest].name : C.places[s.place].name,
       text: [...pre.map((t) => fill(s, t)), fill(s, sc.text)].join("\n\n"), art: artOf(s), result: s.ev.result,
+      pending: s.ev.pending ? { ...s.ev.pending, total: s.ev.pending.r + s.ev.pending.mod + s.ev.pending.bonus, tierName: TIER[s.ev.pending.tier] } : null,
+      will: s.will, useWill: !!s.ev.useWill, help: s.ev.help || null,
+      helpers: live(s).filter((c) => c.trust >= 1 && c.hp <= 1).map((c) => ({ id: c.id, name: c.name })),
+      costs: s.ev.result?.cost ? costOptions(s) : null,
       choices: (sc.choices || []).map((ch, i) => {
         const lock = reqState(s, ch.req);
         const tag = ch.label.match(/^\[([^\]]+)\]/)?.[1] || "";
@@ -349,18 +360,45 @@
       }),
     };
   }
+  // ── TRPG 판정: 굴린다 → (의지로 다시 굴릴 수 있다) → 받아들인다 → 완전 성공 / 대가를 치르는 성공 / 실패 ──
+  const CLOCK = { wolves: { name: "늑대단 추적", max: 6 }, storm: { name: "눈보라", max: 5 }, heart: { name: "동행의 마음", max: 4 } };
+  const tierOf = (r, m, dc) => (r === 20 ? "crit" : r === 1 ? "fumble" : r + m >= dc ? "win" : r + m >= dc - 3 ? "partial" : "lose");
+  const TIER = { crit: "대성공", win: "성공", partial: "대가를 치르는 성공", lose: "실패", fumble: "대실패" };
   function choose(state, i) {
-    if (state.phase !== "event" || !state.ev?.cur || state.ev.result) return { state, error: "고를 것이 없다." };
+    if (state.phase !== "event" || !state.ev?.cur || state.ev.result || state.ev.pending) return { state, error: "고를 것이 없다." };
     const sc0 = sceneOf(state), ch0 = sc0.choices[i];
     if (!ch0) return { state, error: "없는 선택이다." };
     const lock = reqState(state, ch0.req);
     if (lock) return { state, error: lock };
-    const s = clone(state), sc = sceneOf(s), ch = sc.choices[i], notes = [];
+    const s = clone(state), sc = sceneOf(s), ch = sc.choices[i];
+    if (!ch.check) return resolve(s, i, null);
+    const info = chance(s, ch), useWill = s.ev.useWill && s.will > 0, helper = s.ev.help && live(s).some((c) => c.id === s.ev.help) ? s.ev.help : null;
+    if (useWill) s.will -= 1;
+    const bonus = (useWill ? 2 : 0) + (helper ? 1 : 0), r = d20(s);
+    s.ev.pending = { i, r, mod: info.mod, bonus, dc: info.dc, who: info.r.name, stat: STATS[ch.check[0]], help: helper, label: fill(s, ch.label.replace(/^\[[^\]]+\]\s*/, "")), tier: tierOf(r, info.mod + bonus, info.dc), rerolled: 0 };
+    s.ev.useWill = false; s.ev.help = null;
+    return { state: s };
+  }
+  function reroll(state) {
+    const p = state.ev?.pending;
+    if (!p || ["win", "crit"].includes(p.tier)) return { state, error: "다시 굴릴 필요가 없다." };
+    if (state.will <= 0) return { state, error: "의지가 남아 있지 않다." };
+    const s = clone(state), q = s.ev.pending;
+    s.will -= 1; q.r = d20(s); q.rerolled += 1; q.tier = tierOf(q.r, q.mod + q.bonus, q.dc);
+    return { state: s };
+  }
+  function accept(state) {
+    if (!state.ev?.pending) return { state, error: "굴린 주사위가 없다." };
+    const s = clone(state), p = s.ev.pending;
+    s.ev.pending = null;
+    return resolve(s, p.i, p);
+  }
+  function resolve(s, i, p) {
+    const sc = sceneOf(s), ch = sc.choices[i], notes = [];
     let out = { t: ch.t, fx: ch.fx, go: ch.go }, roll = null;
-    if (ch.check) {
-      const info = chance(s, ch), r = d20(s), ok = r === 20 || (r !== 1 && r + info.mod >= info.dc);
-      roll = { r, mod: info.mod, dc: info.dc, ok, who: info.r.name, stat: STATS[ch.check[0]] };
-      const o = ok ? ch.win : ch.lose;
+    if (p) {
+      const ok = ["crit", "win", "partial"].includes(p.tier), o = ok ? ch.win : ch.lose;
+      roll = { r: p.r, mod: p.mod + p.bonus, dc: p.dc, ok, who: p.who, stat: p.stat, tier: p.tier, tierName: TIER[p.tier] };
       out = { t: o?.t, fx: { ...(ch.fx || {}), ...(o?.fx || {}) }, go: o?.go ?? ch.go };
     }
     if (ch.check && ch.check[0] === "force") s.effort = (s.effort || 0) + 1;
@@ -368,17 +406,60 @@
     applyFx(s, out.fx || {}, notes);
     const cur = s.ev.cur;
     if (cur.kind === "beat") { const tw = cur.beat.onTwist; if (tw) twistAfter(s, tw); }
+    // 실패해도 이야기는 앞으로 간다: 대가 없는 실패는 시계를 채운다
+    if (p && ["lose", "fumble"].includes(p.tier)) {
+      const fx = out.fx || {};
+      if (!(fx.hp || fx.day || fx.cold || (fx.food || 0) < 0 || fx.take || fx.ending)) { const k = s.act >= 2 ? "wolves" : "storm"; s.clocks[k] += 1; notes.push(k === "wolves" ? "실패의 대가: 소란이 퍼졌다. 늑대단 추적 +1" : "실패의 대가: 시간을 잃었다. 눈보라가 한 칸 가까워졌다"); }
+      if (p.tier === "fumble") { s.me.hp = Math.min(4, s.me.hp + 1); notes.push(`대실패: 당신도 다쳤다 (${HP[s.me.hp]})`); }
+      if (p.help) { const h = comp(s, p.help); if (h && h.alive) { h.hp = Math.min(4, h.hp + 1); notes.push(`${h.name}도 다쳤다. 당신을 돕다가.`); } }
+    }
+    if (p && p.tier === "crit") { s.will = Math.min(3, s.will + 1); notes.push("대성공: 기세가 올랐다. 의지 +1"); }
+    if (p && p.help && ["win", "crit", "partial"].includes(p.tier)) { const h = comp(s, p.help); if (h) h.trust += 0.5; }
     const JOIN_T = { maru: "마루가 사냥총을 등에 메고 당신 곁에 섰다. 말은 없었다. 그걸로 충분했다.", hanbyeol: "한별이 담요를 여미며 웃었다. “좋아요. 하늘길은 제가 볼게요.”", hyean: "혜안이 고개를 숙이고 당신 뒤에 섰다. 발소리가 눈 위에서 거의 나지 않았다.", eunseo: "은서가 공책을 품에 넣고 따라나섰다. “바람은 제가 읽을게요.”" };
     const text = fill(s, out.t || (out.fx?.join && JOIN_T[out.fx.join]) || "");
     if (out.fx?.clue) (s.sus = s.sus || []).push({ day: s.day, text, mine: out.fx.clue === CLUE_OF[s.dir.premise] });
-    const v0 = view(state);
-    s.chronicle.push({ day: s.day, title: v0.title, paras: [...v0.text.split("\n\n").filter((t) => !s.chronicle.some((x) => x.title === "길" && x.paras[0] === t)), `“${fill(s, ch.label.replace(/^\[[^\]]+\]\s*/, ""))}” — ${text}`].filter(Boolean) });
+    const v0 = view(s);
+    s.chronicle.push({ day: s.day, title: v0.title, paras: [...v0.text.split("\n\n").filter((t) => !s.chronicle.some((x) => x.title === "길" && x.paras[0] === t)), `“${fill(s, ch.label.replace(/^\[[^\]]+\]\s*/, ""))}” — ${p ? `(${TIER[p.tier]}) ` : ""}${text}`].filter(Boolean) });
     const hv = out.fx?.human || 0;
     if (Math.abs(hv) >= 4 && live(s).length) { const c = pick(s, live(s)); if (C.reacts[c.id]) notes.push(C.reacts[c.id][hv > 0 ? "good" : "bad"]); }
-    s.ev.result = { text, notes, roll, go: out.go || null, ending: out.fx?.ending || null };
-    if (s.me.hp >= 4) { s.ev.result.ending = "frozen"; }
+    s.ev.result = { text, notes, roll, go: out.go || null, ending: out.fx?.ending || null, cost: !!(p && p.tier === "partial" && !out.fx?.ending) };
+    if (s.me.hp >= 4) { s.ev.result.ending = "frozen"; s.ev.result.cost = false; }
     return { state: s };
   }
+  // 대가를 치르는 성공: 무엇을 잃을지 고른다
+  function costOptions(s) {
+    const out = [];
+    if (bagCount(s) > 0) out.push({ k: "item", label: "짐 하나를 잃는다", sub: "가방에서 무언가 떨어져 나갔다" });
+    out.push({ k: "hurt", label: "상처를 입는다", sub: `몸: ${HP[s.me.hp]} → ${HP[Math.min(4, s.me.hp + 1)]}`, danger: s.me.hp >= 2 });
+    out.push({ k: "day", label: "하루를 잃는다", sub: `열차까지 ${s.trainDay - s.day - 1}일이 된다` });
+    const ck = s.act >= 2 ? "wolves" : "storm";
+    out.push({ k: "clock", label: s.act >= 2 ? "소란을 남긴다" : "눈보라에 쫓긴다", sub: `${CLOCK[ck].name} +1 (${s.clocks[ck] + 1}/${CLOCK[ck].max})` });
+    return out;
+  }
+  function payCost(state, k) {
+    if (!state.ev?.result?.cost) return { state, error: "치를 대가가 없다." };
+    const s = clone(state), r = s.ev.result;
+    if (k === "item") { const xs = s.bag.filter((b) => !C.items[b.k]?.key); if (!xs.length) return { state, error: "잃을 짐이 없다." }; const b = pick(s, xs); takeItem(s, b.k); r.notes.push(`대가: ${C.items[b.k].name}을(를) 잃었다.`); }
+    else if (k === "hurt") { s.me.hp = Math.min(4, s.me.hp + 1); r.notes.push(`대가: 다쳤다 (${HP[s.me.hp]}).`); if (s.me.hp >= 4) r.ending = "frozen"; }
+    else if (k === "day") { s.day += 1; r.notes.push("대가: 하루를 잃었다."); }
+    else if (k === "clock") { const ck = s.act >= 2 ? "wolves" : "storm"; s.clocks[ck] += 1; r.notes.push(`대가: ${CLOCK[ck].name} +1`); }
+    else return { state, error: "모르는 대가다." };
+    r.cost = false;
+    return { state: s };
+  }
+  const setWill = (state) => { if (!state.ev || state.ev.result || state.ev.pending) return { state, error: "지금은 안 된다." }; if (state.will <= 0 && !state.ev.useWill) return { state, error: "의지가 남아 있지 않다." }; const s = clone(state); s.ev.useWill = !s.ev.useWill; return { state: s }; };
+  const setHelp = (state, id) => { if (!state.ev || state.ev.result || state.ev.pending) return { state, error: "지금은 안 된다." }; const c = live(state).find((x) => x.id === id); if (!c || c.trust < 1 || c.hp >= 2) return { state, error: "도와줄 수 있는 사람이 없다." }; const s = clone(state); s.ev.help = s.ev.help === id ? null : id; return { state: s }; };
+  function clocksView(s) {
+    const out = Object.entries(CLOCK).map(([k, d]) => ({ k, name: d.name, n: Math.min(d.max, s.clocks?.[k] || 0), max: d.max }));
+    if (s.dir.premise) out.push({ k: "clue", name: "알아챈 것", n: Math.min(3, s.clues[CLUE_OF[s.dir.premise]] || 0), max: 3 });
+    return out;
+  }
+  function adventure(s, act) {
+    const a = C.adventures[act];
+    if (!a) return null;
+    return { ...a, need: a.need.map((n) => ({ label: n.label, have: n.item ? hasItem(s, n.item) : n.companion ? live(s).some((c) => c.id === n.companion) : n.food ? s.food >= n.food : n.fact ? !!s.facts[n.fact] : n.truths ? allTruths(s).length >= n.truths : false })) };
+  }
+  const closeAct = (state) => { const s = clone(state); s.actCard = 0; return { state: s }; };
   // 반전 뒤처리: 배신자가 떠나거나 남는다
   function twistAfter(s, tw) {
     const id = s.dir.roles.traitor;
@@ -388,6 +469,7 @@
   }
   function cont(state) {
     if (state.phase !== "event" || !state.ev?.result) return { state, error: "계속할 수 없다." };
+    if (state.ev.result.cost) return { state, error: "대가를 먼저 고르세요." };
     const s = clone(state), r = s.ev.result;
     if (r.ending) return finish(s, r.ending);
     if (r.go) { s.ev.cur.scene = r.go; s.ev.result = null; return { state: s }; }
@@ -403,10 +485,11 @@
     if (fx.human) {
       s.human = clamp(s.human + fx.human, 0, 100);
       if (fx.human > 0) s.habit.share += 1; else s.habit.harsh += 1;
+      if (fx.human <= -4 && live(s).length) s.clocks.heart += 1;
       // 마음 약한 동행은 당신의 잔인함을 기억하고, 거친 동행은 개의치 않는다
       for (const c of live(s)) if (C.people[c.id].heart === "kind") c.trust += fx.human <= -8 ? -1 : fx.human < 0 ? -0.5 : 0.5;
     }
-    if (fx.wolves) s.wolves = clamp(s.wolves + fx.wolves, -3, 3);
+    if (fx.wolves) { s.wolves = clamp(s.wolves + fx.wolves, -3, 3); if (fx.wolves < 0) s.clocks.wolves += -fx.wolves; }
     for (const k of [].concat(fx.item || [])) addItem(s, k, notes);
     if (fx.take) takeItem(s, fx.take);
     for (const f of [fx.fact, fx.fact2].filter(Boolean)) s.facts[f] = s.day;
@@ -731,19 +814,21 @@
       else if (p.trust <= -2.5) { p.gone = true; lines.push(`아침에 보니 ${p.name}의 자리가 비어 있다. 떠났다.`); jr(s, `${p.name}이(가) 떠났다.`, 3); }
     }
     s.chronicle.push({ day: s.day, title: "야영", paras: [c.fire ? "작은 불 앞에서 밤을 보냈다." : "불 없이 밤을 보냈다. 이가 딱딱 부딪혔다.", ...lines] });
+    s.will = Math.min(3, s.will + (s.me.full >= 5 && c.fire ? 2 : 1));
+    if (live(s).some((p) => !c.feed[p.id])) s.clocks.heart += 1;
     s.camp = null;
     s.effort = 0;
     if (s.me.hp >= 4) return finish(s, "frozen");
     // 다음 걸음
     s.step += 1;
-    if (s.step >= (s.map[s.act] || []).length) { s.act += 1; s.step = 0; }
+    if (s.step >= (s.map[s.act] || []).length) { s.act += 1; s.step = 0; s.actCard = s.act; }
     s.phase = "map";
     s.lastNight = lines;
     return { state: s };
   }
   function begin(state) {
     if (state.phase !== "intro") return { state, error: "이미 시작했다." };
-    const s = clone(state); s.phase = "map"; return { state: s };
+    const s = clone(state); s.phase = "map"; s.actCard = 1; return { state: s };
   }
   function validate(s) {
     if (!s || s.v !== 1 || !C.origins[s.origin] || !Array.isArray(s.bag) || !s.map || !s.dir) throw Error("저장이 손상되었다.");
@@ -751,6 +836,9 @@
     c.evPick = c.evPick || {};
     c.habit = c.habit || { share: 0, harsh: 0, trust: 0 };
     c.roadUsed = c.roadUsed || {};
+    if (c.will === undefined) c.will = 3;
+    c.clocks = c.clocks || { wolves: 0, storm: 0, heart: 0 };
+    if (c.actCard === undefined) c.actCard = 0;
     if (c.me.full === undefined) c.me.full = 7 - 2 * (c.me.hunger || 0);
     for (const x of c.comps) if (x.full === undefined) x.full = 7 - 2 * (x.hunger || 0);
     if (c.camp) for (const k of Object.keys(c.camp.feed)) c.camp.feed[k] = c.camp.feed[k] === true ? 1 : c.camp.feed[k] || 0;
@@ -768,7 +856,7 @@
       return ch + (jong ? a : b);
     });
   }
-  const api = { newGame, begin, options, go, view, choose, cont, campToggle, useItem, drop, craft, sleep, validate, live, hasItem, allTruths, bagCount, fullLabel, mealForecast, goals, notebook, josa, BAG, HP, HUNGER, COLD, STATS, C, premiseOf, fill };
+  const api = { newGame, begin, options, go, view, choose, cont, campToggle, useItem, drop, craft, sleep, validate, live, hasItem, allTruths, reroll, accept, payCost, setWill, setHelp, clocksView, adventure, closeAct, TIER, bagCount, fullLabel, mealForecast, goals, notebook, josa, BAG, HP, HUNGER, COLD, STATS, C, premiseOf, fill };
   root.JourneyEngine = api;
   if (typeof module !== "undefined") module.exports = api;
 })(globalThis);

@@ -3,6 +3,14 @@
 const assert = require("node:assert/strict");
 const E = require("../journey/engine"), C = require("../journey/content");
 const { bot } = require("./sim-journey");
+// 사건 한 걸음: 굴린 주사위는 받아들이고, 대가는 첫 번째로 치르고, 결과는 넘긴다
+function stepEvent(g, pickChoice) {
+  if (g.ev.pending) return E.accept(g).state;
+  const v = E.view(g);
+  if (v.result) return v.result.cost ? E.payCost(g, v.costs[0].k).state : E.cont(g).state;
+  const c = pickChoice ? pickChoice(v) : null;
+  return E.choose(g, c ? c.i : v.choices.find((x) => !x.lock).i).state;
+}
 // 콘텐츠: 모든 선택의 물건·다음 장면·조건이 실제로 있다
 const checkChoice = (where, ch, scenes) => {
   for (const o of [ch, ch.win, ch.lose].filter(Boolean)) {
@@ -39,12 +47,10 @@ assert.deepEqual(a1, E.go(JSON.parse(raw), first.id).state, "결정성");
 assert.equal(a1.phase, "event");
 // 잠긴 선택은 고를 수 없다
 let e = a1, guard = 0;
-while (e.phase === "event" && guard++ < 20) {
+while (e.phase === "event" && guard++ < 30) {
   const v = E.view(e);
-  if (v.result) { e = E.cont(e).state; continue; }
-  const locked = v.choices.find((c) => c.lock);
-  if (locked) assert(E.choose(e, locked.i).error, "잠긴 선택 거부");
-  e = E.choose(e, v.choices.find((c) => !c.lock).i).state;
+  if (!v.result && !e.ev.pending) { const locked = v.choices.find((c) => c.lock); if (locked) assert(E.choose(e, locked.i).error, "잠긴 선택 거부"); }
+  e = stepEvent(e);
 }
 assert.equal(e.phase, "camp", "사건이 끝나면 야영");
 // 가방이 넘치면 떠날 수 없다
@@ -80,12 +86,7 @@ assert.throws(() => E.validate({ v: 0 }));
   g.act = 3; g.step = 1; g.facts.baekgom_down = 1; g.day = 5; g.dir.premise = "betrayal"; g.dir.pending = [];
   g = E.go(g, "station_whiteferry").state;
   let guard = 0;
-  while (g.phase === "event" && guard++ < 10) {
-    const v = E.view(g);
-    if (v.result) { g = E.cont(g).state; continue; }
-    const king = v.choices.find((c) => /이제 내가 백곰/.test(c.label));
-    g = E.choose(g, king && !king.lock ? king.i : v.choices.find((c) => !c.lock).i).state;
-  }
+  while (g.phase === "event" && guard++ < 20) g = stepEvent(g, (v) => { const k = v.choices.find((c) => /이제 내가 백곰/.test(c.label)); return k && !k.lock ? k : null; });
   assert.equal(g.ending.key, "king", "설원의 왕");
   assert.match(g.narrator, /늑대단의 아이들/);
 }
@@ -99,12 +100,45 @@ assert.throws(() => E.validate({ v: 0 }));
   assert.equal(E.allTruths(g).length, 3);
   let h = E.begin(g).state; h.act = 3; h.step = 1; h.day = 5; h.dir.premise = "betrayal"; h.dir.pending = [];
   h = E.go(h, "station_whiteferry").state; let guard = 0;
-  while (h.phase === "event" && guard++ < 10) { const v = E.view(h); if (v.result) { h = E.cont(h).state; continue; } const o = v.choices.find((c) => /불길에 던진다/.test(c.label)); h = E.choose(h, o && !o.lock ? o.i : v.choices.find((c) => !c.lock).i).state; }
+  while (h.phase === "event" && guard++ < 20) h = stepEvent(h, (v) => { const o = v.choices.find((c) => /불길에 던진다/.test(c.label)); return o && !o.lock ? o : null; });
   assert.equal(h.ending.key, "open", "모두의 열차");
   const pilot = E.begin(E.newGame({ origin: "pilot", seed: 4 })).state; pilot.act = 3; pilot.step = 1;
   assert(E.options(pilot).some((o) => o.dest === "sky"), "조종사는 비행장이 보인다");
   const par = E.begin(E.newGame({ origin: "parent", seed: 4 })).state; par.act = 3; par.step = 1;
   assert(!E.options(par).some((o) => o.dest === "sky" || o.dest === "signal"), "부모는 단서 없이는 비행장·관측소가 안 보인다");
+}
+// TRPG: 굴림 → 다시 굴리기(의지) → 3단계 결과 → 대가 고르기, 시계
+{
+  let g = E.begin(E.newGame({ origin: "deserter", seed: 12 })).state;
+  assert.equal(g.actCard, 1, "1막 소개");
+  g = E.go(g, E.options(g)[0].id).state;
+  assert.equal(g.actCard, 0);
+  let guard = 0, sawPending = false;
+  while (g.phase === "event" && guard++ < 30) {
+    const v = E.view(g);
+    if (!v.result && !g.ev.pending && v.choices.some((c) => c.feel && !c.lock)) {
+      g = E.setWill(g).state; assert(g.ev.useWill);
+      const w = g.will; g = E.choose(g, v.choices.find((c) => c.feel && !c.lock).i).state;
+      assert.equal(g.will, w - 1, "의지를 쓰면 1점 줄고"); assert.equal(g.ev.pending.bonus >= 2, true, "+2");
+      sawPending = true; break;
+    }
+    g = stepEvent(g);
+  }
+  assert(sawPending, "판정이 있는 장면");
+  // 대가를 치르는 성공
+  const p = JSON.parse(JSON.stringify(g)); p.ev.pending.tier = "partial";
+  let r = E.accept(p).state; assert(r.ev.result.cost, "대가를 골라야 한다"); assert(E.cont(r).error);
+  const costs = E.view(r).costs; assert(costs.length >= 3);
+  const day0 = r.day; r = E.payCost(r, "day").state; assert.equal(r.day, day0 + 1); assert(!r.ev.result.cost);
+  // 실패는 시계를 채운다(대가 없는 실패일 때)
+  assert(E.clocksView(r).length >= 3);
+  // 늑대단 추적 시계가 다 차면 백곰이 나타난다
+  let h = E.begin(E.newGame({ origin: "parent", seed: 13 })).state; h.clocks.wolves = 6; h.dir.premise = "betrayal"; h.dir.pending = [];
+  h = E.go(h, E.options(h)[0].id).state; assert.equal(h.ev.cur.beat?.id, "hunt", "백곰의 사냥");
+  // 눈보라 시계
+  let w = E.begin(E.newGame({ origin: "parent", seed: 14 })).state; w.clocks.storm = 4; w.dir.pending = [];
+  w = E.go(w, E.options(w)[0].id).state; assert.equal(w.ev.cur.beat?.id, "storm_block", "눈보라로 길이 막힌다");
+  assert(E.adventure(w, 2).need.length >= 3);
 }
 // 결말 보강: 조사, 명단 줄기, 수첩
 {

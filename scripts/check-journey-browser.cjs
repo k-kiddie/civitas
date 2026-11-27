@@ -19,6 +19,9 @@ const assert = require("node:assert/strict");
       if (await has(".ending")) break;
       if (await has(".roll")) { await page.waitForTimeout(1600); continue; }
       if (await has("[data-action=begin]")) { await shot("intro"); await page.click("[data-action=begin]"); continue; }
+      if (await has("[data-action=closeact]")) { await shot("act"); await page.click("[data-action=closeact]"); continue; }
+      if (await has("[data-action=accept]")) { await shot("roll"); await page.click("[data-action=accept]"); continue; }
+      if (await has("[data-action=cost]")) { await shot("cost"); await page.locator("[data-action=cost]").last().click(); continue; }
       if (await has("[data-action=cont]")) { await page.click("[data-action=cont]"); continue; }
       if (await has("[data-action=choose]:not(:disabled)")) { await shot("event"); await page.locator("[data-action=choose]:not(:disabled)").first().click(); continue; }
       if (await has(".sheet [data-action=drop]") && await has(".slots.over")) { await page.locator("[data-action=drop]").first().click(); continue; }
