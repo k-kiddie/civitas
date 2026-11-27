@@ -19,6 +19,7 @@ const assert = require("node:assert/strict");
       if (await has(".ending")) break;
       if (await has(".roll")) { await page.waitForTimeout(1600); continue; }
       if (await has("[data-action=begin]")) { await shot("intro"); await page.click("[data-action=begin]"); continue; }
+      if (await has("[data-action=trait]")) { await shot("trait"); await page.locator("[data-action=trait]").first().click(); continue; }
       if (await has("[data-action=closeact]")) { await shot("act"); await page.click("[data-action=closeact]"); continue; }
       if (await has("[data-action=accept]")) { await shot("roll"); await page.click("[data-action=accept]"); continue; }
       if (await has("[data-action=cost]")) { await shot("cost"); await page.locator("[data-action=cost]").last().click(); continue; }
