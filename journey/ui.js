@@ -1,0 +1,167 @@
+"use strict";
+// 「남행」 화면. 표지(출신 고르기) → 지도 → 사건 → 야영 → … → 결말
+(function () {
+  const E = JourneyEngine, C = E.C, app = document.querySelector("#app");
+  const SAVE = "civitas-journey-v1";
+  const store = {
+    get() { try { return JSON.parse(localStorage.getItem(SAVE)); } catch { return null; } },
+    set(v) { try { localStorage.setItem(SAVE, JSON.stringify(v)); } catch {} },
+  };
+  let state = null, sheet = null, toast = "", pickOrigin = "parent", rolling = null, lastTap = 0;
+  try { const v = store.get(); if (v) state = E.validate(v); } catch { toast = "저장이 손상되어 새로 시작합니다."; }
+  const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  const btn = (label, action, attrs = "") => `<button type="button" data-action="${action}" ${attrs}>${label}</button>`;
+  const prose = (list) => `<div class="prose">${list.filter(Boolean).map((t, i) => `<p style="--i:${i}">${esc(t)}</p>`).join("")}</div>`;
+  // ── 그림: 여정 그림이 없으면 빙하기 그림, 그것도 없으면 어두운 바탕 ──
+  const A = "../assets/";
+  const SKY = `linear-gradient(#1d2a33,#0d0c0a)`;
+  function art(a, cls = "banner") {
+    const urls = [`${A}journey/${a.dir || "places"}/${a.key}.webp`, a.fb ? `${A}scenarios/iceage/scenes/${a.fb}.webp` : ""].filter(Boolean);
+    return `<div class="art ${cls}" style='background-image:${urls.map((u) => `url("${u}")`).join(",")},${SKY}'></div>`;
+  }
+  const placeArt = (id, cls) => { const p = C.places[id]; return art({ key: p.art, fb: p.fb, dir: "places" }, cls); };
+  function face(id, size = 32) {
+    const p = C.people[id];
+    const urls = p ? [`${A}journey/people/${id}.webp`, `${A}scenarios/iceage/portraits/${p.art}.webp`] : [`${A}journey/people/${state.origin}_m.webp`, `${A}scenarios/iceage/portraits/leader.webp`];
+    return `<span class="pt" style='width:${size}px;height:${size}px;background-image:${urls.map((u) => `url("${u}")`).join(",")},${SKY}'></span>`;
+  }
+  const itemArt = (k) => `<span class="ithumb" style='background-image:url("${A}journey/items/${k}.webp"),url("${A}gear/${k}.webp")'></span>`;
+  function commit(res) {
+    if (res.error) { toast = res.error; render(); return false; }
+    state = res.state; toast = ""; store.set(state); render(); return true;
+  }
+  // ── 머리말 ──
+  function header() {
+    const s = state, left = s.trainDay - s.day;
+    const st = (label, v, bad) => `<span class="${bad ? "bad" : ""}">${label}<b>${v}</b></span>`;
+    return `<header class="jhead"><div class="top"><span><b>남행</b>  ${s.day}일째</span><span>${btn("가방", "sheet", 'data-sheet="bag" class="mini"')} ${btn("기록", "sheet", 'data-sheet="chron" class="mini"')} ${btn("새로", "sheet", 'data-sheet="new" class="mini"')}</span></div>
+      <div class="jstats">${st("몸", E.HP[s.me.hp], s.me.hp >= 2)}${st("배", E.HUNGER[s.me.hunger], s.me.hunger >= 2)}${st("체온", E.COLD[s.me.cold], s.me.cold >= 2)}${st("식량", s.food, s.food < 2)}${st("연료", s.fuel, s.fuel < 1)}${st("열차", left > 0 ? `${left}일 뒤쯤` : left === 0 ? "오늘 밤" : "지나갔다", left <= 1)}</div>
+      ${E.live(s).length ? `<div class="jcomps">${E.live(s).map((c) => `<span>${face(c.id, 26)} ${esc(c.name)} <small>${E.HP[c.hp]}</small></span>`).join("")}</div>` : ""}</header>`;
+  }
+  // ── 지도 ──
+  const ACTS = { 1: "1막 · 얼어붙은 마을들", 2: "2막 · 늑대단의 땅", 3: "3막 · 남쪽 산맥" };
+  function mapView() {
+    const s = state, cols = s.map[s.act] || [];
+    const route = cols.map((col, i) => {
+      const visited = col.find((id) => s.seen[id]);
+      const cls = i < s.step ? "done" : i === s.step ? "now" : "";
+      const label = visited ? C.places[visited].name : i === s.step ? "지금 고를 길" : C.places[col[0]].gate ? C.places[col[0]].name : "…";
+      return `<li class="${cls} ${C.places[col[0]].gate ? "gate" : ""}">${esc(label)}</li>`;
+    }).join("");
+    const nodes = E.options(s).map((o) => btn(`${placeArt(o.id, "thumb")}<b>${esc(o.name)}</b><small>${o.lock ? esc(o.lock) : o.gate ? "관문 — 넘으면 돌아올 수 없다" : o.dest ? "마지막 목적지" : "하루가 걸린다"}</small>`, "go", `data-id="${o.id}" class="node ${o.gate ? "gate" : ""}" ${o.lock ? "disabled" : ""}`)).join("");
+    const night = (s.lastNight || []).length ? `<p class="night">${s.lastNight.map(esc).join(" ")}</p>` : "";
+    return `${header()}<main class="jmain"><p class="act">${ACTS[s.act]}</p><ul class="route">${route}</ul>${night}<h3>어디로 갈까</h3><div class="nodes">${nodes}</div></main>${bar()}`;
+  }
+  function bar() {
+    const over = state.bag.length > E.BAG;
+    return `<nav class="jbar">${btn(`가방 ${state.bag.length}/${E.BAG}`, "sheet", `data-sheet="bag" class="${over ? "warn" : ""}"`)}${btn("기록", "sheet", 'data-sheet="chron"')}</nav>`;
+  }
+  // ── 사건 ──
+  function eventView() {
+    const s = state, v = E.view(s);
+    if (!v) return mapView();
+    const r = v.result;
+    const head = `${art(v.art)}<div class="eyebrow">${esc(v.title)} · ${s.day}일째</div>${(s.found || []).length && !r ? `<p class="found">길에서 주운 것: ${s.found.map(esc).join(", ")}</p>` : ""}`;
+    if (rolling) return `<div class="veil night"><section class="modal roll" role="dialog"><p class="picked">“${esc(rolling.label)}”</p><p class="roll-head">${esc(rolling.who)} · ${esc(rolling.stat)}</p><div class="dice">d20</div><p class="muted heartbeat">숨을 참는다…</p></section></div>`;
+    if (r) {
+      const dice = r.roll ? `<div class="roll-line"><span class="d20 ${r.roll.r === 20 ? "crit" : r.roll.r === 1 ? "fumble" : ""}">${r.roll.r}</span><span class="calc">${esc(r.roll.who)} ${esc(r.roll.stat)} +${r.roll.mod} = <b>${r.roll.r + r.roll.mod}</b> <small>vs ${r.roll.dc}</small></span></div><div class="verdict">${r.roll.ok ? "성공" : "실패"}</div>` : "";
+      return `<div class="veil"><section class="modal result ${r.roll && !r.roll.ok ? "lose flash" : "win"}" role="dialog">${head}${dice}${prose([r.text])}${r.notes.map((n) => `<p class="note">${esc(n)}</p>`).join("")}${btn(r.ending ? "결말" : "계속", "cont", 'class="primary"')}</section></div>`;
+    }
+    const choices = v.choices.map((c) => btn(`${c.tag ? `<em class="req ${c.lock ? "no" : "ok"}">[${esc(c.tag)}]</em> ` : ""}<span>${esc(c.label)}</span>${c.lock ? `<small class="why">${esc(c.lock)}</small>` : c.feel ? `<small><b class="feel f-${{ "해볼 만하다": "good", "반반이다": "mid", "위험하다": "bad", "무모하다": "awful" }[c.feel]}">${c.feel}</b> · ${esc(c.stat)} · ${esc(c.who)}</small>` : ""}`, "choose", `data-i="${c.i}" ${c.lock ? "disabled" : ""} class="${c.lock ? "locked" : c.tag ? "special" : ""}"`)).join("");
+    return `<div class="veil"><section class="modal scene" role="dialog">${head}${prose(v.text.split("\n\n"))}<div class="choices">${choices}</div></section></div>`;
+  }
+  // ── 야영 ──
+  function campView() {
+    const s = state, c = s.camp;
+    const people = [{ id: "me", name: "당신", p: s.me }, ...E.live(s).map((x) => ({ id: x.id, name: x.name, p: x }))];
+    const rows = people.map((x) => `<div class="crow">${x.id === "me" ? face(null, 36) : face(x.id, 36)}<div><b>${esc(x.name)}</b><small>${E.HP[x.p.hp]} · ${E.HUNGER[x.p.hunger]}${x.id === "me" ? ` · ${E.COLD[s.me.cold]}` : ` · ${esc(C.people[x.id].perkText)}`}</small></div>${btn(c.feed[x.id] ? "먹인다" : "굶긴다", "feed", `data-id="${x.id}" class="tg ${c.feed[x.id] ? "on" : "off"}"`)}</div>`).join("");
+    const heal = s.bag.filter((b) => C.items[b.k].use).map((b) => people.filter((x) => x.p.hp >= 1).map((x) => btn(`${esc(C.items[b.k].name)} → ${esc(x.name)}`, "use", `data-k="${b.k}" data-t="${x.id}" class="mini"`)).join(" ")).join(" ");
+    const talk = !c.talked ? E.live(s).map((x) => btn(`${esc(x.name)}와(과) 이야기한다`, "talk", `data-id="${x.id}" class="mini"`)).join(" ") : "";
+    const crafts = C.recipes.filter((r) => r.from.every((k) => E.hasItem(s, k))).map((r) => btn(esc(r.name), "craft", `data-r="${r.id}" class="mini"`)).join(" ");
+    const over = s.bag.length > E.BAG;
+    return `${header()}<main class="jmain">${art({ key: c.fire ? "camp_fire" : "camp_storm", fb: c.fire ? "night" : "dawn_cold", dir: "places" })}<p class="act">야영 · ${esc(C.places[s.place].name)} 근처</p>
+      <div class="campsec"><h3>먹을 사람 <small>식량 ${s.food}</small></h3>${rows}</div>
+      <div class="campsec"><h3>불</h3><div class="crow"><span></span><div><b>${c.fire ? "불을 피운다" : "불 없이 버틴다"}</b><small>연료 ${s.fuel} · 불이 없으면 체온이 떨어지고 동행이 지친다</small></div>${btn(c.fire ? "피운다" : "안 피운다", "fire", `class="tg ${c.fire ? "on" : "off"}"`)}</div></div>
+      ${heal ? `<div class="campsec"><h3>치료</h3><p>${heal}</p></div>` : ""}
+      ${talk || c.talk ? `<div class="campsec"><h3>이야기</h3>${c.talk ? `<p class="talkline">${face(c.talk.id, 24)} ${esc(c.talk.line)}</p>` : `<p>${talk}</p>`}</div>` : ""}
+      ${crafts ? `<div class="campsec"><h3>만들기</h3><p>${crafts}</p></div>` : ""}
+      ${btn(over ? `가방이 넘친다 — ${s.bag.length - E.BAG}개를 버려야 한다` : "밤을 보낸다", over ? "sheet" : "sleep", over ? 'data-sheet="bag" class="primary"' : 'class="primary"')}</main>${bar()}`;
+  }
+  // ── 가방 · 기록 · 새로 ──
+  function bagSheet() {
+    const s = state, over = s.bag.length > E.BAG;
+    const rows = s.bag.map((b) => { const d = C.items[b.k]; return `<li>${itemArt(b.k)}<div><b>${esc(d.name)}</b>${d.uses ? ` <small>${b.u}회</small>` : ""}<small>${esc(d.kind)} · ${esc(d.desc)}</small></div><span class="acts">${d.key ? "<small>버릴 수 없다</small>" : btn("버리기", "drop", `data-k="${b.k}" class="drop"`)}</span></li>`; }).join("");
+    return `<div class="veil bottom"><section class="sheet" role="dialog"><h2>가방 <small class="slots ${over ? "over" : ""}">${s.bag.length}/${E.BAG}칸</small></h2><ul class="bagl">${rows || "<li class='muted'>비어 있다.</li>"}</ul>${btn("닫기", "close", 'class="secondary"')}</section></div>`;
+  }
+  function chronSheet() {
+    const c = state.chronicle || [];
+    return `<div class="veil bottom"><section class="sheet chron" role="dialog"><h2>기록</h2>${c.map((x) => `<article><h3><small>${x.day}일</small> ${esc(x.title)}</h3>${x.paras.map((t) => `<p>${esc(t)}</p>`).join("")}</article>`).join("")}${btn("닫기", "close", 'class="secondary"')}</section></div>`;
+  }
+  const newSheet = () => `<div class="veil"><section class="modal" role="dialog"><h2>처음부터 다시 할까요?</h2><p class="story">지금 여정은 사라집니다.</p>${btn("새로 시작", "restart", 'class="primary"')}${btn("취소", "close", 'class="secondary"')}</section></div>`;
+  // ── 표지 · 시작 · 결말 ──
+  function titleView() {
+    const cards = Object.entries(C.origins).map(([k, o]) => btn(`${art({ key: k, fb: o.start === "outskirts" ? "camp" : "title", dir: "origins" }, "thumb")}<b>${esc(o.name)}</b><small>${esc(o.pitch)}</small>`, "origin", `data-k="${k}" class="ocard ${pickOrigin === k ? "on" : ""}"`)).join("");
+    return `<div class="title"><div class="logo">남행</div><p class="sub">CIVITAS · 극 빙하기</p><p class="story">열차가 남쪽 선로를 지난다는 소문. 영하 오십 도의 설원을 건너야 한다. 무엇을 들고, 누구와 걷고, 무엇을 내줄 것인가.</p><h3>당신은 누구인가</h3><div class="origins">${cards}</div>${btn("떠난다", "start", 'class="primary"')}<a class="back" href="../survive/">넷이서 버티기(/survive)</a></div>`;
+  }
+  function introView() {
+    const o = C.origins[state.origin];
+    return `<div class="veil"><section class="modal" role="dialog">${placeArt(o.start)}<h2 class="chapter">${esc(o.name)}</h2>${prose(o.intro)}${btn("떠난다", "begin", 'class="primary"')}</section></div>`;
+  }
+  function endView() {
+    const s = state, e = C.endings[s.ending.key];
+    const moments = s.journal.slice().sort((a, b) => b.w - a.w || a.day - b.day).slice(0, 6).sort((a, b) => a.day - b.day);
+    return `<div class="veil"><section class="modal ending" role="dialog">${art({ key: `end_${s.ending.key}`, fb: s.ending.key === "train" ? "f_train" : s.ending.key === "missed" ? "ending_missed" : s.ending.key === "frozen" ? "ending_bad" : "ending_good", dir: "endings" })}<p class="etitle">이번 겨울의 이야기</p><h2 class="storyname">「${esc(s.title)}」</h2><p class="muted">${esc(C.origins[s.origin].name)} · ${s.day}일</p><h3>${esc(e.title)}</h3>${prose([e.text, s.ending.inhuman ? C.endings.inhuman.text : ""])}${s.ending.inhuman ? `<p class="inhuman">— ${esc(C.endings.inhuman.title)}</p>` : ""}<h3>그 겨울의 결정들</h3><ul class="wall moments">${moments.map((m) => `<li><small>${m.day}일</small> ${esc(m.text)}</li>`).join("")}</ul>${btn("기록을 처음부터 읽기", "sheet", 'data-sheet="chron" class="secondary"')}${btn("다른 사람으로 다시", "restart", 'class="primary"')}</section></div>`;
+  }
+  function render() {
+    let html;
+    if (!state || state.restart) html = titleView();
+    else if (state.phase === "intro") html = introView();
+    else if (state.phase === "end") html = sheet === "chron" ? chronSheet() : endView();
+    else if (state.phase === "event") html = eventView();
+    else if (state.phase === "camp") html = campView();
+    else html = mapView();
+    if (state && !state.restart && state.phase !== "end" && sheet) html += sheet === "bag" ? bagSheet() : sheet === "chron" ? chronSheet() : sheet === "new" ? newSheet() : "";
+    if (toast) html += `<div class="toast">${esc(toast)} ${btn("×", "toast")}</div>`;
+    app.innerHTML = html;
+    document.body.classList.toggle("modal-open", /class="veil/.test(html));
+  }
+  function act(a) {
+    if (rolling) return;
+    const k = a.dataset.action;
+    if (k === "origin") { pickOrigin = a.dataset.k; render(); }
+    else if (k === "start") { state = E.newGame({ origin: pickOrigin, seed: crypto.getRandomValues(new Uint32Array(1))[0] }); sheet = null; store.set(state); render(); }
+    else if (k === "begin") commit(E.begin(state));
+    else if (k === "go") commit(E.go(state, a.dataset.id));
+    else if (k === "choose") {
+      const i = Number(a.dataset.i), c = E.view(state).choices[i];
+      if (c.feel) { rolling = { label: c.label, who: c.who, stat: c.stat }; render(); setTimeout(() => { rolling = null; commit(E.choose(state, i)); }, 1500); }
+      else commit(E.choose(state, i));
+    }
+    else if (k === "cont") { if (commit(E.cont(state))) window.scrollTo(0, 0); }
+    else if (k === "feed") commit(E.campToggle(state, "feed", a.dataset.id));
+    else if (k === "fire") commit(E.campToggle(state, "fire"));
+    else if (k === "talk") commit(E.campToggle(state, "talk", a.dataset.id));
+    else if (k === "use") commit(E.useItem(state, a.dataset.k, a.dataset.t));
+    else if (k === "craft") commit(E.craft(state, a.dataset.r));
+    else if (k === "drop") commit(E.drop(state, a.dataset.k));
+    else if (k === "sleep") { if (commit(E.sleep(state))) window.scrollTo(0, 0); }
+    else if (k === "sheet") { sheet = a.dataset.sheet; render(); }
+    else if (k === "close") { sheet = null; render(); }
+    else if (k === "restart") { state = { restart: true }; sheet = null; store.set(null); render(); }
+    else if (k === "toast") { toast = ""; render(); }
+  }
+  let down = null;
+  app.addEventListener("pointerdown", (e) => { down = { x: e.clientX, y: e.clientY }; const v = e.target.closest(".veil"); if (v) v.classList.add("shown"); }, true);
+  app.addEventListener("pointerup", (e) => {
+    const a = e.target.closest("button[data-action]");
+    if (!a || a.disabled || e.pointerType === "mouse") return;
+    if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 10) return;
+    lastTap = Date.now(); act(a);
+  });
+  app.addEventListener("click", (e) => {
+    const a = e.target.closest("button[data-action]");
+    if (!a || a.disabled || Date.now() - lastTap < 500) return;
+    act(a);
+  });
+  render();
+})();

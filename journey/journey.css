@@ -1,0 +1,54 @@
+/* 「남행」 — 넷이서 버티기의 소설책 스타일 위에 지도·가방·야영만 더한다 */
+.jhead { padding: 16px 22px 12px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--paper); z-index: 5; }
+.jhead .top b { color: var(--ink2); }
+.jstats { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 10px; font-family: var(--sans); font-size: 12px; color: var(--mute); }
+.jstats b { color: var(--ink); font-weight: 600; font-size: 14px; margin-left: 4px; }
+.jstats .bad b { color: var(--red); }
+.jcomps { display: flex; gap: 14px; margin-top: 10px; font-family: var(--sans); font-size: 12px; color: var(--ink2); }
+.jcomps span { display: inline-flex; align-items: center; gap: 6px; }
+.jmain { max-width: 620px; margin: 0 auto; padding: 4px 22px 140px; }
+.act { font-family: var(--sans); font-size: 11px; letter-spacing: .24em; color: var(--mute); margin: 22px 0 4px; }
+.route { list-style: none; padding: 0; margin: 6px 0 0; border-left: 1px solid var(--line2); }
+.route li { position: relative; padding: 5px 0 5px 16px; font-size: 13px; color: var(--mute); }
+.route li::before { content: ""; position: absolute; left: -4px; top: 12px; width: 7px; height: 7px; border-radius: 50%; background: var(--line2); }
+.route li.done { color: var(--ink2); }
+.route li.done::before { background: var(--ink2); }
+.route li.now::before { background: var(--amber); box-shadow: 0 0 0 3px rgba(210,174,114,.2); }
+.route li.gate { color: #c9b38a; }
+.nodes { margin-top: 6px; }
+.node { display: grid; grid-template-columns: 76px 1fr; gap: 2px 14px; width: 100%; padding: 14px 0; border-top: 1px solid var(--line); text-align: left; }
+.node > .art { grid-row: span 2; width: 76px; height: 56px; }
+.node b { font-size: 15px; }
+.node small { font-size: 12px; color: var(--mute); }
+.node:disabled { opacity: .4; }
+.node.gate b { color: #d9c08c; }
+.night { margin-top: 18px; font-size: 14px; color: var(--ink2); line-height: 1.8; font-style: italic; }
+.jbar { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 22px calc(8px + env(safe-area-inset-bottom)); background: var(--paper); border-top: 1px solid var(--line); z-index: 6; display: flex; gap: 22px; justify-content: center; font-family: var(--sans); font-size: 13px; }
+.jbar button { color: var(--ink2); padding: 6px 0; border-bottom: 1px solid var(--line2); }
+.jbar button.warn { color: var(--red); border-color: var(--red); }
+.bagl { list-style: none; padding: 0; margin: 8px 0; }
+.bagl li { display: grid; grid-template-columns: 44px 1fr auto; gap: 0 12px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.bagl li small { display: block; font-size: 12px; color: var(--mute); }
+.bagl .acts { display: flex; gap: 10px; font-family: var(--sans); font-size: 12px; }
+.bagl .acts button { color: var(--amber); }
+.bagl .acts button.drop { color: var(--mute); }
+.ithumb { width: 44px; height: 44px; background-size: cover; background-position: center; border-radius: 2px; background-color: #1a1814; }
+.slots { font-family: var(--sans); font-size: 12px; color: var(--mute); }
+.slots.over { color: var(--red); font-weight: 600; }
+.campsec { margin-top: 20px; }
+.campsec h3 { margin-top: 0; }
+.crow { display: grid; grid-template-columns: 40px 1fr auto; gap: 0 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.crow small { display: block; font-size: 12px; color: var(--mute); }
+.crow .tg { font-size: 13px; }
+.talkline { font-style: italic; color: var(--ink2); font-size: 14px; line-height: 1.8; margin: 10px 0; }
+.origins { border-bottom: 1px solid var(--line); margin-top: 8px; }
+.ocard { display: grid; grid-template-columns: 72px 1fr; gap: 2px 14px; width: 100%; padding: 14px 0; border-top: 1px solid var(--line); text-align: left; }
+.ocard > .art { grid-row: span 2; width: 72px; height: 96px; }
+.ocard b { font-size: 16px; }
+.ocard small { font-size: 13px; color: var(--mute); line-height: 1.6; }
+.ocard.on b { color: var(--amber); }
+.ocard.on { box-shadow: inset 2px 0 0 var(--amber); padding-left: 12px; }
+.etitle { font-family: var(--sans); font-size: 11px; letter-spacing: .3em; color: var(--mute); margin-top: 6px; }
+.storyname { font-size: 24px; margin: 4px 0 2px; }
+.inhuman { color: var(--red); font-style: italic; }
+.found { font-family: var(--sans); font-size: 12px; color: #b8a27a; margin: 6px 0; }
