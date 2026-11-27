@@ -50,7 +50,7 @@
     const s = state, left = s.trainDay - s.day;
     const st = (label, v, bad) => `<span class="${bad ? "bad" : ""}">${label}<b>${v}</b></span>`;
     return `<header class="jhead"><div class="top"><span><b>남행</b>  ${s.day}일째</span><span>${btn("가방", "sheet", 'data-sheet="bag" class="mini"')} ${btn("기록", "sheet", 'data-sheet="chron" class="mini"')} ${btn("새로", "sheet", 'data-sheet="new" class="mini"')}</span></div>
-      <div class="jstats">${st("몸", E.HP[s.me.hp], s.me.hp >= 2)}${st("배", E.HUNGER[s.me.hunger], s.me.hunger >= 2)}${st("체온", E.COLD[s.me.cold], s.me.cold >= 2)}${st("식량", s.food, s.food < 2)}${st("연료", s.fuel, s.fuel < 1)}${st("열차", left > 0 ? `${left}일 뒤쯤` : left === 0 ? "오늘 밤" : "지나갔다", left <= 1)}</div>
+      <div class="jstats">${st("몸", E.HP[s.me.hp], s.me.hp >= 2)}${st("배", E.fullLabel(s.me.full ?? 5), (s.me.full ?? 5) <= 2)}${st("체온", E.COLD[s.me.cold], s.me.cold >= 2)}${st("식량", s.food, s.food < 2)}${st("연료", s.fuel, s.fuel < 1)}${st("열차", left > 0 ? `${left}일 뒤쯤` : left === 0 ? "오늘 밤" : "지나갔다", left <= 1)}</div>
       ${E.live(s).length ? `<div class="jcomps">${E.live(s).map((c) => `<span>${face(c.id, 26)} ${esc(c.name)} <small>${E.HP[c.hp]}</small></span>`).join("")}</div>` : ""}</header>`;
   }
   // ── 지도 ──
@@ -89,13 +89,15 @@
   function campView() {
     const s = state, c = s.camp;
     const people = [{ id: "me", name: "당신", p: s.me }, ...E.live(s).map((x) => ({ id: x.id, name: x.name, p: x }))];
-    const rows = people.map((x) => `<div class="crow">${x.id === "me" ? face(null, 36) : face(x.id, 36)}<div><b>${esc(x.name)}</b><small>${E.HP[x.p.hp]} · ${E.HUNGER[x.p.hunger]}${x.id === "me" ? ` · ${E.COLD[s.me.cold]}` : ` · ${esc(C.people[x.id].perkText)}`}</small></div>${btn(c.feed[x.id] ? "먹인다" : "굶긴다", "feed", `data-id="${x.id}" class="tg ${c.feed[x.id] ? "on" : "off"}"`)}</div>`).join("");
+    const MEAL = ["굶긴다", "조금 (식량 1)", "넉넉히 (식량 2)"];
+    const used = Object.values(c.feed).reduce((a, b) => a + (b || 0), 0);
+    const rows = people.map((x) => { const f = E.mealForecast(s, x.id), m = c.feed[x.id] || 0; return `<div class="crow meal">${x.id === "me" ? face(null, 36) : face(x.id, 36)}<div><b>${esc(x.name)}</b> <small class="inline">${E.HP[x.p.hp]}${x.id === "me" ? ` · ${E.COLD[s.me.cold]}` : ""}</small><span class="fullbar"><i style="width:${f.full * 10}%"></i><em style="left:${f.after * 10}%"></em></span><small>지금 ${f.now} → 내일 아침 <b class="${f.after <= 2 ? "bad" : f.after >= 7 ? "good" : ""}">${f.afterLabel}</b>${f.why.length ? ` · ${esc(f.why.join(", "))}` : ""}</small>${x.id !== "me" ? `<small>${esc(C.people[x.id].perkText)}</small>` : ""}</div>${btn(MEAL[m], "feed", `data-id="${x.id}" class="tg ${m === 0 ? "off" : "on"}"`)}</div>`; }).join("");
     const heal = s.bag.filter((b) => C.items[b.k].use).map((b) => people.filter((x) => x.p.hp >= 1).map((x) => btn(`${esc(C.items[b.k].name)} → ${esc(x.name)}`, "use", `data-k="${b.k}" data-t="${x.id}" class="mini"`)).join(" ")).join(" ");
     const talk = !c.talked ? E.live(s).map((x) => btn(`${esc(x.name)}와(과) 이야기한다`, "talk", `data-id="${x.id}" class="mini"`)).join(" ") : "";
     const crafts = C.recipes.filter((r) => r.from.every((k) => E.hasItem(s, k))).map((r) => btn(esc(r.name), "craft", `data-r="${r.id}" class="mini"`)).join(" ");
     const over = E.bagCount(s) > E.BAG;
     return `${header()}<main class="jmain">${art({ key: c.fire ? "camp_fire" : "camp_storm", fb: c.fire ? "night" : "dawn_cold", dir: "places" })}<p class="act">야영 · ${esc(C.places[s.place].name)} 근처</p>
-      <div class="campsec"><h3>먹을 사람 <small>식량 ${s.food}</small></h3>${rows}</div>
+      <div class="campsec"><h3>저녁 <small>식량 ${s.food} · 오늘 쓸 것 ${used} · 누르면 굶김 → 조금 → 넉넉히</small></h3>${rows}</div>
       <div class="campsec"><h3>불</h3><div class="crow"><span></span><div><b>${c.fire ? "불을 피운다" : "불 없이 버틴다"}</b><small>연료 ${s.fuel} · 불이 없으면 체온이 떨어지고 동행이 지친다</small></div>${btn(c.fire ? "피운다" : "안 피운다", "fire", `class="tg ${c.fire ? "on" : "off"}"`)}</div></div>
       ${heal ? `<div class="campsec"><h3>치료</h3><p>${heal}</p></div>` : ""}
       ${talk || c.talk ? `<div class="campsec"><h3>이야기</h3>${c.talk ? `<p class="talkline">${face(c.talk.id, 24)} ${esc(c.talk.line)}</p>` : `<p>${talk}</p>`}</div>` : ""}

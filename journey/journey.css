@@ -55,3 +55,9 @@
 .narrator { font-style: italic; color: var(--ink2); font-size: 14px; line-height: 1.8; margin: 14px 0 6px; border-left: 1px solid var(--amber); padding-left: 12px; }
 .why { font-size: 14px; line-height: 1.8; color: #c9b38a; margin: 14px 0; font-style: italic; }
 .truth { font-size: 13px; line-height: 1.7; color: #c9b38a; margin: 6px 0; }
+.crow.meal { align-items: start; }
+.crow .inline { display: inline; }
+.fullbar { position: relative; display: block; height: 3px; background: var(--line2); margin: 6px 0 4px; }
+.fullbar i { display: block; height: 3px; background: #8a7350; }
+.fullbar em { position: absolute; top: -3px; width: 2px; height: 9px; background: var(--amber); margin-left: -1px; }
+.crow small b.bad { color: var(--red); } .crow small b.good { color: var(--green); }
